@@ -1,0 +1,1921 @@
+{
+  "source": "https://tagoo.jp/optour/ginowan-marina/",
+  "fetchedAt": "2026-09-27T17:55:52Z",
+  "fetchedPages": [
+    "https://tagoo.jp/optour/ginowan-marina/",
+    "https://tagoo.jp/optour/parasailing/oa555/",
+    "https://tagoo.jp/optour/parasailing/oa553/",
+    "https://tagoo.jp/optour/parasailing/oa551/",
+    "https://tagoo.jp/optour/parasailing/oa552/",
+    "https://tagoo.jp/optour/parasailing/oa557/",
+    "https://tagoo.jp/optour/ginowan-marina/oa556/",
+    "https://tagoo.jp/optour/flyboard/oa554/",
+    "https://tagoo.jp/optour/fishing/oa4140/",
+    "https://tagoo.jp/optour/cruising/oa1611-05/",
+    "https://tagoo.jp/optour/cruising/oa1615-03/",
+    "https://tagoo.jp/optour/whale-watching/oa1613/",
+    "https://tagoo.jp/optour/shops/cocomarine/",
+    "https://tagoo.jp/optour/shops/recsea/",
+    "https://tagoo.jp/optour/shops/seaworks/",
+    "https://tagoo.jp/optour/howto/"
+  ],
+  "shop": {
+    "name": "宜野湾港マリーナ",
+    "pageTitle": "宜野湾港マリーナでマリンスポーツを楽しもう！",
+    "heading": "宜野湾港マリーナでマリンスポーツ予約",
+    "catchCopy": "宜野湾港マリーナでマリンスポーツを楽しもう！",
+    "introduction": "那覇から約20分。フライボード、パラセーリングなどマリンスポーツが揃う沖縄初の本格的マリーナ。隣接のトロピカルビーチは海水浴、シュノーケリングを楽しむ人々で賑わい、レジャー・マリンスポーツの拠点として期待されます。",
+    "areaLabel": "宜野湾市ベイサイド・コンベンションエリア",
+    "note": "ソースページは単一店舗ではなく『宜野湾港マリーナ』エリアページで、3事業者（ココマリン／釣船レクシー／シーワークス沖縄アイランド）のプランが掲載されている。",
+    "access": {
+      "address": "沖縄県宜野湾市真志喜４丁目４－１",
+      "mapEmbed": "https://www.google.com/maps?q=26.2770361,127.7299963&z=17&output=embed",
+      "mapLink": "http://maps.google.co.jp/maps?q=沖縄県宜野湾市真志喜４丁目４－１",
+      "geo": {
+        "lat": 26.2770361,
+        "lng": 127.7299963
+      },
+      "directions": [
+        "那覇空港より車で約30分",
+        "西原ＩＣ下車で車で約10分"
+      ],
+      "directionsAlt": [
+        "那覇から約20分（エリアページ）",
+        "宜野湾マリーナは那覇空港から車で約20分！（釣船レクシー）"
+      ],
+      "parking": "あり（有料）  300円",
+      "nearbyHotels": [
+        "東京第一ホテルオキナワグランメールリゾート",
+        "EMウェルネスリゾート コスタビスタ沖縄 ホテル＆スパ",
+        "ヒルトン沖縄北谷リゾート",
+        "ベッセルホテルカンパーナ沖縄",
+        "ザ・ビーチタワー沖縄",
+        "ラグナガーデンホテル",
+        "沖縄プリンスホテル オーシャンビューぎのわん",
+        "ムーンオーシャン宜野湾ホテル＆レジデンス"
+      ],
+      "landmark": "宜野湾コンベンションセンターのお隣"
+    },
+    "businessHours": null,
+    "phone": null,
+    "contactNote": "電話番号・営業時間はtagoo上では予約リクエスト送信後の画面／メールにのみ表示される仕様のため取得不可。",
+    "operators": [
+      {
+        "name": "ココマリン（COCO MARINE）",
+        "about": "那覇から約20分、宜野湾コンベンションセンターのお隣、宜野湾港マリーナにてパラセーリングを中心にフライボードなど話題のマリンスポーツを開催。皆様の思い出作りをお手伝い致します♪",
+        "images": [
+          "https://tagoo.jp/optour/img/entry/coco_05.JPG",
+          "https://tagoo.jp/optour/img/entry/coco_13.jpg",
+          "https://tagoo.jp/optour/img/entry/00.jpg"
+        ],
+        "sourceUrl": "https://tagoo.jp/optour/shops/cocomarine/",
+        "slug": "cocomarine",
+        "plansOnGinowanPage": [
+          "ginowan-parasailing-marine-pack-active",
+          "ginowan-parasailing-flyboard",
+          "ginowan-parasailing-100m",
+          "ginowan-parasailing-150m",
+          "ginowan-parasailing-200m",
+          "ginowan-marine-pack-triple",
+          "ginowan-flyboard"
+        ],
+        "onOffSeason": "オン期：4/25~30・5/1~10・6/6,7,13,14,20,21,27,28・7/4,5,11,12,18~31・8/1~31・9/5,6,12,13,19~27・10/3,4,10~12,17,18,24,25,31・11/1~3,21~23・12/26~31・1/1~3,9~11 の期間\nオフ期：※上記以外の期間",
+        "onsiteOptions": [
+          {
+            "label": "バナナボート体験コース",
+            "durationMin": 10,
+            "price": 2500,
+            "note": "現地申し込み"
+          },
+          {
+            "label": "マーブル体験コース",
+            "durationMin": 10,
+            "price": 2500,
+            "note": "現地申し込み"
+          },
+          {
+            "label": "ビスケット体験コース",
+            "durationMin": 10,
+            "price": 2500,
+            "note": "現地申し込み"
+          },
+          {
+            "label": "ジェットスキー体験コース",
+            "durationMin": 10,
+            "price": 2500,
+            "note": "現地申し込み"
+          }
+        ]
+      },
+      {
+        "name": "釣船レクシー",
+        "about": "沖縄観光の合間に釣り体験はいかがですか？宜野湾マリーナは那覇空港から車で約20分！底もの狙いのお手軽ボートフィッシングツアー！手ぶらで参加OK！必要な機材はすべて込み♪女性やお子様、初心者大歓迎！",
+        "images": [
+          "https://tagoo.jp/optour/img/entry/oa4140_s_01.jpg",
+          "https://tagoo.jp/optour/img/entry/oa4140_s_02.jpg",
+          "https://tagoo.jp/optour/img/entry/oa4140_s_03.jpg"
+        ],
+        "sourceUrl": "https://tagoo.jp/optour/shops/recsea/",
+        "slug": "recsea",
+        "plansOnGinowanPage": [
+          "ginowan-boat-fishing-2h"
+        ],
+        "boat": {
+          "model": "ヤマハW32",
+          "capacity": 8,
+          "facilities": "トイレ・シャワー完備"
+        },
+        "payment": "当日、現地にて現金でお支払いください。（クレジットカード不可）"
+      },
+      {
+        "name": "シーワークス沖縄アイランド",
+        "about": "2014年に国立公園に指定された慶良間諸島の海の美しさ！那覇からたったの20分程度で行ける大人気スポットのチービシ環礁！ シュノーケリングや釣り、マリンスポーツなど、多種多様の海遊びができる最高の場所へ。少人数でも気軽にチャーターできるので、他人を気にする事なく！お仲間だけで大切な旅の1日が、忘れられない最高な思い出になるでしょう。",
+        "images": [
+          "https://tagoo.jp/optour/img/entry/oa1600_02.jpg",
+          "https://tagoo.jp/optour/img/entry/oa1600_01.jpg",
+          "https://tagoo.jp/optour/img/entry/oa1600_03.jpg"
+        ],
+        "sourceUrl": "https://tagoo.jp/optour/shops/seaworks/",
+        "slug": "seaworks",
+        "plansOnGinowanPage": [
+          "kerama-charter-party-7h",
+          "kerama-charter-6h",
+          "ginowan-whale-watching"
+        ],
+        "payment": "クレジットカードもご利用いただけます。ご予約の際にお問い合わせください。\nVISA／MasterCard／JCB／American Express／Diners／ Discover Card",
+        "boat": {
+          "description": "▼53フィート 団体様向け大型クルーザー",
+          "capacity": 35,
+          "comfortableCapacity": "20名前後"
+        },
+        "departurePorts": [
+          {
+            "name": "宜野湾港マリーナ",
+            "meeting": "宜野湾マリーナ／レストランフィッシュテール前の白テント30分前集合",
+            "address": "沖縄県宜野湾市真志喜４丁目４－１",
+            "parking": "あり（有料）  300円",
+            "shower": "レストランフィッシュテール建物下　1回300円"
+          },
+          {
+            "name": "那覇・三重城港（みえぐすくこう）",
+            "address": "那覇市西3-20",
+            "parking": "あり（有料）  500円",
+            "shower": "待合所　温水シャワー　3分100円",
+            "mapEmbed": "https://www.google.com/maps?q=26.219755,127.663694&z=17&output=embed"
+          },
+          {
+            "name": "北谷町うみんちゅワーフ",
+            "address": "沖縄県中頭郡北谷町美浜54番地",
+            "parking": "あり（無料）  駐車場代2時間まで無料・以後1時間100円（最大1日400円）",
+            "shower": "温水シャワー　5分200円",
+            "mapEmbed": "https://www.google.com/maps?q=26.321515, 127.754951&z=17&output=embed"
+          }
+        ],
+        "endedPlansListedOnShopPage": [
+          "★★終了★★少人数でお得♪♪沖釣りチャータープラン｜宜野湾マリーナ発（35,000円～）",
+          "★★終了★★ケラマ諸島【1日チャータープラン】沖釣り体験＆シュノーケリングツアー｜那覇三重城港発（98,000円～）",
+          "★★終了★★【国立公園ケラマ諸島】仲間だけで盛り上がるホエールウォッチングチャータープラン♪宜野湾マリーナ発（49,800円～）",
+          "★★終了★★沖縄でお手軽夜釣り体験！沖釣りチャータープラン｜那覇三重城港発（40,000円～）",
+          "★★終了★★ケラマ諸島【1日チャータープラン】沖釣り体験＆シュノーケリングツアー｜宜野湾マリーナ（98,000円～）",
+          "★★終了★★【国立公園ケラマ諸島】団体様向け！海遊びプレミアムパーティープラン｜宜野湾マリーナ（298,000円～）",
+          "★★終了★★お手軽に夜釣り体験！沖釣りチャータープラン【宜野湾マリーナ発】（40,000円～）",
+          "★★終了★★【グループ旅行・団体様向け】ケラマ諸島・チービシ環礁の海でマリンスポーツ遊び放題！宜野湾マリーナ（158,000円～）",
+          "★★終了★★【国立公園ケラマ諸島】団体様向け！海遊びプレミアムパーティープラン｜那覇三重城港発（298,000円～）",
+          "★★終了★★ケラマ諸島【1日チャータープラン】シュノーケリングツアー｜那覇三重城港発（90,000円～）",
+          "★★終了★★ケラマ諸島【1日チャータープラン】シュノーケリングツアー｜宜野湾マリーナ（90,000円～）"
+        ]
+      }
+    ]
+  },
+  "plans": [
+    {
+      "slug": "ginowan-parasailing-marine-pack-active",
+      "title": "【宜野湾発】パラセーリング＆マリンパック　海×空アクティブプラン★GoPro無料レンタル＆データプレゼント",
+      "category": "other",
+      "originalCategory": "パラセーリング＋マリンパック（バナナボート・マーブル・ビスケット・ジェットスキーから3種）",
+      "sourceCategoryPath": "パラセーリング",
+      "operator": "ココマリン（COCO MARINE）",
+      "operatorSlug": "cocomarine",
+      "optionCode": "OA-0555-01（）",
+      "summary": "海も空もまとめてお得、よくばりアクティブプラン！パラセーリングとマリンスポーツをみんなでワイワイ楽しめる内容で、グループや団体様にも人気！",
+      "description": "★パラセーリング特典★\nGoProカメラの無料レンタル！！\n使い方もしっかりレクチャーさせて頂きます！\n枚数無制限なので、フライトの思い出写真をたくさん撮ってきてください♪\nデータのダウンロードも無料なので、素敵な思い出と記憶に残るプランです！！\n\n【女性グループに大好評】パラセーリングとマリンパックよくばりプラン\n低価格で定番のマリンスポーツをあれこれ楽しみたい方におすすめ★\nスリル満点パラセーリング＆定番で盛り上がるマリンスポーツ3 つをセットにしたお得プラン♪ここでしか味わえない最高の興奮を是非体験してみてください ！美しい海と空、ゆっくりと時間が流れる「美ら島・宜野湾港マリーナ」で贅沢な時間を過ごしませんか。\n学生旅行や、ｸﾞﾙｰﾌﾟ団体旅行にもおすすめ！！是非この機会にお友達やご家族、カップルでもご参加ください。\n\n〈パラセーリング〉\n沖縄に来たら是非やってみたい人気マリンスポーツのパラセーリング♪パラシュートを背に、モーターボートに引かれグングンと上昇。３６０度青い海と空。まさしく絶景です！！\n\n〈マリンパック〉\nマリンスポーツを色々と楽しみたいお客様におすすめ！！定番で盛り上がるマリンスポーツ3 つをセットにしたお得プラン♪マリンスポーツはバナナボート、マーブル、ビスケット、ジェットスキー体験の中から現地にてお選びください。",
+      "durationMin": 180,
+      "durationText": "約3時間",
+      "startTimes": [
+        "09:00",
+        "10:30",
+        "12:00",
+        "13:30",
+        "15:00",
+        "16:30"
+      ],
+      "startTimesText": "09：00　10：30　12：00　13：30　15：00　16：30",
+      "season": "通年",
+      "location": "宜野湾マリーナ",
+      "prices": [
+        {
+          "label": "大人・子供共通（オン期）",
+          "price": 15000
+        },
+        {
+          "label": "大人・子供共通（オフ期）",
+          "price": 13300
+        }
+      ],
+      "priceText": "15,000円/人　オン期\n13,300円/人　オフ期\n＋2,000円/人 ★ロープ長200mへ変更",
+      "priceNotes": "オン期：4/25~30・5/1~10・6/6,7,13,14,20,21,27,28・7/4,5,11,12,18~31・8/1~31・9/5,6,12,13,19~27・10/3,4,10~12,17,18,24,25,31・11/1~3,21~23・12/26~31・1/1~3,9~11 の期間\nオフ期：※上記以外の期間\n\n※お申し込みは前日の18：00までとさせて頂きます。\n間際予約は【リクエスト送信後】に利用施設連絡先、営業時間が表示されるので、お電話にて確認お願い致します。「沖縄の遊び」からリクエストメールした事をお伝え下さい。",
+      "taxIncluded": true,
+      "paymentTiming": "現地払い",
+      "options": [
+        {
+          "label": "ロープ長200mへ変更",
+          "price": 2000,
+          "unit": "人"
+        },
+        {
+          "label": "バナナボート体験コース",
+          "durationMin": 10,
+          "price": 2500,
+          "note": "現地申し込み"
+        },
+        {
+          "label": "マーブル体験コース",
+          "durationMin": 10,
+          "price": 2500,
+          "note": "現地申し込み"
+        },
+        {
+          "label": "ビスケット体験コース",
+          "durationMin": 10,
+          "price": 2500,
+          "note": "現地申し込み"
+        },
+        {
+          "label": "ジェットスキー体験コース",
+          "durationMin": 10,
+          "price": 2500,
+          "note": "現地申し込み"
+        }
+      ],
+      "minAge": 4,
+      "maxAge": null,
+      "participationConditions": "対象年齢：4歳以上（体重15kg以上の方）\n※妊娠中の方のご参加はご遠慮いただいております。",
+      "capacity": null,
+      "minParticipants": null,
+      "applicationPartySizeText": null,
+      "meetingPoint": "宜野湾マリーナに30分前集合（住所：沖縄県宜野湾市真志喜４丁目４－１ ）",
+      "meetingPoints": [
+        {
+          "label": null,
+          "text": "宜野湾マリーナに30分前集合（住所：沖縄県宜野湾市真志喜４丁目４－１ ）",
+          "parking": "あり（有料）  300円",
+          "mapEmbed": "https://www.google.com/maps?q=26.2770361,127.7299963&z=17&output=embed"
+        }
+      ],
+      "whatToBring": null,
+      "included": "パラセール、マリンスポーツ3つ、保険料、器材料、消費税",
+      "notes": "【コース参加にあたってのご注意】\n・当日の天候次第では現地到着後、中止になる場合もございますのでご了承ください。\n・お子様は保護者同伴での参加になります。\n・妊娠中、又は妊娠の可能性がある方は参加をご遠慮ください。\n\n【その他注意事項】\n未成年者のみのご参加は保護者の同意書が必要となります。ご利用当日、参加受付の際に提出お願い致します。",
+      "cancellationPolicy": "お客様都合によるキャンセル・変更は早目にご連絡下さい。\n当日キャンセル・無連絡はキャンセル料100％頂いております。",
+      "facilities": "宜野湾マリーナ近郊のホテル\n東京第一ホテルオキナワグランメールリゾート\nEMウェルネスリゾート コスタビスタ沖縄 ホテル＆スパ\nヒルトン沖縄北谷リゾート\nベッセルホテルカンパーナ沖縄\nザ・ビーチタワー沖縄\nラグナガーデンホテル\n沖縄プリンスホテル オーシャンビューぎのわん\nムーンオーシャン宜野湾ホテル＆レジデンス",
+      "otherInfo": "現地にてオプションでマリンメニューがお楽しみできます！（現地申し込み）\n\nバナナボート体験コース10分2,500円\n\nマーブル体験コース10分2,500円\n\nビスケット体験コース10分2,500円\n\nジェットスキー体験コ−ス10分2,500円\n\n宜野湾マリーナ（集合場所）\n那覇空港より車で約30分\n西原ＩＣ下車で車で約10分",
+      "rentalAndOptionsText": null,
+      "transferInfo": null,
+      "schedule": [
+        {
+          "title": "宜野湾マリーナに集合",
+          "text": "宜野湾マリーナ現地集合\n専用ボートに乗り込みポイントへ移動します！",
+          "image": "https://tagoo.jp/optour/img/entry/01.jpg"
+        },
+        {
+          "title": "マリーナ出港",
+          "text": "ライフジャケットを着用していざ出港！\nパラセーリングポイントへ！\nハーネスを装着して飛行に備えます。",
+          "image": "https://tagoo.jp/optour/img/entry/02.jpg"
+        },
+        {
+          "title": "パラセールのセッテング",
+          "text": "期待高まる瞬間！いよいよパラシュートが広がります！順番がきたらハーネスをフックに繋ぎます。",
+          "image": "https://tagoo.jp/optour/img/entry/03.jpg"
+        },
+        {
+          "title": "パラセーリングで大空へ♪",
+          "text": "青空へテイクオフ！ぐんぐんと高度は増し上空へ♪\nフライト約10分\nパラセールで大空に舞い上がると眼下には壮大な景色が広がリます。360度、見渡す限りの青一色！沖縄の南風を全身で受けながら、ゆったりと空中散歩をお楽しみください。",
+          "image": "https://tagoo.jp/optour/img/entry/coco_02.jpg"
+        },
+        {
+          "title": "バナナボート",
+          "text": "みんなで楽しい♪バナナボートは大迫力！！\nお手軽で楽しさ満点ですのでご家族、ご友人、カップルなど、たくさんのお客様にお楽しみいただけます♪",
+          "image": "https://tagoo.jp/optour/img/entry/oa555_04.jpg"
+        },
+        {
+          "title": "ビスケット",
+          "text": "水しぶきを浴び、海面を滑走するスリル感と遠心力はまるで海の上のジェットコースター。スリルを味わいたいあなた！　一度、挑戦してみませんか？",
+          "image": "https://tagoo.jp/optour/img/entry/oa555_05.jpg"
+        },
+        {
+          "title": "マーブル",
+          "text": "遠心力がハンパありません。前後左右、色々な姿勢でスリルを楽しめます。みんなでチャレンジしてみよう♪",
+          "image": "https://tagoo.jp/optour/img/entry/oa555_09.jpg"
+        },
+        {
+          "title": "ジェットスキー体験",
+          "text": "インストラクター同行・安全操作で、初心者でも大丈夫！\n潮風と爽快な波音・スピード感・エンジン音を、肌で感じられ、安心してお楽しみいただけます。",
+          "image": "https://tagoo.jp/optour/img/entry/oa555_02.jpg"
+        },
+        {
+          "title": "体験終了",
+          "text": "港に戻り解散！お疲れ様でした♪",
+          "image": "https://tagoo.jp/optour/img/entry/04.jpg"
+        }
+      ],
+      "images": [
+        "https://tagoo.jp/optour/img/entry/oa555_m1.jpg",
+        "https://tagoo.jp/optour/img/entry/oa555_m2.jpg",
+        "https://tagoo.jp/optour/img/entry/oa555_m3.jpg",
+        "https://tagoo.jp/optour/img/entry/01.jpg",
+        "https://tagoo.jp/optour/img/entry/02.jpg",
+        "https://tagoo.jp/optour/img/entry/03.jpg",
+        "https://tagoo.jp/optour/img/entry/coco_02.jpg",
+        "https://tagoo.jp/optour/img/entry/oa555_04.jpg",
+        "https://tagoo.jp/optour/img/entry/oa555_05.jpg",
+        "https://tagoo.jp/optour/img/entry/oa555_09.jpg",
+        "https://tagoo.jp/optour/img/entry/oa555_02.jpg",
+        "https://tagoo.jp/optour/img/entry/04.jpg"
+      ],
+      "sourceUrl": "https://tagoo.jp/optour/parasailing/oa555/"
+    },
+    {
+      "slug": "ginowan-parasailing-flyboard",
+      "title": "【宜野湾発】パラセーリング＆フライボード　よくばりプラン★GoPro無料レンタル＆データプレゼント",
+      "category": "other",
+      "originalCategory": "パラセーリング＋フライボード",
+      "sourceCategoryPath": "パラセーリング",
+      "operator": "ココマリン（COCO MARINE）",
+      "operatorSlug": "cocomarine",
+      "optionCode": "OA-0553-01（）",
+      "summary": "沖縄で人気のマリンスポーツ！パラセーリングとフライボードのセットプランで沖縄の海を満喫しよう♪美しい海と空、ゆっくりと時間が流れる「美ら島・宜野湾港マリーナ」で贅沢な時間を過ごしませんか。",
+      "description": "★パラセーリング特典★\nGoProカメラの無料レンタル！！\n使い方もしっかりレクチャーさせて頂きます！\n枚数無制限なので、フライトの思い出写真をたくさん撮ってきてください♪\nデータのダウンロードも無料なので、素敵な思い出と記憶に残るプランです！！\n\n【宜野湾】よくばりプラン登場！パラセーリング＆フライボード\nセットでお得に♪沖縄の青い空、青い海を思いっきり遊びつくそう★\n\n〈フライボード〉\n水上バイクが吐出する水をボードから噴射し、空中飛行が楽しめるマリンスポーツです。初心者でも10～15分の練習で飛行することができるお手軽感も人気♪慣れてくると、上下左右自由に飛行することが可能☆\n\n〈パラセーリング〉\n沖縄に来たら是非やってみたい人気マリンスポーツのパラセーリング♪パラシュートを背に、モーターボートに引かれグングンと上昇。３６０度青い海と空。まさしく絶景です！！\n\n＜見どころ＞\n・当店完全オーダーメイドのパラセーリングで空の旅へ！\n・経験豊富なスタッフがボートをぐいぐい引っ張っていくので迫力満点★\n・鳥になった気分で空の空中散歩が楽しめる♪\n・遠くに宜野湾の街並みが見えます！\n・安全にも考慮しているのでご安心下さい！\n\n＜当日の流れ＞\n宜野湾マリーナ出港　→　ポイントについたらパラセーリング＆フライボードをスタート！",
+      "durationMin": 180,
+      "durationText": "約3時間",
+      "startTimes": [
+        "09:00",
+        "10:30",
+        "12:00",
+        "13:30",
+        "15:00",
+        "16:30"
+      ],
+      "startTimesText": "09：00　10：30　12：00　13：30　15：00　16：30",
+      "season": "通年",
+      "location": "宜野湾マリーナ",
+      "prices": [
+        {
+          "label": "1名（オン期）",
+          "price": 16000
+        },
+        {
+          "label": "1名（オフ期）",
+          "price": 14300
+        }
+      ],
+      "priceText": "16,000円/人　オン期\n14,300円/人　オフ期\n＋2,000円/人 ★ロープ長200mへ変更",
+      "priceNotes": "オン期：4/25~30・5/1~10・6/6,7,13,14,20,21,27,28・7/4,5,11,12,18~31・8/1~31・9/5,6,12,13,19~27・10/3,4,10~12,17,18,24,25,31・11/1~3,21~23・12/26~31・1/1~3,9~11 の期間\nオフ期：※上記以外の期間\n\n※お申し込みは前日の18：00までとさせて頂きます。\n間際予約は【リクエスト送信後】に利用施設連絡先、営業時間が表示されるので、お電話にて確認お願い致します。「沖縄の遊び」からリクエストメールした事をお伝え下さい。",
+      "taxIncluded": true,
+      "paymentTiming": "現地払い",
+      "options": [
+        {
+          "label": "ロープ長200mへ変更",
+          "price": 2000,
+          "unit": "人"
+        },
+        {
+          "label": "バナナボート体験コース",
+          "durationMin": 10,
+          "price": 2500,
+          "note": "現地申し込み"
+        },
+        {
+          "label": "マーブル体験コース",
+          "durationMin": 10,
+          "price": 2500,
+          "note": "現地申し込み"
+        },
+        {
+          "label": "ビスケット体験コース",
+          "durationMin": 10,
+          "price": 2500,
+          "note": "現地申し込み"
+        },
+        {
+          "label": "ジェットスキー体験コース",
+          "durationMin": 10,
+          "price": 2500,
+          "note": "現地申し込み"
+        }
+      ],
+      "minAge": 12,
+      "maxAge": null,
+      "participationConditions": "対象年齢：12歳以上（体重15kg以上の方）\n※妊娠中の方のご参加はご遠慮いただいております。",
+      "capacity": null,
+      "minParticipants": null,
+      "applicationPartySizeText": null,
+      "meetingPoint": "宜野湾マリーナに30分前集合（住所：沖縄県宜野湾市真志喜４丁目４－１ ）",
+      "meetingPoints": [
+        {
+          "label": null,
+          "text": "宜野湾マリーナに30分前集合（住所：沖縄県宜野湾市真志喜４丁目４－１ ）",
+          "parking": "あり（有料）  300円",
+          "mapEmbed": "https://www.google.com/maps?q=26.2770361,127.7299963&z=17&output=embed"
+        }
+      ],
+      "whatToBring": null,
+      "included": "体験料、保険料、器材料、消費税",
+      "notes": "【コース参加にあたってのご注意】\n・当日の天候次第では現地到着後、中止になる場合もございますのでご了承ください。\n・お子様は保護者同伴での参加になります。\n・妊娠中、又は妊娠の可能性がある方は参加をご遠慮ください。\n\n【その他注意事項】\n未成年者のみのご参加は保護者の同意書が必要となります。ご利用当日、参加受付の際に提出お願い致します。",
+      "cancellationPolicy": "お客様都合によるキャンセル・変更は早目にご連絡下さい。\n当日キャンセル・無連絡はキャンセル料100％頂いております。",
+      "facilities": "宜野湾マリーナ近郊のホテル\n東京第一ホテルオキナワグランメールリゾート\nEMウェルネスリゾート コスタビスタ沖縄 ホテル＆スパ\nヒルトン沖縄北谷リゾート\nベッセルホテルカンパーナ沖縄\nザ・ビーチタワー沖縄\nラグナガーデンホテル\n沖縄プリンスホテル オーシャンビューぎのわん\nムーンオーシャン宜野湾ホテル＆レジデンス",
+      "otherInfo": "現地にてオプションでマリンメニューがお楽しみできます！（現地申し込み）\n\nバナナボート体験コース10分2,500円\n\nマーブル体験コース10分2,500円\n\nビスケット体験コース10分2,500円\n\nジェットスキー体験コ−ス10分2,500円\n\n宜野湾マリーナ（集合場所）\n那覇空港より車で約30分\n西原ＩＣ下車で車で約10分",
+      "rentalAndOptionsText": null,
+      "transferInfo": null,
+      "schedule": [
+        {
+          "title": "宜野湾マリーナに集合",
+          "text": "宜野湾マリーナ現地集合\n専用ボートに乗り込みポイントへ移動します！",
+          "image": "https://tagoo.jp/optour/img/entry/01.jpg"
+        },
+        {
+          "title": "マリーナ出港",
+          "text": "ライフジャケットを着用していざ出港！\nパラセーリングポイントへ！\nハーネスを装着して飛行に備えます。",
+          "image": "https://tagoo.jp/optour/img/entry/02.jpg"
+        },
+        {
+          "title": "パラセールのセッテング",
+          "text": "期待高まる瞬間！いよいよパラシュートが広がります！順番がきたらハーネスをフックに繋ぎます。",
+          "image": "https://tagoo.jp/optour/img/entry/03.jpg"
+        },
+        {
+          "title": "パラセーリングで大空へ♪",
+          "text": "青空へテイクオフ！ぐんぐんと高度は増し上空へ♪\nフライト約10分\nパラセールで大空に舞い上がると眼下には壮大な景色が広がリます。360度、見渡す限りの青一色！沖縄の南風を全身で受けながら、ゆったりと空中散歩をお楽しみください。",
+          "image": "https://tagoo.jp/optour/img/entry/coco_02.jpg"
+        },
+        {
+          "title": "フライボードに挑戦♪",
+          "text": "（\n\n体験時間は約20分）\nフライボードは意外に簡単で、初めてでもほとんどの方が空中散歩を楽しめます。",
+          "image": "https://tagoo.jp/optour/img/entry/coco_11.jpg"
+        },
+        {
+          "title": "フライボードに挑戦♪",
+          "text": "ポイントまではジェットスキーでなくジェットボートでお連れしますので、みんなでわいわいグループ一緒に楽しめます。",
+          "image": "https://tagoo.jp/optour/img/entry/coco_14.jpg"
+        },
+        {
+          "title": "体験終了",
+          "text": "港に戻り解散！お疲れ様でした♪",
+          "image": "https://tagoo.jp/optour/img/entry/04.jpg"
+        }
+      ],
+      "images": [
+        "https://tagoo.jp/optour/img/entry/coco_13.jpg",
+        "https://tagoo.jp/optour/img/entry/coco_05.JPG",
+        "https://tagoo.jp/optour/img/entry/coco_15.jpg",
+        "https://tagoo.jp/optour/img/entry/01.jpg",
+        "https://tagoo.jp/optour/img/entry/02.jpg",
+        "https://tagoo.jp/optour/img/entry/03.jpg",
+        "https://tagoo.jp/optour/img/entry/coco_02.jpg",
+        "https://tagoo.jp/optour/img/entry/coco_11.jpg",
+        "https://tagoo.jp/optour/img/entry/coco_14.jpg",
+        "https://tagoo.jp/optour/img/entry/04.jpg"
+      ],
+      "sourceUrl": "https://tagoo.jp/optour/parasailing/oa553/"
+    },
+    {
+      "slug": "ginowan-parasailing-100m",
+      "title": "【宜野湾発】パラセーリング100ｍ　お子様に人気！ワクワク空デビュー★GoPro無料レンタル＆データプレゼント",
+      "category": "other",
+      "originalCategory": "パラセーリング（ロープ100m）",
+      "sourceCategoryPath": "パラセーリング",
+      "operator": "ココマリン（COCO MARINE）",
+      "operatorSlug": "cocomarine",
+      "optionCode": "OA-0551-01（）",
+      "summary": "沖縄に来たら是非やってみたいマリンスポーツの定番♪専用ボートで大空に舞い上がると、眼下に壮大な景色が広がリます。宜野湾港マリーナ発のアトラクション型新感覚マリンスポーツ♪",
+      "description": "★パラセーリング特典★\nGoProカメラの無料レンタル！！\n使い方もしっかりレクチャーさせて頂きます！\n枚数無制限なので、フライトの思い出写真をたくさん撮ってきてください♪\nデータのダウンロードも無料なので、素敵な思い出と記憶に残るプランです！！\n\n《宜野湾港マリーナ発のアトラクション型新体感マリンスポーツ★》\nお子様連れの方に人気！定番の100ｍのパラセーリング！\n沖縄に来たら是非やってみたい人気マリンスポーツのパラセーリング♪パラシュートを背に、モーターボートに引かれグングンと上昇。上空から眺める空と海のコントラストと浮遊感をご体験下さい！！\n初めての方にもオススメの高さで無理なく楽しむことが出来ちゃいます♪普段では味わえない特別な景色をたくさん堪能してきてください！\n※オプションで当日にロープ150m、200mへの変更も可能です。変更の際は受付時にお声かけください。\n\n＜見どころ＞\n・当店完全オーダーメイドのパラセーリングで空の旅へ！\n・経験豊富なスタッフがボートをぐいぐい引っ張っていくので迫力満点★\n・鳥になった気分で空の空中散歩が楽しめる♪\n・遠くに宜野湾の街並みが見えます！\n・安全にも考慮しているのでご安心下さい！\n\n＜当日の流れ＞\n宜野湾マリーナ出港　→　出航間もなくポイント地点。ハーネスを装着し、飛行に備えます。　→　パラセーリングスタート！　→　空と海のコントラストと浮遊感を存分に楽しんだら、ゆっくり船上にテイクオフ！",
+      "durationMin": 90,
+      "durationText": "約30分～90分",
+      "startTimes": [
+        "09:00",
+        "10:30",
+        "12:00",
+        "13:30",
+        "15:00",
+        "16:30"
+      ],
+      "startTimesText": "09：00　10：30　12：00　13：30　15：00　16：30",
+      "season": "通年",
+      "location": "宜野湾マリーナ",
+      "prices": [
+        {
+          "label": "1名（オン期）",
+          "price": 8000
+        },
+        {
+          "label": "1名（オフ期）",
+          "price": 7300
+        }
+      ],
+      "priceText": "8,000円/人　オン期\n7,300円/人　オフ期",
+      "priceNotes": "オン期：4/25~30・5/1~10・6/6,7,13,14,20,21,27,28・7/4,5,11,12,18~31・8/1~31・9/5,6,12,13,19~27・10/3,4,10~12,17,18,24,25,31・11/1~3,21~23・12/26~31・1/1~3,9~11 の期間\nオフ期：※上記以外の期間\n\n※お申し込みは前日の18：00までとさせて頂きます。\n間際予約は【リクエスト送信後】に利用施設連絡先、営業時間が表示されるので、お電話にて確認お願い致します。「沖縄の遊び」からリクエストメールした事をお伝え下さい。",
+      "taxIncluded": true,
+      "paymentTiming": "現地払い",
+      "options": [
+        {
+          "label": "バナナボート体験コース",
+          "durationMin": 10,
+          "price": 2500,
+          "note": "現地申し込み"
+        },
+        {
+          "label": "マーブル体験コース",
+          "durationMin": 10,
+          "price": 2500,
+          "note": "現地申し込み"
+        },
+        {
+          "label": "ビスケット体験コース",
+          "durationMin": 10,
+          "price": 2500,
+          "note": "現地申し込み"
+        },
+        {
+          "label": "ジェットスキー体験コース",
+          "durationMin": 10,
+          "price": 2500,
+          "note": "現地申し込み"
+        }
+      ],
+      "minAge": 4,
+      "maxAge": null,
+      "participationConditions": "対象年齢：4歳以上（体重15kg以上の方）\n※妊娠中の方のご参加はご遠慮いただいております。",
+      "capacity": 10,
+      "minParticipants": 1,
+      "applicationPartySizeText": "1～10",
+      "meetingPoint": "宜野湾マリーナに30分前集合（住所：沖縄県宜野湾市真志喜４丁目４－１ ）",
+      "meetingPoints": [
+        {
+          "label": null,
+          "text": "宜野湾マリーナに30分前集合（住所：沖縄県宜野湾市真志喜４丁目４－１ ）",
+          "parking": "あり（有料）  300円",
+          "mapEmbed": "https://www.google.com/maps?q=26.2770361,127.7299963&z=17&output=embed"
+        }
+      ],
+      "whatToBring": null,
+      "included": "体験料、保険料、器材料、消費税",
+      "notes": "【コース参加にあたってのご注意】\n・当日の天候次第では現地到着後、中止になる場合もございますのでご了承ください。\n・お子様は保護者同伴での参加になります。\n・妊娠中、又は妊娠の可能性がある方は参加をご遠慮ください。\n\n【その他注意事項】\n未成年者のみのご参加は保護者の同意書が必要となります。ご利用当日、参加受付の際に提出お願い致します。",
+      "cancellationPolicy": "お客様都合によるキャンセル・変更は早目にご連絡下さい。\n当日キャンセル・無連絡はキャンセル料100％頂いております。",
+      "facilities": "宜野湾マリーナ近郊のホテル\n東京第一ホテルオキナワグランメールリゾート\nEMウェルネスリゾート コスタビスタ沖縄 ホテル＆スパ\nヒルトン沖縄北谷リゾート\nベッセルホテルカンパーナ沖縄\nザ・ビーチタワー沖縄\nラグナガーデンホテル\n沖縄プリンスホテル オーシャンビューぎのわん\nムーンオーシャン宜野湾ホテル＆レジデンス",
+      "otherInfo": "現地にてオプションでマリンメニューがお楽しみできます！（現地申し込み）\n\nバナナボート体験コース10分2,500円\n\nマーブル体験コース10分2,500円\n\nビスケット体験コース10分2,500円\n\nジェットスキー体験コ−ス10分2,500円\n\n宜野湾マリーナ（集合場所）\n那覇空港より車で約30分\n西原ＩＣ下車で車で約10分",
+      "rentalAndOptionsText": null,
+      "transferInfo": null,
+      "schedule": [
+        {
+          "title": "宜野湾マリーナに集合",
+          "text": "宜野湾マリーナ現地集合\n専用ボートに乗り込みポイントへ移動します！",
+          "image": "https://tagoo.jp/optour/img/entry/01.jpg"
+        },
+        {
+          "title": "マリーナ出港",
+          "text": "ライフジャケットを着用していざ出港！",
+          "image": "https://tagoo.jp/optour/img/entry/00.jpg"
+        },
+        {
+          "title": "ハーネス装着",
+          "text": "パラセーリングポイントへ！\nハーネスを装着して飛行に備えます。",
+          "image": "https://tagoo.jp/optour/img/entry/02.jpg"
+        },
+        {
+          "title": "パラセールのセッテング",
+          "text": "期待高まる瞬間！いよいよパラシュートが広がります！順番がきたらハーネスをフックに繋ぎます。",
+          "image": "https://tagoo.jp/optour/img/entry/03.jpg"
+        },
+        {
+          "title": "パラセーリングで大空へ♪",
+          "text": "青空へテイクオフ！ぐんぐんと高度は増し上空へ♪\nフライト約10分",
+          "image": "https://tagoo.jp/optour/img/entry/DSC_0093.JPG"
+        },
+        {
+          "title": "パラセーリングで大空へ♪",
+          "text": "パラセールで大空に舞い上がると眼下には壮大な景色が広がリます。360度、見渡す限りの青一色！沖縄の南風を全身で受けながら、ゆったりと空中散歩をお楽しみください。",
+          "image": "https://tagoo.jp/optour/img/entry/coco_01.jpg"
+        },
+        {
+          "title": "パラセーリングで大空へ♪",
+          "text": "足元は青一色",
+          "image": "https://tagoo.jp/optour/img/entry/oa551_07.jpg"
+        },
+        {
+          "title": "体験終了",
+          "text": "港に戻り解散！お疲れ様でした♪",
+          "image": "https://tagoo.jp/optour/img/entry/04.jpg"
+        }
+      ],
+      "images": [
+        "https://tagoo.jp/optour/img/entry/oa551_m1.jpg",
+        "https://tagoo.jp/optour/img/entry/coco_03.jpg",
+        "https://tagoo.jp/optour/img/entry/coco_05.JPG",
+        "https://tagoo.jp/optour/img/entry/01.jpg",
+        "https://tagoo.jp/optour/img/entry/00.jpg",
+        "https://tagoo.jp/optour/img/entry/02.jpg",
+        "https://tagoo.jp/optour/img/entry/03.jpg",
+        "https://tagoo.jp/optour/img/entry/DSC_0093.JPG",
+        "https://tagoo.jp/optour/img/entry/coco_01.jpg",
+        "https://tagoo.jp/optour/img/entry/oa551_07.jpg",
+        "https://tagoo.jp/optour/img/entry/04.jpg"
+      ],
+      "sourceUrl": "https://tagoo.jp/optour/parasailing/oa551/"
+    },
+    {
+      "slug": "ginowan-parasailing-150m",
+      "title": "【宜野湾発】パラセーリング150ｍ　写真じゃ伝わらない景色へ！★GoPro無料レンタル＆データプレゼント",
+      "category": "other",
+      "originalCategory": "パラセーリング（ロープ150m）",
+      "sourceCategoryPath": "パラセーリング",
+      "operator": "ココマリン（COCO MARINE）",
+      "operatorSlug": "cocomarine",
+      "optionCode": "OA-0552-01（）",
+      "summary": "人気マリンスポーツの定番♪パラセーリング！冒険コースでパラセーリングボートに乗って、宜野湾の上空150ｍの眺めを体験しよう♪お子様や女性の方も心配不要！船内にはトイレも完備！",
+      "description": "★パラセーリング特典★\nGoProカメラの無料レンタル！！\n使い方もしっかりレクチャーさせて頂きます！\n枚数無制限なので、フライトの思い出写真をたくさん撮ってきてください♪\nデータのダウンロードも無料なので、素敵な思い出と記憶に残るプランです！！\n\n《宜野湾港マリーナ発のアトラクション型新体感マリンスポーツ★》\n強者集まれ！高さ150ｍのパラセーリング\n沖縄に来たら是非やってみたい人気マリンスポーツのパラセーリング♪パラシュートを背に、モーターボートに引かれグングンと上昇。上空から眺める空と海のコントラストと浮遊感をご体験下さい！！\n空と海がどこまでも広がる感動の絶景フライト！写真では伝えきれないスケール感を楽しめる人気の高さです♪\n※オプションで当日にロープ200mへの変更も可能です。変更の際は受付時にお声かけください。\n\n＜見どころ＞\n・当店完全オーダーメイドのパラセーリングで空の旅へ！\n・経験豊富なスタッフがボートをぐいぐい引っ張っていくので迫力満点★\n・鳥になった気分で空の空中散歩が楽しめる♪\n・遠くに宜野湾の街並みが見えます！\n・安全にも考慮しているのでご安心下さい！\n\n＜当日の流れ＞\n宜野湾マリーナ出港　→　出航間もなくポイント地点。ハーネスを装着し、飛行に備えます。　→　パラセーリングスタート！　→　空と海のコントラストと浮遊感を存分に楽しんだら、ゆっくり船上にテイクオフ！",
+      "durationMin": 90,
+      "durationText": "約30分～90分",
+      "startTimes": [
+        "09:00",
+        "10:30",
+        "12:00",
+        "13:30",
+        "15:00",
+        "16:30"
+      ],
+      "startTimesText": "09：00　10：30　12：00　13：30　15：00　16：30",
+      "season": "通年",
+      "location": "宜野湾マリーナ",
+      "prices": [
+        {
+          "label": "1名（オン期）",
+          "price": 8800
+        },
+        {
+          "label": "1名（オフ期）",
+          "price": 8300
+        }
+      ],
+      "priceText": "8,800円/人　オン期\n8,300円/人　オフ期",
+      "priceNotes": "オン期：4/25~30・5/1~10・6/6,7,13,14,20,21,27,28・7/4,5,11,12,18~31・8/1~31・9/5,6,12,13,19~27・10/3,4,10~12,17,18,24,25,31・11/1~3,21~23・12/26~31・1/1~3,9~11 の期間\nオフ期：※上記以外の期間\n\n※お申し込みは前日の18：00までとさせて頂きます。\n間際予約は【リクエスト送信後】に利用施設連絡先、営業時間が表示されるので、お電話にて確認お願い致します。「沖縄の遊び」からリクエストメールした事をお伝え下さい。",
+      "taxIncluded": true,
+      "paymentTiming": "現地払い",
+      "options": [
+        {
+          "label": "バナナボート体験コース",
+          "durationMin": 10,
+          "price": 2500,
+          "note": "現地申し込み"
+        },
+        {
+          "label": "マーブル体験コース",
+          "durationMin": 10,
+          "price": 2500,
+          "note": "現地申し込み"
+        },
+        {
+          "label": "ビスケット体験コース",
+          "durationMin": 10,
+          "price": 2500,
+          "note": "現地申し込み"
+        },
+        {
+          "label": "ジェットスキー体験コース",
+          "durationMin": 10,
+          "price": 2500,
+          "note": "現地申し込み"
+        }
+      ],
+      "minAge": 4,
+      "maxAge": null,
+      "participationConditions": "対象年齢：4歳以上（体重15kg以上の方）\n※妊娠中の方のご参加はご遠慮いただいております。",
+      "capacity": 10,
+      "minParticipants": 1,
+      "applicationPartySizeText": "1～10",
+      "meetingPoint": "宜野湾マリーナに30分前集合（住所：沖縄県宜野湾市真志喜４丁目４－１ ）",
+      "meetingPoints": [
+        {
+          "label": null,
+          "text": "宜野湾マリーナに30分前集合（住所：沖縄県宜野湾市真志喜４丁目４－１ ）",
+          "parking": "あり（有料）  300円",
+          "mapEmbed": "https://www.google.com/maps?q=26.2770361,127.7299963&z=17&output=embed"
+        }
+      ],
+      "whatToBring": null,
+      "included": "体験料、保険料、器材料、消費税",
+      "notes": "【コース参加にあたってのご注意】\n・当日の天候次第では現地到着後、中止になる場合もございますのでご了承ください。\n・お子様は保護者同伴での参加になります。\n・妊娠中、又は妊娠の可能性がある方は参加をご遠慮ください。\n\n【その他注意事項】\n未成年者のみのご参加は保護者の同意書が必要となります。ご利用当日、参加受付の際に提出お願い致します。",
+      "cancellationPolicy": "お客様都合によるキャンセル・変更は早目にご連絡下さい。\n当日キャンセル・無連絡はキャンセル料100％頂いております。",
+      "facilities": "宜野湾マリーナ近郊のホテル\n東京第一ホテルオキナワグランメールリゾート\nEMウェルネスリゾート コスタビスタ沖縄 ホテル＆スパ\nヒルトン沖縄北谷リゾート\nベッセルホテルカンパーナ沖縄\nザ・ビーチタワー沖縄\nラグナガーデンホテル\n沖縄プリンスホテル オーシャンビューぎのわん\nムーンオーシャン宜野湾ホテル＆レジデンス",
+      "otherInfo": "現地にてオプションでマリンメニューがお楽しみできます！（現地申し込み）\n\nバナナボート体験コース10分2,500円\n\nマーブル体験コース10分2,500円\n\nビスケット体験コース10分2,500円\n\nジェットスキー体験コ−ス10分2,500円\n\n宜野湾マリーナ（集合場所）\n那覇空港より車で約30分\n西原ＩＣ下車で車で約10分",
+      "rentalAndOptionsText": null,
+      "transferInfo": null,
+      "schedule": [
+        {
+          "title": "宜野湾マリーナに集合",
+          "text": "宜野湾マリーナ現地集合\n専用ボートに乗り込みポイントへ移動します！",
+          "image": "https://tagoo.jp/optour/img/entry/01.jpg"
+        },
+        {
+          "title": "マリーナ出港",
+          "text": "ライフジャケットを着用していざ出港！",
+          "image": "https://tagoo.jp/optour/img/entry/00.jpg"
+        },
+        {
+          "title": "ハーネス装着",
+          "text": "パラセーリングポイントへ！\nハーネスを装着して飛行に備えます。",
+          "image": "https://tagoo.jp/optour/img/entry/02.jpg"
+        },
+        {
+          "title": "パラセールのセッテング",
+          "text": "期待高まる瞬間！いよいよパラシュートが広がります！順番がきたらハーネスをフックに繋ぎます。",
+          "image": "https://tagoo.jp/optour/img/entry/03.jpg"
+        },
+        {
+          "title": "パラセーリングで大空へ♪",
+          "text": "青空へテイクオフ！ぐんぐんと高度は増し上空150ｍへ♪\nフライト約10分",
+          "image": "https://tagoo.jp/optour/img/entry/DSC_0093.JPG"
+        },
+        {
+          "title": "パラセーリングで大空へ♪",
+          "text": "パラセールで大空に舞い上がると眼下には壮大な景色が広がリます。360度、見渡す限りの青一色！沖縄の南風を全身で受けながら、ゆったりと空中散歩をお楽しみください。",
+          "image": "https://tagoo.jp/optour/img/entry/coco_01.jpg"
+        },
+        {
+          "title": "パラセーリングで大空へ♪",
+          "text": "足元は青一色",
+          "image": "https://tagoo.jp/optour/img/entry/oa551_07.jpg"
+        },
+        {
+          "title": "体験終了",
+          "text": "港に戻り解散！お疲れ様でした♪",
+          "image": "https://tagoo.jp/optour/img/entry/04.jpg"
+        }
+      ],
+      "images": [
+        "https://tagoo.jp/optour/img/entry/coco_05.JPG",
+        "https://tagoo.jp/optour/img/entry/coco_03.jpg",
+        "https://tagoo.jp/optour/img/entry/coco_04.jpg",
+        "https://tagoo.jp/optour/img/entry/01.jpg",
+        "https://tagoo.jp/optour/img/entry/00.jpg",
+        "https://tagoo.jp/optour/img/entry/02.jpg",
+        "https://tagoo.jp/optour/img/entry/03.jpg",
+        "https://tagoo.jp/optour/img/entry/DSC_0093.JPG",
+        "https://tagoo.jp/optour/img/entry/coco_01.jpg",
+        "https://tagoo.jp/optour/img/entry/oa551_07.jpg",
+        "https://tagoo.jp/optour/img/entry/04.jpg"
+      ],
+      "sourceUrl": "https://tagoo.jp/optour/parasailing/oa552/"
+    },
+    {
+      "slug": "ginowan-parasailing-200m",
+      "title": "【宜野湾発】県内最長パラセーリング200ｍ　沖縄の空をひとりじめ！★GoPro無料レンタル＆写真プレザント",
+      "category": "other",
+      "originalCategory": "パラセーリング（ロープ200m・県内最長）",
+      "sourceCategoryPath": "パラセーリング",
+      "operator": "ココマリン（COCO MARINE）",
+      "operatorSlug": "cocomarine",
+      "optionCode": "OA-0557-01（）",
+      "summary": "人気マリンスポーツの定番♪パラセーリング！冒険コースでパラセーリングボートに乗って宜野湾の上空、県内最長200ｍの眺めを体験しよう♪お子様や女性の方も心配不要！船内にはトイレも完備！",
+      "description": "★パラセーリング特典★\nGoProカメラの無料レンタル！！\n使い方もしっかりレクチャーさせて頂きます！\n枚数無制限なので、フライトの思い出写真をたくさん撮ってきてください♪\nデータのダウンロードも無料なので、素敵な思い出と記憶に残るプランです！！\n\n《宜野湾港マリーナ発のアトラクション型新体感マリンスポーツ★》\n県内最長スリル満点！200ｍのパラセーリング\n沖縄に来たら是非やってみたい人気マリンスポーツのパラセーリング♪パラシュートを背に、モーターボートに引かれグングンと上昇。上空から眺める空と海のコントラストと浮遊感をご体験下さい！！\n絶対に特別な思い出になるプレミアムフライトです！ここでしか味わえないスケール感と開放感は、まさにプレミアムな空体験♪思い出に残るワンランク上のパラセーリングをぜひ体感してください！\n\n＜見どころ＞\n・当店完全オーダーメイドのパラセーリングで空の旅へ！\n・経験豊富なスタッフがボートをぐいぐい引っ張っていくので迫力満点★\n・鳥になった気分で空の空中散歩が楽しめる♪\n・遠くに宜野湾の街並みが見えます！\n・安全にも考慮しているのでご安心下さい！\n\n＜当日の流れ＞\n宜野湾マリーナ出港　→　出航間もなくポイント地点。ハーネスを装着し、飛行に備えます。　→　パラセーリングスタート！　→　空と海のコントラストと浮遊感を存分に楽しんだら、ゆっくり船上にテイクオフ！",
+      "durationMin": 90,
+      "durationText": "約30分～90分",
+      "startTimes": [
+        "09:00",
+        "10:30",
+        "12:00",
+        "13:30",
+        "15:00",
+        "16:30"
+      ],
+      "startTimesText": "09：00　10：30　12：00　13：30　15：00　16：30",
+      "season": "通年",
+      "location": "宜野湾マリーナ",
+      "prices": [
+        {
+          "label": "1名（オン期）",
+          "price": 9800
+        },
+        {
+          "label": "1名（オフ期）",
+          "price": 9300
+        }
+      ],
+      "priceText": "9,800円/人　オン期\n9,300円/人　オフ期",
+      "priceNotes": "オン期：4/25~30・5/1~10・6/6,7,13,14,20,21,27,28・7/4,5,11,12,18~31・8/1~31・9/5,6,12,13,19~27・10/3,4,10~12,17,18,24,25,31・11/1~3,21~23・12/26~31・1/1~3,9~11 の期間\nオフ期：※上記以外の期間\n\n※お申し込みは前日の18：00までとさせて頂きます。\n間際予約は【リクエスト送信後】に利用施設連絡先、営業時間が表示されるので、お電話にて確認お願い致します。「沖縄の遊び」からリクエストメールした事をお伝え下さい。",
+      "taxIncluded": true,
+      "paymentTiming": "現地払い",
+      "options": [
+        {
+          "label": "バナナボート体験コース",
+          "durationMin": 10,
+          "price": 2500,
+          "note": "現地申し込み"
+        },
+        {
+          "label": "マーブル体験コース",
+          "durationMin": 10,
+          "price": 2500,
+          "note": "現地申し込み"
+        },
+        {
+          "label": "ビスケット体験コース",
+          "durationMin": 10,
+          "price": 2500,
+          "note": "現地申し込み"
+        },
+        {
+          "label": "ジェットスキー体験コース",
+          "durationMin": 10,
+          "price": 2500,
+          "note": "現地申し込み"
+        }
+      ],
+      "minAge": 4,
+      "maxAge": null,
+      "participationConditions": "対象年齢：4歳以上（体重15kg以上の方）\n※妊娠中の方のご参加はご遠慮いただいております。",
+      "capacity": 10,
+      "minParticipants": 1,
+      "applicationPartySizeText": "1～10",
+      "meetingPoint": "宜野湾マリーナに30分前集合（住所：沖縄県宜野湾市真志喜４丁目４－１ ）",
+      "meetingPoints": [
+        {
+          "label": null,
+          "text": "宜野湾マリーナに30分前集合（住所：沖縄県宜野湾市真志喜４丁目４－１ ）",
+          "parking": "あり（有料）  300円",
+          "mapEmbed": "https://www.google.com/maps?q=26.2770361,127.7299963&z=17&output=embed"
+        }
+      ],
+      "whatToBring": null,
+      "included": "体験料、保険料、器材料、消費税",
+      "notes": "【コース参加にあたってのご注意】\n・当日の天候次第では現地到着後、中止になる場合もございますのでご了承ください。\n・お子様は保護者同伴での参加になります。\n・妊娠中、又は妊娠の可能性がある方は参加をご遠慮ください。\n\n【その他注意事項】\n未成年者のみのご参加は保護者の同意書が必要となります。ご利用当日、参加受付の際に提出お願い致します。",
+      "cancellationPolicy": "お客様都合によるキャンセル・変更は早目にご連絡下さい。\n当日キャンセル・無連絡はキャンセル料100％頂いております。",
+      "facilities": "宜野湾マリーナ近郊のホテル\n東京第一ホテルオキナワグランメールリゾート\nEMウェルネスリゾート コスタビスタ沖縄 ホテル＆スパ\nヒルトン沖縄北谷リゾート\nベッセルホテルカンパーナ沖縄\nザ・ビーチタワー沖縄\nラグナガーデンホテル\n沖縄プリンスホテル オーシャンビューぎのわん\nムーンオーシャン宜野湾ホテル＆レジデンス",
+      "otherInfo": "現地にてオプションでマリンメニューがお楽しみできます！（現地申し込み）\n\nバナナボート体験コース10分2,500円\n\nマーブル体験コース10分2,500円\n\nビスケット体験コース10分2,500円\n\nジェットスキー体験コ−ス10分2,500円\n\n宜野湾マリーナ（集合場所）\n那覇空港より車で約30分\n西原ＩＣ下車で車で約10分",
+      "rentalAndOptionsText": null,
+      "transferInfo": null,
+      "schedule": [
+        {
+          "title": "宜野湾マリーナに集合",
+          "text": "宜野湾マリーナ現地集合\n専用ボートに乗り込みポイントへ移動します！",
+          "image": "https://tagoo.jp/optour/img/entry/01.jpg"
+        },
+        {
+          "title": "マリーナ出港",
+          "text": "ライフジャケットを着用していざ出港！",
+          "image": "https://tagoo.jp/optour/img/entry/00.jpg"
+        },
+        {
+          "title": "ハーネス装着",
+          "text": "パラセーリングポイントへ！\nハーネスを装着して飛行に備えます。",
+          "image": "https://tagoo.jp/optour/img/entry/02.jpg"
+        },
+        {
+          "title": "パラセールのセッテング",
+          "text": "期待高まる瞬間！いよいよパラシュートが広がります！順番がきたらハーネスをフックに繋ぎます。",
+          "image": "https://tagoo.jp/optour/img/entry/03.jpg"
+        },
+        {
+          "title": "パラセーリングで大空へ♪",
+          "text": "青空へテイクオフ！ぐんぐんと高度は増し上空150ｍへ♪\nフライト約10分",
+          "image": "https://tagoo.jp/optour/img/entry/DSC_0093.JPG"
+        },
+        {
+          "title": "パラセーリングで大空へ♪",
+          "text": "パラセールで大空に舞い上がると眼下には壮大な景色が広がリます。360度、見渡す限りの青一色！沖縄の南風を全身で受けながら、ゆったりと空中散歩をお楽しみください。",
+          "image": "https://tagoo.jp/optour/img/entry/coco_01.jpg"
+        },
+        {
+          "title": "パラセーリングで大空へ♪",
+          "text": "足元は青一色",
+          "image": "https://tagoo.jp/optour/img/entry/oa551_07.jpg"
+        },
+        {
+          "title": "体験終了",
+          "text": "港に戻り解散！お疲れ様でした♪",
+          "image": "https://tagoo.jp/optour/img/entry/04.jpg"
+        }
+      ],
+      "images": [
+        "https://tagoo.jp/optour/img/entry/coco_05.JPG",
+        "https://tagoo.jp/optour/img/entry/coco_03.jpg",
+        "https://tagoo.jp/optour/img/entry/coco_04.jpg",
+        "https://tagoo.jp/optour/img/entry/01.jpg",
+        "https://tagoo.jp/optour/img/entry/00.jpg",
+        "https://tagoo.jp/optour/img/entry/02.jpg",
+        "https://tagoo.jp/optour/img/entry/03.jpg",
+        "https://tagoo.jp/optour/img/entry/DSC_0093.JPG",
+        "https://tagoo.jp/optour/img/entry/coco_01.jpg",
+        "https://tagoo.jp/optour/img/entry/oa551_07.jpg",
+        "https://tagoo.jp/optour/img/entry/04.jpg"
+      ],
+      "sourceUrl": "https://tagoo.jp/optour/parasailing/oa557/"
+    },
+    {
+      "slug": "ginowan-marine-pack-triple",
+      "title": "【宜野湾発】マリンパック海遊び　トリプルプラン",
+      "category": "other",
+      "originalCategory": "マリンパック（バナナボート・マーブル・ビスケット・ジェットスキーから3種）",
+      "sourceCategoryPath": "宜野湾港マリーナ",
+      "operator": "ココマリン（COCO MARINE）",
+      "operatorSlug": "cocomarine",
+      "optionCode": "OA-0556-01（）",
+      "summary": "宜野湾港マリーナでマリンスポーツ♪ここでしか味わえない最高の興奮を是非体験してみてください ！人気のマリンアクティビティ（バナナボート、マーブル、ビスケット、ジェットスキー）から、3つセットにしたお得プラン♪",
+      "description": "【女性グループに大好評！】マリンパックよくばりプラン\n低価格でマリンスポーツをたくさん楽しみたい方におすすめ★\n宜野湾港マリーナでマリンスポーツ♪定番で盛り上がるマリンスポーツ3 つをセットにしたお得プラン♪マリンスポーツはバナナボート、マーブル、ビスケット、ジェットスキー体験の中から現地にてお選びください。\n学生旅行や、ｸﾞﾙｰﾌﾟ団体旅行にもおすすめ！！是非この機会にお友達やご家族、カップルでもご参加ください。",
+      "durationMin": 60,
+      "durationText": "約1時間　各10分",
+      "startTimes": [
+        "09:00",
+        "10:30",
+        "12:00",
+        "13:30",
+        "15:00",
+        "16:30"
+      ],
+      "startTimesText": "09：00　10：30　12：00　13：30　15：00　16：30",
+      "season": "通年",
+      "location": "宜野湾マリーナ",
+      "prices": [
+        {
+          "label": "1名（オン期）",
+          "price": 8000
+        },
+        {
+          "label": "1名（オフ期）",
+          "price": 7300
+        }
+      ],
+      "priceText": "8,000円/人　オン期\n7,300円/人　オフ期",
+      "priceNotes": "オン期：4/25~30・5/1~10・6/6,7,13,14,20,21,27,28・7/4,5,11,12,18~31・8/1~31・9/5,6,12,13,19~27・10/3,4,10~12,17,18,24,25,31・11/1~3,21~23・12/26~31・1/1~3,9~11 の期間\nオフ期：※上記以外の期間\n\n※お申し込みは前日の18：00までとさせて頂きます。\n間際予約は【リクエスト送信後】に利用施設連絡先、営業時間が表示されるので、お電話にて確認お願い致します。「沖縄の遊び」からリクエストメールした事をお伝え下さい。",
+      "taxIncluded": true,
+      "paymentTiming": "現地払い",
+      "options": [
+        {
+          "label": "バナナボート体験コース",
+          "durationMin": 10,
+          "price": 2500,
+          "note": "現地申し込み"
+        },
+        {
+          "label": "マーブル体験コース",
+          "durationMin": 10,
+          "price": 2500,
+          "note": "現地申し込み"
+        },
+        {
+          "label": "ビスケット体験コース",
+          "durationMin": 10,
+          "price": 2500,
+          "note": "現地申し込み"
+        },
+        {
+          "label": "ジェットスキー体験コース",
+          "durationMin": 10,
+          "price": 2500,
+          "note": "現地申し込み"
+        }
+      ],
+      "minAge": 4,
+      "maxAge": null,
+      "participationConditions": "対象年齢：4歳以上\n※妊娠中の方のご参加はご遠慮いただいております。",
+      "capacity": null,
+      "minParticipants": 2,
+      "applicationPartySizeText": "2～",
+      "meetingPoint": "宜野湾マリーナに30分前集合（住所：沖縄県宜野湾市真志喜４丁目４－１ ）",
+      "meetingPoints": [
+        {
+          "label": null,
+          "text": "宜野湾マリーナに30分前集合（住所：沖縄県宜野湾市真志喜４丁目４－１ ）",
+          "parking": "あり（有料）  300円",
+          "mapEmbed": "https://www.google.com/maps?q=26.2770361,127.7299963&z=17&output=embed"
+        }
+      ],
+      "whatToBring": null,
+      "included": "マリンスポーツ3つ、保険料、器材料、消費税",
+      "notes": "【コース参加にあたってのご注意】\n・当日の天候次第では現地到着後、中止になる場合もございますのでご了承ください。\n・お子様は保護者同伴での参加になります。\n・妊娠中、又は妊娠の可能性がある方は参加をご遠慮ください。\n\n【その他注意事項】\n未成年者のみのご参加は保護者の同意書が必要となります。ご利用当日、参加受付の際に提出お願い致します。",
+      "cancellationPolicy": "お客様都合によるキャンセル・変更は早目にご連絡下さい。\n当日キャンセル・無連絡はキャンセル料100％頂いております。",
+      "facilities": "宜野湾マリーナ近郊のホテル\n東京第一ホテルオキナワグランメールリゾート\nEMウェルネスリゾート コスタビスタ沖縄 ホテル＆スパ\nヒルトン沖縄北谷リゾート\nベッセルホテルカンパーナ沖縄\nザ・ビーチタワー沖縄\nラグナガーデンホテル\n沖縄プリンスホテル オーシャンビューぎのわん\nムーンオーシャン宜野湾ホテル＆レジデンス",
+      "otherInfo": "現地にてオプションでマリンメニューがお楽しみできます！（現地申し込み）\n\nバナナボート体験コース10分2,500円\n\nマーブル体験コース10分2,500円\n\nビスケット体験コース10分2,500円\n\nジェットスキー体験コ−ス10分2,500円\n\n宜野湾マリーナ（集合場所）\n那覇空港より車で約30分\n西原ＩＣ下車で車で約10分",
+      "rentalAndOptionsText": null,
+      "transferInfo": null,
+      "schedule": [
+        {
+          "title": "宜野湾マリーナに集合",
+          "text": "宜野湾マリーナ現地集合",
+          "image": "https://tagoo.jp/optour/img/entry/oa556_02.jpg"
+        },
+        {
+          "title": "バナナボート",
+          "text": "みんなで楽しい♪バナナボートは大迫力！！\nお手軽で楽しさ満点ですのでご家族、ご友人、カップルなど、たくさんのお客様にお楽しみいただけます♪",
+          "image": "https://tagoo.jp/optour/img/entry/oa555_04.jpg"
+        },
+        {
+          "title": "ビスケット",
+          "text": "水しぶきを浴び、海面を滑走するスリル感と遠心力はまるで海の上のジェットコースター。スリルを味わいたいあなた！　一度、挑戦してみませんか？",
+          "image": "https://tagoo.jp/optour/img/entry/oa555_05.jpg"
+        },
+        {
+          "title": "マーブル",
+          "text": "遠心力がハンパありません。前後左右、色々な姿勢でスリルを楽しめます。みんなでチャレンジしてみよう♪",
+          "image": "https://tagoo.jp/optour/img/entry/oa555_06.jpg"
+        },
+        {
+          "title": "ジェットスキー体験",
+          "text": "インストラクター同行・安全操作で、初心者でも大丈夫！\n潮風と爽快な波音・スピード感・エンジン音を、肌で感じられ、安心してお楽しみいただけます。",
+          "image": "https://tagoo.jp/optour/img/entry/oa555_07.jpg"
+        },
+        {
+          "title": "体験終了",
+          "text": "お疲れ様でした♪",
+          "image": "https://tagoo.jp/optour/img/entry/oa556_04.jpg"
+        }
+      ],
+      "images": [
+        "https://tagoo.jp/optour/img/entry/oa556_m1.jpg",
+        "https://tagoo.jp/optour/img/entry/oa556_m2.jpg",
+        "https://tagoo.jp/optour/img/entry/oa556_m3.jpg",
+        "https://tagoo.jp/optour/img/entry/oa556_02.jpg",
+        "https://tagoo.jp/optour/img/entry/oa555_04.jpg",
+        "https://tagoo.jp/optour/img/entry/oa555_05.jpg",
+        "https://tagoo.jp/optour/img/entry/oa555_06.jpg",
+        "https://tagoo.jp/optour/img/entry/oa555_07.jpg",
+        "https://tagoo.jp/optour/img/entry/oa556_04.jpg"
+      ],
+      "sourceUrl": "https://tagoo.jp/optour/ginowan-marina/oa556/"
+    },
+    {
+      "slug": "ginowan-flyboard",
+      "title": "【宜野湾発】フライボード　今話題の空飛ぶマリンアクティビティ！",
+      "category": "other",
+      "originalCategory": "フライボード",
+      "sourceCategoryPath": "フライボード",
+      "operator": "ココマリン（COCO MARINE）",
+      "operatorSlug": "cocomarine",
+      "optionCode": "OA-0554-01（）",
+      "summary": "ジェット噴射の威力で体が宙に浮く！！大興奮のアクティビティ♪今話題のフライボードならお任せください！沖縄で最高の思い出を作りませんか！？",
+      "description": "【宜野湾】ジェット噴射の威力で体が宙に浮く！フライボードコース\n\n今話題のフライボードならお任せください！水上バイクが吐出する水をボードから噴射し、空中飛行が楽しめるマリンスポーツです。初心者でも10～15分の練習で飛行することができるお手軽感も人気♪慣れてくると、上下左右自由に飛行することやテクニック次第ではイルカのように泳ぐことも可能☆ウェットスーツを着用すれば冬でも楽しめるマリンスポーツです。\n学生旅行や、ｸﾞﾙｰﾌﾟ団体旅行にもおすすめ！！是非この機会にお友達やご家族、カップルでもご参加ください。\n\n＜見どころ＞\n・鳥になった気分で空中歩行が楽しめる！\n・初心者の人でも慣れてくれば、簡単に飛行可能！\n・経験豊富なスタッフが優しくレクチャーいたします！\n・安全に考慮した上で行うのでご安心下さい！\n\n＜当日の流れ＞\n宜野湾マリーナ出港　→　ポイントについたらフライボードをスタート！　→　青く透き通るキレイな海で思いっきり遊んで心も体もリフレッシュ♪",
+      "durationMin": 30,
+      "durationText": "約30分",
+      "startTimes": [
+        "09:00",
+        "10:30",
+        "12:00",
+        "13:30",
+        "15:00",
+        "16:30"
+      ],
+      "startTimesText": "09：00　10：30　12：00　13：30　15：00　16：30",
+      "season": "通年",
+      "location": "宜野湾マリーナ",
+      "prices": [
+        {
+          "label": "1名（オン期）",
+          "price": 8800
+        },
+        {
+          "label": "1名（オフ期）",
+          "price": 8300
+        }
+      ],
+      "priceText": "8,800円/人　オン期\n8,300円/人　オフ期",
+      "priceNotes": "オン期：4/25~30・5/1~10・6/6,7,13,14,20,21,27,28・7/4,5,11,12,18~31・8/1~31・9/5,6,12,13,19~27・10/3,4,10~12,17,18,24,25,31・11/1~3,21~23・12/26~31・1/1~3,9~11 の期間\nオフ期：※上記以外の期間\n\n※お申し込みは前日の18：00までとさせて頂きます。\n間際予約は【リクエスト送信後】に利用施設連絡先、営業時間が表示されるので、お電話にて確認お願い致します。「沖縄の遊び」からリクエストメールした事をお伝え下さい。",
+      "taxIncluded": true,
+      "paymentTiming": "現地払い",
+      "options": [
+        {
+          "label": "バナナボート体験コース",
+          "durationMin": 10,
+          "price": 2500,
+          "note": "現地申し込み"
+        },
+        {
+          "label": "マーブル体験コース",
+          "durationMin": 10,
+          "price": 2500,
+          "note": "現地申し込み"
+        },
+        {
+          "label": "ビスケット体験コース",
+          "durationMin": 10,
+          "price": 2500,
+          "note": "現地申し込み"
+        },
+        {
+          "label": "ジェットスキー体験コース",
+          "durationMin": 10,
+          "price": 2500,
+          "note": "現地申し込み"
+        }
+      ],
+      "minAge": 12,
+      "maxAge": null,
+      "participationConditions": "対象年齢：12歳以上\n※妊娠中の方のご参加はご遠慮いただいております。",
+      "capacity": null,
+      "minParticipants": null,
+      "applicationPartySizeText": null,
+      "meetingPoint": "宜野湾マリーナに30分前集合（住所：沖縄県宜野湾市真志喜４丁目４－１ ）",
+      "meetingPoints": [
+        {
+          "label": null,
+          "text": "宜野湾マリーナに30分前集合（住所：沖縄県宜野湾市真志喜４丁目４－１ ）",
+          "parking": "あり（有料）  300円",
+          "mapEmbed": "https://www.google.com/maps?q=26.2770361,127.7299963&z=17&output=embed"
+        }
+      ],
+      "whatToBring": null,
+      "included": "体験料、保険料、器材料、消費税",
+      "notes": "【コース参加にあたってのご注意】\n・当日の天候次第では現地到着後、中止になる場合もございますのでご了承ください。\n・お子様は保護者同伴での参加になります。\n・妊娠中、又は妊娠の可能性がある方は参加をご遠慮ください。\n\n【その他注意事項】\n未成年者のみのご参加は保護者の同意書が必要となります。ご利用当日、参加受付の際に提出お願い致します。",
+      "cancellationPolicy": "お客様都合によるキャンセル・変更は早目にご連絡下さい。\n当日キャンセル・無連絡はキャンセル料100％頂いております。",
+      "facilities": "宜野湾マリーナ近郊のホテル\n東京第一ホテルオキナワグランメールリゾート\nEMウェルネスリゾート コスタビスタ沖縄 ホテル＆スパ\nヒルトン沖縄北谷リゾート\nベッセルホテルカンパーナ沖縄\nザ・ビーチタワー沖縄\nラグナガーデンホテル\n沖縄プリンスホテル オーシャンビューぎのわん\nムーンオーシャン宜野湾ホテル＆レジデンス",
+      "otherInfo": "現地にてオプションでマリンメニューがお楽しみできます！（現地申し込み）\n\nバナナボート体験コース10分2,500円\n\nマーブル体験コース10分2,500円\n\nビスケット体験コース10分2,500円\n\nジェットスキー体験コ−ス10分2,500円\n\n宜野湾マリーナ（集合場所）\n那覇空港より車で約30分\n西原ＩＣ下車で車で約10分",
+      "rentalAndOptionsText": null,
+      "transferInfo": null,
+      "schedule": [
+        {
+          "title": "宜野湾マリーナに集合",
+          "text": "宜野湾マリーナ現地集合",
+          "image": "https://tagoo.jp/optour/img/entry/oa554_08.jpg"
+        },
+        {
+          "title": "フライボードに挑戦♪",
+          "text": "器材装着！ベテランインストラクターの指導のもと、いざ！フライボードにチャレンジ♪",
+          "image": "https://tagoo.jp/optour/img/entry/oa554_05.jpg"
+        },
+        {
+          "title": "フライボードに挑戦♪",
+          "text": "（体験時間は約20分）\nフライボードは意外に簡単で、初めてでもほとんどの方が空中散歩を楽しめます。",
+          "image": "https://tagoo.jp/optour/img/entry/oa554_01.jpg"
+        },
+        {
+          "title": "フライボードに挑戦♪",
+          "text": "ポイントまではジェットスキーでなくジェットボートでお連れしますので、みんなでわいわいグループ一緒に楽しめます。",
+          "image": "https://tagoo.jp/optour/img/entry/oa554_13.jpg"
+        },
+        {
+          "title": "体験終了",
+          "text": "マリーナに戻り解散！お疲れ様でした♪",
+          "image": "https://tagoo.jp/optour/img/entry/oa554_10.jpg"
+        }
+      ],
+      "images": [
+        "https://tagoo.jp/optour/img/entry/oa554_02.jpg",
+        "https://tagoo.jp/optour/img/entry/oa554_07.jpg",
+        "https://tagoo.jp/optour/img/entry/oa554_09.jpg",
+        "https://tagoo.jp/optour/img/entry/oa554_08.jpg",
+        "https://tagoo.jp/optour/img/entry/oa554_05.jpg",
+        "https://tagoo.jp/optour/img/entry/oa554_01.jpg",
+        "https://tagoo.jp/optour/img/entry/oa554_13.jpg",
+        "https://tagoo.jp/optour/img/entry/oa554_10.jpg"
+      ],
+      "sourceUrl": "https://tagoo.jp/optour/flyboard/oa554/"
+    },
+    {
+      "slug": "ginowan-boat-fishing-2h",
+      "title": "【宜野湾マリーナ発】手ぶらで参加OK！お手軽ボートフィッシング2時間ツアー！",
+      "category": "other",
+      "originalCategory": "釣り（ボートフィッシング／底もの狙い）",
+      "sourceCategoryPath": "沖縄本島の釣り",
+      "operator": "釣船レクシー",
+      "operatorSlug": "recsea",
+      "optionCode": "OA-4140-01（）",
+      "summary": "沖縄観光の合間に釣り体験はいかがですか？宜野湾マリーナは那覇空港から車で約20分！必要な機材はすべて込みなので手ぶらで参加OKです！女性やお子様、初心者大歓迎！ベテランガイドが丁寧にサポートしてくれるので、初心者はもちろん、釣り経験者も楽しちゃう♪",
+      "description": "★底もの狙いのお手軽ボートフィッシングツアー！\n★手ぶらで参加OK！必要な機材はすべて込み♪\n★女性やお子様、初心者大歓迎！\n\n沖縄観光の合間に釣り体験はいかがですか？\n宜野湾マリーナは那覇空港から車で約20分！\n\nライトなフィッシング体験では物足りない方におすすめの底もの狙いのフィッシング。\n沖縄らしい綺麗な魚から大きな高級魚まで狙えるのが魅力！\nメインターゲットにはフエフキダイ、タマン、シロダイ、ミーバイなどの高級魚も♪\nベテランガイドが丁寧にサポートしてくれるので、初心者はもちろん、釣り経験者も楽しちゃう♪",
+      "durationMin": 120,
+      "durationText": "約2時間",
+      "startTimes": [
+        "08:00",
+        "10:30",
+        "13:00",
+        "15:30"
+      ],
+      "startTimesText": "08：00　10：30　13：00　15：30",
+      "season": "通年",
+      "location": "宜野湾マリーナ発　近海",
+      "prices": [
+        {
+          "label": "小学生以上（釣り参加）",
+          "price": 5000
+        },
+        {
+          "label": "乗船のみ",
+          "price": 3000
+        }
+      ],
+      "priceText": "5,000円/人(小学生以上)\n3,000円/人(乗船のみの方)",
+      "priceNotes": "※お申し込みは前日の12：00までとさせて頂きます。間際予約は【リクエスト送信後】に利用施設連絡先、営業時間が表示されるので、お電話にて確認お願い致します。「沖縄の遊び」からリクエストメールした事をお伝え下さい。",
+      "taxIncluded": true,
+      "paymentTiming": "現地払い",
+      "options": [],
+      "minAge": 6,
+      "maxAge": 80,
+      "participationConditions": "小学生～80歳まで※それ以上はご相談下さい。\n妊婦さん、重い持病をお持ちの方は参加不可。",
+      "capacity": 8,
+      "minParticipants": 2,
+      "applicationPartySizeText": "2～",
+      "meetingPoint": "宜野湾マリーナに15分前集合\n（住所：沖縄県宜野湾市真志喜４丁目４－１ ）",
+      "meetingPoints": [
+        {
+          "label": null,
+          "text": "宜野湾マリーナに15分前集合\n（住所：沖縄県宜野湾市真志喜４丁目４－１ ）",
+          "parking": "あり（有料）  300円",
+          "mapEmbed": "https://www.google.com/maps?q=26.2770361,127.7299963&z=17&output=embed"
+        }
+      ],
+      "whatToBring": "※濡れても良い服でご参加ください。\n※日焼け予防グッズや飲み物など必要なものをご持参ください。\n※船酔いの心配な方は酔い止めをご準備ください。\n※釣った魚のお持ち帰りを希望される場合はクーラーボックスや氷等を予めご準備ください。",
+      "included": "乗船代・ガイド料・保険・道具代・餌代・消費税",
+      "notes": "【コース参加にあたってのご注意】\n※濡れても良い服でご参加ください。\n※日焼け予防グッズや飲み物など必要なものをご持参ください。\n※船酔いの心配な方は酔い止めをご準備ください。\n※天候、海況などにより開催できない場合もございます。その場合でもツアー開催場所までの交通費などの補償には応じられません。予めご了承下さい。\n※魚の保全と資源保護のためにキャッチ＆リリースを推奨しています。\n※釣った魚のお持ち帰りを希望される場合はクーラーボックスや氷等を予めご準備ください。\n※釣った魚を調理してくれる飲食店をご紹介することは可能ですが、飲食店都合でお受けできない場合も御座います。予めご了承ください。\n\n【その他注意事項】\n未成年者のみのご参加は保護者の同意書が必要となります。ご利用当日、参加受付の際に提出お願い致します。",
+      "cancellationPolicy": "天候、海況などにより開催できない場合もございます。\nその場合はキャンセル料はかかりませんのでご安心ください。\nお客様のご都合でキャンセルの場合は以下のキャンセル料金がかかります\n前日：50%\n当日：100%\nお早めにお電話でご連絡ください。",
+      "facilities": null,
+      "otherInfo": "当日、現地にて現金でお支払いください。（クレジットカード不可）",
+      "rentalAndOptionsText": null,
+      "transferInfo": null,
+      "schedule": [
+        {
+          "title": "集合",
+          "text": "宜野湾マリーナに15分前集合～船へご案内します。\n船種：ヤマハW32\n定員：8名\n設備：トイレ・シャワー完備",
+          "image": "https://tagoo.jp/optour/img/entry/oa4140_ship.jpg"
+        },
+        {
+          "title": "ツアーの説明",
+          "text": "釣りのレクチャーをし出港します。ポイントは近くて約10分。",
+          "image": null
+        },
+        {
+          "title": "釣り開始",
+          "text": "沖縄観光の合間に釣り体験はいかがですか？",
+          "image": "https://tagoo.jp/optour/img/entry/oa4140_04.jpg"
+        },
+        {
+          "title": "釣り",
+          "text": "手ぶらで参加OK！必要な機材はすべて込み♪",
+          "image": "https://tagoo.jp/optour/img/entry/oa4140_05.jpg"
+        },
+        {
+          "title": "釣り",
+          "text": "女性やお子様、初心者大歓迎！",
+          "image": "https://tagoo.jp/optour/img/entry/oa4140_06.jpg"
+        },
+        {
+          "title": "釣り",
+          "text": "メインターゲットにはフエフキダイ、タマン、シロダイ、ミーバイなどの高級魚も♪",
+          "image": "https://tagoo.jp/optour/img/entry/oa4140_07.jpg"
+        },
+        {
+          "title": "釣り",
+          "text": "ベテランガイドが丁寧にサポートしてくれるので、初心者はもちろん、釣り経験者も楽しちゃう♪",
+          "image": "https://tagoo.jp/optour/img/entry/oa4140_08.jpg"
+        },
+        {
+          "title": "帰港",
+          "text": "体験終了。お疲れさまでした！",
+          "image": null
+        }
+      ],
+      "images": [
+        "https://tagoo.jp/optour/img/entry/oa4140_001.jpg",
+        "https://tagoo.jp/optour/img/entry/oa4140_02.jpg",
+        "https://tagoo.jp/optour/img/entry/oa4140_03.jpg",
+        "https://tagoo.jp/optour/img/entry/oa4140_ship.jpg",
+        "https://tagoo.jp/optour/img/entry/oa4140_04.jpg",
+        "https://tagoo.jp/optour/img/entry/oa4140_05.jpg",
+        "https://tagoo.jp/optour/img/entry/oa4140_06.jpg",
+        "https://tagoo.jp/optour/img/entry/oa4140_07.jpg",
+        "https://tagoo.jp/optour/img/entry/oa4140_08.jpg"
+      ],
+      "sourceUrl": "https://tagoo.jp/optour/fishing/oa4140/"
+    },
+    {
+      "slug": "kerama-charter-party-7h",
+      "title": "10名以上団体向け／【那覇・宜野湾・北谷発】至れり尽くせり（貸切7時間）慶良間船上パーティープラン　マリンスポーツが遊び放題！しかも船上BBQ付き♪",
+      "category": "other",
+      "originalCategory": "クルーザー貸切チャーター（シュノーケリング・釣り・SUP・JETスキー・トーイング・船上BBQ）",
+      "sourceCategoryPath": "クルージング＆グラスボート",
+      "operator": "シーワークス沖縄アイランド",
+      "operatorSlug": "seaworks",
+      "optionCode": "OA-1611-05（）",
+      "summary": "10名様まで基本料金　船内広々最大35名旅客クルーザーで快適！チャーターでの海遊び満喫◆激レア慶良間諸島でシュノーケリング、釣り、SUP、JETスキー、マリンスポーツ遊び放題！BBQ付。",
+      "description": "★爽快クルージング\n★高遭遇率海がめ探索\n★シュノーケリング\n★楽しさ倍増の魚釣り\n★船上BBQパーティー\n★マリンスポーツ三昧\n☆絶景パラセーリング（オプション）\n☆貴重体験無人島上陸（オプション）\n☆出発時間自由に設定！（ご相談ください）\n――――――――――\n３ヵ所の港から出発\n1.那覇市三重城港\n2.宜野湾港マリーナ\n3.北谷町うみんちゅワーフ\n――――――――――\n\n☆＼幹事様は鼻高々／至れり尽くせり７時間！超～お得な【船上パーティープラン】\n☆絶景ポイントでマリンスポーツが遊び放題！しかも船上BBQ付きで全てコミコミ！！\n\n☆３ヵ所の港から出発！那覇発20分～宜野湾発30分～北谷発40分～で行ける絶景珊瑚礁の慶良間チービシ海域へご案内致します。\n\n☆JET遊び付きで貴重な海がめ探しも楽々\n☆料金追加で無人島上陸できる島へのご案内も可能。\n☆パーティプランAとフライボード付きのプレミアムプランをご用意。\n☆慶良間絶景パラセーリングの追加もOK！\n☆当日船に空きがあればサンセットまでの時間延長も受付けます。\n\n【タイムスケジュール】\n(8：30)集合　宜野湾港マリーナへ到着されましたら連絡ください　→　事前説明　船にご案内後、船上にて説明をさせて頂きます　→　(9：00)出港　→　（9：25）ウミガメ探索クルーズ　→　(9：50)ポイント到着　シュノーケル＆マリンスポーツ、ランチはBBQ！ポイント移動もOKです♪スケジュールは自由設定♪ 　→　(16：00)帰港\n※スケジュールは一例です。\n※集合時に服の下から水着を着用しておくと、到着後すぐにシュノーケルが楽しめます♪\n※船酔いの心配がある方は　事前に酔い止めの服用をおすすめいたします！",
+      "durationMin": 420,
+      "durationText": "約7時間",
+      "startTimes": [
+        "09:00",
+        "10:00",
+        "11:00"
+      ],
+      "startTimesText": "9:00　10:00　11:00",
+      "season": "通年",
+      "location": "慶良間チービシ",
+      "prices": [
+        {
+          "label": "貸切基本料金（10名様迄）宜野湾港マリーナ発",
+          "price": 265000
+        },
+        {
+          "label": "貸切基本料金（10名様迄）那覇市三重城港発",
+          "price": 285000
+        },
+        {
+          "label": "貸切基本料金（10名様迄）北谷うみんちゅワーフ発",
+          "price": 285000
+        }
+      ],
+      "priceText": "▼53フィート 団体様向け大型クルーザー\n265,000円 宜野湾港マリーナ発\n285,000円 那覇市三重城港発\n285,000円 北谷うみんちゅワーフ発\n＋70,000円 ★プレミアムプラン",
+      "priceNotes": "※10名様迄の基本料金\n※11名以上 ＋10,000円/名\n※BBQ追加 ＋3,000円/名\n\n※お申し込みは前日の18：00までとさせて頂きます。間際予約は【リクエスト送信後】に利用施設連絡先、営業時間が表示されるので、お電話にて確認お願い致します。「沖縄の遊び」からリクエストメールした事をお伝え下さい。",
+      "taxIncluded": true,
+      "paymentTiming": "現地払い",
+      "options": [
+        {
+          "label": "★プレミアムプラン",
+          "price": 70000,
+          "unit": "貸切"
+        },
+        {
+          "label": "11名以上 追加",
+          "price": 10000,
+          "unit": "名"
+        },
+        {
+          "label": "BBQ追加",
+          "price": 3000,
+          "unit": "名"
+        },
+        {
+          "label": "上陸できる無人島まで遠征",
+          "price": 30000,
+          "unit": "貸切"
+        },
+        {
+          "label": "1H延長（当日受付）",
+          "price": 30000,
+          "unit": "貸切",
+          "note": "プレミアムプランは＋45,000円"
+        },
+        {
+          "label": "冬季のウエットスーツ",
+          "price": 1500,
+          "unit": "着"
+        },
+        {
+          "label": "絶景慶良間パラセーリング",
+          "price": 8000,
+          "unit": "名"
+        }
+      ],
+      "minAge": 4,
+      "maxAge": null,
+      "participationConditions": "対象年齢：4歳～\n妊婦さん、重い持病をお持ちの方は参加不可。",
+      "capacity": 35,
+      "minParticipants": null,
+      "applicationPartySizeText": "～35名様（快適人数20名前後）",
+      "meetingPoint": "宜野湾マリーナ／レストランフィッシュテール前の白テント30分前集合（住所：沖縄県宜野湾市真志喜４丁目４－１ ）",
+      "meetingPoints": [
+        {
+          "label": "宜野湾マリーナ",
+          "text": "宜野湾マリーナ／レストランフィッシュテール前の白テント30分前集合（住所：沖縄県宜野湾市真志喜４丁目４－１ ）",
+          "parking": "あり（有料）  300円"
+        },
+        {
+          "label": null,
+          "text": "那覇・三重城港（みえぐすくこう）30分前集合（住所：那覇市西3-20 ）",
+          "parking": "あり（有料）  500円",
+          "mapEmbed": "https://www.google.com/maps?q=26.219755,127.663694&z=17&output=embed"
+        },
+        {
+          "label": null,
+          "text": "北谷町うみんちゅワーフ30分前集合（住所：沖縄県中頭郡北谷町美浜54番地 ）",
+          "parking": "あり（無料）  駐車場代2時間まで無料・以後1時間100円（最大1日400円）",
+          "mapEmbed": "https://www.google.com/maps?q=26.321515, 127.754951&z=17&output=embed"
+        }
+      ],
+      "whatToBring": "・タオル持参・日焼けと酔い止め対策は万全に！\n※集合時に服の下から水着を着用しておくと、到着後すぐにシュノーケルが楽しめます♪",
+      "included": "乗船料、必要機材一式、保険料、消費税、☆爽快クルージング、高遭遇率の海がめ探索、シュノーケリングSET、釣り×2SET、SUP×1艇、JETスキー1艇（運転手付き※船舶免許持参されるとレンタルOK！）、トーイング系3点が遊び放題（バナナボート・マーブル・ウェイクボード）、ウェルカムちんすこう（沖縄の定番お菓子）、船上BBQ（ライス付き）、ソフトドリンク、クーラーボックス（氷入り）、JBL Bluetooth防水スピーカ　防水デジカメレンタル、撮影画像プレゼント\n★プレミアムプランで変更・追加\n・JETスキー１艇→２艇（運転手付き）※船舶免許持参されると１台レンタルOK！\n・フライボード＆トーイング系３点全てが遊び放題",
+      "notes": "【コース参加にあたってのご注意】\n・当日慶良間方面の海況が悪いと判断した場合、近くの波が穏やかなポイントで開催する事もできますので船酔いが心配な方でも急なご予定変更がなく１日中楽しめます。\n・最遅帰港時間は夏季18時～冬季17時となります。\n・タオル持参・日焼けと酔い止め対策は万全に！\n・集合時間は出発の30分前になります。\n・出発の10分前までに乗船手続きをお済ませください。\n・現地でご説明する注意事項をお守りください。\n（特に遊泳範囲  航行区域  危険生物等々）\n・酔い止め対策は事前に万全にお願いします。\n・ライフジャッケット着用のご協力をお願いします。\n\n【その他注意事項】\n※１８歳未満の方だけのご利用はできません。",
+      "cancellationPolicy": "キャンセルは参加日3日前の17時までに電話でご連絡ください。\n■参加日当日：ツアー料金の100％\n■無断キャンセル：ツアー料金の100％\n悪天候により弊社が中止の判断した場合キャンセル料はかかりません。",
+      "facilities": "■宜野湾マリーナ\nレストランフィッシュテール建物下　1回300円\n■那覇三重城港\n待合所　温水シャワー　3分100円\n■北谷うみんちゅワーフ\n温水シャワー　5分200円",
+      "otherInfo": "クレジットカードもご利用いただけます。ご予約の際にお問い合わせください。\nVISA／MasterCard／JCB／American Express／Diners／ Discover Card",
+      "rentalAndOptionsText": "☆上陸できる無人島まで遠征＋30,000円\n※チービシ海域からさらに約20分、上陸は別途ジェットスキーが必要です。\n☆１H延長（当日受付）＋30,000円\n※プレミアムプランは＋45,000円\n\n■オプション\n・冬季のウエットスーツ 1,500円／1着\n・絶景慶良間パラセーリング 8,000円／名",
+      "transferInfo": null,
+      "schedule": [
+        {
+          "title": "集合",
+          "text": "港に30分前集合\n受付・説明後ボートに乗船♪慶良間チービシ環礁に向け出港！！",
+          "image": "https://tagoo.jp/optour/img/entry/oa1611_05_01.jpg"
+        },
+        {
+          "title": "ウミガメ探索クルーズ",
+          "text": "船長自慢の海がめ探しクルーズは大好評。ポイント移動中にもみつかるかも♪",
+          "image": "https://tagoo.jp/optour/img/entry/oa1611_05_02.jpg"
+        },
+        {
+          "title": "シュノーケリング",
+          "text": "ポイントに到着！透明度の高い海は「ケラマブルー」と称されるほど。国立公園に指定されたケラマの海があなたを待っています！のんびりシュノーケリングを楽しもう♪",
+          "image": "https://tagoo.jp/optour/img/entry/oa1611_05_03.jpg"
+        },
+        {
+          "title": "魚釣り体験",
+          "text": "沖縄のカラフルな魚を釣り上げて最高の思い出にしてください！沖縄の綺麗な海でのんびり船釣りをするのは、この上ない最高の贅沢な時間かもしれません♪",
+          "image": "https://tagoo.jp/optour/img/entry/oa1611_05_04.jpg"
+        },
+        {
+          "title": "マリンスポーツ",
+          "text": "トーイング系3点が遊び放題（バナナボート・マーブル・ウェイクボード）",
+          "image": "https://tagoo.jp/optour/img/entry/oa1611_05_05.jpg"
+        },
+        {
+          "title": "JET体験",
+          "text": "水上を縦横無尽に滑走するジェットスキーはスピード感抜群！ストレス発散したい方にお勧め！※船舶免許をお持ちの方は、ご自分で運転できます。",
+          "image": "https://tagoo.jp/optour/img/entry/oa1611_05_06.jpg"
+        },
+        {
+          "title": "★プレミアムプラン",
+          "text": "プレミアムプランはフライボード付き！コツを掴めば初心者でも５分ほどで浮上に成功。危険性や難易度は低く、女性でも気軽に楽しめる新感覚のマリンスポーツです♪\nさらにJETスキー１艇→２艇（運転手付き）※船舶免許持参されると１台レンタルOK！",
+          "image": "https://tagoo.jp/optour/img/entry/oa1611_05_07.jpg"
+        },
+        {
+          "title": "船上BBQ",
+          "text": "仲間とみんなで船上バーベキュー。他のお客様に気兼ねない、貸切ツアーが楽しめます。",
+          "image": "https://tagoo.jp/optour/img/entry/oa1611_05_08.jpg"
+        },
+        {
+          "title": "体験終了",
+          "text": "お疲れ様でした♪",
+          "image": "https://tagoo.jp/optour/img/entry/oa1611_05_11.jpg"
+        }
+      ],
+      "images": [
+        "https://tagoo.jp/optour/img/entry/oa1611_05_m01.jpg",
+        "https://tagoo.jp/optour/img/entry/oa1611_05_m02.jpg",
+        "https://tagoo.jp/optour/img/entry/oa1611_05_m03.jpg",
+        "https://tagoo.jp/optour/img/entry/oa1611_05_01.jpg",
+        "https://tagoo.jp/optour/img/entry/oa1611_05_02.jpg",
+        "https://tagoo.jp/optour/img/entry/oa1611_05_03.jpg",
+        "https://tagoo.jp/optour/img/entry/oa1611_05_04.jpg",
+        "https://tagoo.jp/optour/img/entry/oa1611_05_05.jpg",
+        "https://tagoo.jp/optour/img/entry/oa1611_05_06.jpg",
+        "https://tagoo.jp/optour/img/entry/oa1611_05_07.jpg",
+        "https://tagoo.jp/optour/img/entry/oa1611_05_08.jpg",
+        "https://tagoo.jp/optour/img/entry/oa1611_05_11.jpg"
+      ],
+      "sourceUrl": "https://tagoo.jp/optour/cruising/oa1611-05/"
+    },
+    {
+      "slug": "kerama-charter-6h",
+      "title": "10名以上団体向け／【那覇・宜野湾・北谷発】（貸切6時間）慶良間１日チャーター　釣り・SUP・シュノーケリングほかオプション充実！",
+      "category": "other",
+      "originalCategory": "クルーザー貸切チャーター（シュノーケリング・釣り・SUP）",
+      "sourceCategoryPath": "クルージング＆グラスボート",
+      "operator": "シーワークス沖縄アイランド",
+      "operatorSlug": "seaworks",
+      "optionCode": "OA-1615-03（）",
+      "summary": "10名様まで基本料金　船内広々最大35名旅客クルーザーで快適！6時間クルーザー貸切り海遊び。◆激レア慶良間諸島で釣り、SUP、シュノーケリングほかオプション充実！4歳から参加OKでお子様と一緒に楽しめます♪",
+      "description": "★爽快クルージング\n★高遭遇率海がめ探索\n★シュノーケリング\n★楽しさ倍増の魚釣り\n☆船上BBQパーティー（オプション）\n☆マリンスポーツ三昧（オプション）\n☆絶景パラセーリング（オプション）\n☆貴重体験無人島上陸（オプション）\n☆出発時間自由に設定！（ご相談ください）\n――――――――――\n３ヵ所の港から出発\n1.那覇市三重城港\n2.宜野湾港マリーナ\n3.北谷町うみんちゅワーフ\n――――――――――\n\n☆６時間楽しめるクルーザー貸切り海遊び。\n☆厳選されたポイントでシュノーケリングやSUP、マリンスポーツがお楽しみいただけます。\n\n☆３ヵ所の港から出発！那覇発20分～宜野湾発30分～北谷発40分～で行ける絶景珊瑚礁の慶良間チービシ海域へご案内致します。\n\n☆船長自慢の海がめ探しクルーズは大好評です！\n☆時間内でしたらポイント移動もちろんOK！\n☆料金追加で無人島上陸できる島へのご案内も可能。※別途JETスキー追加が必要\n☆JETスキーやトーイングチューブ遊び、船上BBQ、パラセーリングの追加もOK！\n☆当日船に空きがあればサンセットまでの時間延長も受付けます。\n\n【タイムスケジュール】\n(8：30)集合　宜野湾港マリーナへ到着されましたら連絡ください　→　事前説明　船にご案内後、船上にて説明をさせて頂きます　→　(9：00)出港　→　（9：25）ウミガメ探索クルーズ　→　(9：50)ポイント到着　シュノーケル＆マリンスポーツ、ランチはBBQ！ポイント移動もOKです♪スケジュールは自由設定♪ 　→　(15：00)帰港\n※スケジュールは一例です。\n※集合時に服の下から水着を着用しておくと、到着後すぐにシュノーケルが楽しめます♪\n※船酔いの心配がある方は　事前に酔い止めの服用をおすすめいたします！",
+      "durationMin": 360,
+      "durationText": "約6時間",
+      "startTimes": [
+        "09:00",
+        "10:00",
+        "11:00"
+      ],
+      "startTimesText": "9:00　10:00　11:00",
+      "season": "通年",
+      "location": "慶良間チービシ",
+      "prices": [
+        {
+          "label": "貸切基本料金（10名様迄）宜野湾港マリーナ発",
+          "price": 180000
+        },
+        {
+          "label": "貸切基本料金（10名様迄）那覇市三重城港発",
+          "price": 200000
+        },
+        {
+          "label": "貸切基本料金（10名様迄）北谷うみんちゅワーフ発",
+          "price": 200000
+        }
+      ],
+      "priceText": "▼53フィート 団体様向け大型クルーザー\n180,000円 宜野湾港マリーナ発\n200,000円 那覇市三重城港発\n200,000円 北谷うみんちゅワーフ発",
+      "priceNotes": "※10名様迄の基本料金\n※11名以上 ＋8,000円/名\n\n※お申し込みは前日の18：00までとさせて頂きます。間際予約は【リクエスト送信後】に利用施設連絡先、営業時間が表示されるので、お電話にて確認お願い致します。「沖縄の遊び」からリクエストメールした事をお伝え下さい。",
+      "taxIncluded": true,
+      "paymentTiming": "現地払い",
+      "options": [
+        {
+          "label": "11名以上 追加",
+          "price": 8000,
+          "unit": "名"
+        },
+        {
+          "label": "上陸できる無人島まで遠征",
+          "price": 30000,
+          "unit": "貸切",
+          "note": "別途ジェットスキーが必要"
+        },
+        {
+          "label": "1H延長（当日受付）",
+          "price": 30000,
+          "unit": "貸切"
+        },
+        {
+          "label": "冬季のウエットスーツ",
+          "price": 1500,
+          "unit": "着"
+        },
+        {
+          "label": "絶景慶良間パラセーリング",
+          "price": 8000,
+          "unit": "名"
+        },
+        {
+          "label": "船上BBQ（4名様から受付）",
+          "price": 3000,
+          "unit": "名"
+        },
+        {
+          "label": "JETレンタル（要船舶免許提示）",
+          "price": 43000,
+          "unit": "艇"
+        },
+        {
+          "label": "フライボード遊び放題（運転手付き）",
+          "price": 70000,
+          "unit": "艇"
+        },
+        {
+          "label": "チューブ系3点セット＋トーイングJET",
+          "price": 55000,
+          "unit": "貸切"
+        },
+        {
+          "label": "爽快バナナボート（6人乗り）",
+          "price": 5000,
+          "unit": "回"
+        },
+        {
+          "label": "絶叫マーブル（3人乗り）",
+          "price": 5000,
+          "unit": "回"
+        },
+        {
+          "label": "ウェイクボード（足22～28㎝）",
+          "price": 5000,
+          "unit": "回"
+        },
+        {
+          "label": "トーイングJET（チューブ系利用時に別途必要・お客様は操縦不可）",
+          "price": 43000,
+          "unit": "艇"
+        }
+      ],
+      "minAge": 4,
+      "maxAge": null,
+      "participationConditions": "対象年齢：4歳～\n妊婦さん、重い持病をお持ちの方は参加不可。",
+      "capacity": 35,
+      "minParticipants": null,
+      "applicationPartySizeText": "～35名様（快適人数20名前後）",
+      "meetingPoint": "宜野湾マリーナ／レストランフィッシュテール前の白テント30分前集合（住所：沖縄県宜野湾市真志喜４丁目４－１ ）",
+      "meetingPoints": [
+        {
+          "label": "宜野湾マリーナ",
+          "text": "宜野湾マリーナ／レストランフィッシュテール前の白テント30分前集合（住所：沖縄県宜野湾市真志喜４丁目４－１ ）",
+          "parking": "あり（有料）  300円"
+        },
+        {
+          "label": null,
+          "text": "那覇・三重城港（みえぐすくこう）30分前集合（住所：那覇市西3-20 ）",
+          "parking": "あり（有料）  500円",
+          "mapEmbed": "https://www.google.com/maps?q=26.219755,127.663694&z=17&output=embed"
+        },
+        {
+          "label": null,
+          "text": "北谷町うみんちゅワーフ30分前集合（住所：沖縄県中頭郡北谷町美浜54番地 ）",
+          "parking": "あり（無料）  駐車場代2時間まで無料・以後1時間100円（最大1日400円）",
+          "mapEmbed": "https://www.google.com/maps?q=26.321515, 127.754951&z=17&output=embed"
+        }
+      ],
+      "whatToBring": "・タオル持参・日焼けと酔い止め対策は万全に！\n※集合時に服の下から水着を着用しておくと、到着後すぐにシュノーケルが楽しめます♪",
+      "included": "乗船料、必要機材一式、保険料、消費税、☆爽快クルージング、高遭遇の海がめ探索、シュノーケリングSET、釣り×2SET、SUP×1艇、ウェルカムちんすこう（沖縄の定番お菓子）、ソフトドリンク、クーラーボックス（氷入り）、JBL防水スピーカ、防水デジカメレンタル、撮影画像プレゼント",
+      "notes": "【コース参加にあたってのご注意】\n・当日慶良間方面の海況が悪いと判断した場合、近くの波が穏やかなポイントで開催する事もできますので船酔いが心配な方でも急なご予定変更がなく１日中楽しめます。\n・最遅帰港時間は夏季18時～冬季17時となります。\n・タオル持参・日焼けと酔い止め対策は万全に！\n・集合時間は出発の30分前になります。\n・出発の10分前までに乗船手続きをお済ませください。\n・現地でご説明する注意事項をお守りください。\n（特に遊泳範囲  航行区域  危険生物等々）\n・酔い止め対策は事前に万全にお願いします。\n・ライフジャッケット着用のご協力をお願いします。\n\n【その他注意事項】\n※１８歳未満の方だけのご利用はできません。",
+      "cancellationPolicy": "キャンセルは参加日3日前の17時までに電話でご連絡ください。\n■参加日当日：ツアー料金の100％\n■無断キャンセル：ツアー料金の100％\n悪天候により弊社が中止の判断した場合キャンセル料はかかりません。",
+      "facilities": "■宜野湾マリーナ\nレストランフィッシュテール建物下　1回300円\n■那覇三重城港\n待合所　温水シャワー　3分100円\n■北谷うみんちゅワーフ\n温水シャワー　5分200円",
+      "otherInfo": "クレジットカードもご利用いただけます。ご予約の際にお問い合わせください。\nVISA／MasterCard／JCB／American Express／Diners／ Discover Card",
+      "rentalAndOptionsText": "☆上陸できる無人島まで遠征＋30,000円\n※チービシ海域からさらに約20分、上陸は別途ジェットスキーが必要です。\n☆１H延長（当日受付）＋30,000円\n\n■オプション\n・冬季のウエットスーツ 1,500円／1着\n・絶景慶良間パラセーリング 8,000円／名\n・船上BBQ 3,000円／名（4名様から受付）\n・JETレンタル 　43,000円／1艇（要船舶免許提示）\n・フライボード遊び放題　70,000円／1艇（運転手付き）\n\nさらに盛り上げる！【チューブ系♡】\n・お得！3点セット＋トーイングJET 55,000円\n・爽快バナナボート（6人乗り） 5,000円\n・絶叫マーブル（3人乗り） 5,000円\n・ウェイクボード（足22～28㎝） 5,000円\n※要別途トーイングJET 43,000円（お客様は操縦できません）",
+      "transferInfo": null,
+      "schedule": [
+        {
+          "title": "集合",
+          "text": "港に30分前集合\n受付・説明後ボートに乗船♪慶良間チービシ環礁に向け出港！！",
+          "image": "https://tagoo.jp/optour/img/entry/oa1615_03_01.jpg"
+        },
+        {
+          "title": "ウミガメ探索クルーズ",
+          "text": "船長自慢の海がめ探しクルーズは大好評。ポイント移動中にもみつかるかも♪",
+          "image": "https://tagoo.jp/optour/img/entry/oa1615_03_02.jpg"
+        },
+        {
+          "title": "シュノーケリング",
+          "text": "ポイントに到着！透明度の高い海は「ケラマブルー」と称されるほど。国立公園に指定されたケラマの海があなたを待っています！のんびりシュノーケリングを楽しもう♪",
+          "image": "https://tagoo.jp/optour/img/entry/oa1615_03_03.jpg"
+        },
+        {
+          "title": "魚釣り体験",
+          "text": "沖縄のカラフルな魚を釣り上げて最高の思い出にしてください！沖縄の綺麗な海でのんびり船釣りをするのは、この上ない最高の贅沢な時間かもしれません♪",
+          "image": "https://tagoo.jp/optour/img/entry/oa1615_03_04.jpg"
+        },
+        {
+          "title": "マリンスポーツ",
+          "text": "SUPが楽しめます。ほか、マリンスポーツをオプション追加OK！",
+          "image": "https://tagoo.jp/optour/img/entry/oa1615_03_05.jpg"
+        },
+        {
+          "title": "船上BBQ",
+          "text": "★人気のオプション★仲間とみんなで船上バーベキュー。他のお客様に気兼ねない、貸切ツアーが楽しめます。",
+          "image": "https://tagoo.jp/optour/img/entry/oa1615_03_08.jpg"
+        },
+        {
+          "title": "体験終了",
+          "text": "お疲れ様でした♪",
+          "image": "https://tagoo.jp/optour/img/entry/oa1615_03_11.jpg"
+        }
+      ],
+      "images": [
+        "https://tagoo.jp/optour/img/entry/oa1615_03_m1.jpg",
+        "https://tagoo.jp/optour/img/entry/oa1615_03_m2.jpg",
+        "https://tagoo.jp/optour/img/entry/oa1615_03_m3.jpg",
+        "https://tagoo.jp/optour/img/entry/oa1615_03_01.jpg",
+        "https://tagoo.jp/optour/img/entry/oa1615_03_02.jpg",
+        "https://tagoo.jp/optour/img/entry/oa1615_03_03.jpg",
+        "https://tagoo.jp/optour/img/entry/oa1615_03_04.jpg",
+        "https://tagoo.jp/optour/img/entry/oa1615_03_05.jpg",
+        "https://tagoo.jp/optour/img/entry/oa1615_03_08.jpg",
+        "https://tagoo.jp/optour/img/entry/oa1615_03_11.jpg"
+      ],
+      "sourceUrl": "https://tagoo.jp/optour/cruising/oa1615-03/"
+    },
+    {
+      "slug": "ginowan-whale-watching",
+      "title": "沖縄県民3割引／【宜野湾発】ホエールウォッチングツアー　大型船・少人数制☆ザトウクジラグッズGETの大チャンス",
+      "category": "other",
+      "originalCategory": "ホエールウォッチング（冬季限定）",
+      "sourceCategoryPath": "ホエールウォッチング",
+      "operator": "シーワークス沖縄アイランド",
+      "operatorSlug": "seaworks",
+      "optionCode": "OA-1613-01（）",
+      "summary": "那覇市や北谷町からアクセス便利な宜野湾マリーナ出発。南北のウォッチングポイントへちょうど中間地点にあたる宜野湾地区唯一ツアー船。客席間のスペースをしっかり確保した25名様限定の優雅なツアー。",
+      "description": "☆午前便９時～　午後便１３時～　１日２便毎日運航\n☆那覇市や北谷町からアクセス便利な宜野湾マリーナ出発\n☆南北のウォッチングポイントちょうど中間地点にあたる宜野湾地区唯一ツアー船\n☆客席間を広めに確保した２５名様限定の優雅なツアー\n\n県内最大のマリーナから大型のクルーザータイプの専用船を使用した少しリッチな気分を体験できる宜野湾地区唯一のホエールウォッチングツアーです。\n\n夏の期間はチャーター船として沢山のお客様をご案内しリピーター様に支えられ続けて運航している私たちの『ＴＨＥ沖縄のおもてなし』も皆様にご提供しております。\n\n☆嬉しい特典その①☆\n・毎便開催！経験豊富なスタッフより早くクジラを見つけてくれた素敵なお客様へ《ザトウクジラの可愛いグッズ》をプレゼントさせていただきます。\n\n☆嬉しい特典その②☆\n・対象期間中、万が一クジラを見る事が出来なかった場合は無期限の『再チャレンジ乗船券』を贈呈させていただきます。",
+      "durationMin": 180,
+      "durationText": "90分～最長3時間",
+      "startTimes": [
+        "09:00",
+        "13:00"
+      ],
+      "startTimesText": "9:00　13:00",
+      "season": "2026年1月4日～3月30日",
+      "location": "慶良間諸島国立公園周辺海域",
+      "prices": [
+        {
+          "label": "大人(12～65歳)",
+          "price": 8000
+        },
+        {
+          "label": "子供(4～11歳)",
+          "price": 4000
+        },
+        {
+          "label": "幼児(3歳以下)",
+          "price": 0
+        },
+        {
+          "label": "沖縄県民3割引 大人",
+          "price": 5600
+        },
+        {
+          "label": "沖縄県民3割引 子供",
+          "price": 2800
+        }
+      ],
+      "priceText": "8,000円/人 大人(12～65歳)\n4,000円/人 子供(4～11歳)\n無料 幼児(3歳以下)",
+      "priceNotes": "幼児無料は大人1名につき幼児1名\n★沖縄県民3割引 大人5,600円、子供2,800円\n当日、乗船手続き時に書類を確認。免許証や学生証など県内在住が分かる証明書を全員提示ください。\nチャーター貸切（1～25名様）120,000円\nお申し込み時ご相談ください。\n\n※お申し込みは前日の17：00までとさせて頂きます。間際予約は【リクエスト送信後】に利用施設連絡先、営業時間が表示されるので、お電話にて確認お願い致します。「沖縄の遊び」からリクエストメールした事をお伝え下さい。",
+      "taxIncluded": true,
+      "paymentTiming": "現地払い",
+      "options": [
+        {
+          "label": "チャーター貸切（1～25名様）",
+          "price": 120000,
+          "unit": "貸切"
+        }
+      ],
+      "minAge": 0,
+      "maxAge": null,
+      "participationConditions": "対象年齢：0歳～\n最少催行人数：6名",
+      "capacity": 25,
+      "minParticipants": 6,
+      "applicationPartySizeText": "1～",
+      "meetingPoint": "宜野湾マリーナ／レストランフィッシュテール前の白テント30分前集合（住所：沖縄県宜野湾市真志喜4-4-1 ）",
+      "meetingPoints": [
+        {
+          "label": null,
+          "text": "宜野湾マリーナ／レストランフィッシュテール前の白テント30分前集合（住所：沖縄県宜野湾市真志喜4-4-1 ）",
+          "parking": "あり（有料）  300円",
+          "mapEmbed": "https://www.google.com/maps?q=26.278497,127.731736&z=17&output=embed"
+        }
+      ],
+      "whatToBring": "服装：かかとの低い履物・防寒着\n持ち物：サングラス・日焼け止め・タオル・防寒着・駐車料金",
+      "included": "乗船料、ガイド料、ライフジャケットレンタル料、保険料、マリーナ桟橋利用料、消費税",
+      "notes": "【コース参加にあたってのご注意】\n・最少催行人数に満たない場合や、船のメンテナンス等の都合により別の船を手配する場合があります。\n・中止判断の場合はお客様の携帯電話へご連絡いたします。\n※開催日前日までのご連絡といたしますが、当日、海況の変化によって開催日当日早朝のご連絡となる場合もございます。\n・少量の雨が予想される場合でも出航しますので簡易雨具のご用意があると便利です。\n・妊娠されている方の参加はできません。\n・アルコールを飲まれている方の参加はできません。\n・お子様は保護者同伴で参加お願いします。\n・海洋状況により、６５歳以上の方のご参加をお断りする場合があります。\n・クジラは野生動物ですので１００％の遭遇をお約束する事はできません。\n・万が一クジラに遭えなかった場合は無期限の『再チャレンジ乗船券』を贈呈いたします。※お客様の中でお一人でもブローを見ることができた場合は対象外になります。\n・クジラへ必要以上にストレスを与える事を避ける為、発見後の観察時間は最長で１時間までとさせていただきます。出航して早い時間で発見、ウォッチング開始となった場合は予定時間より１時間ほど早めの帰港となる時もございます。\n・船へ持ち込みされる荷物は必要最小限でお願いいたします。\n\n【その他注意事項】\n未成年者のみのご参加は保護者の同意書が必要となります。ご利用当日、参加受付の際に提出お願い致します。",
+      "cancellationPolicy": "キャンセルは参加日3日前の17時までに電話でご連絡ください。\n■参加日当日：ツアー料金の100％\n■無断キャンセル：ツアー料金の100％\n天候によりやむを得ず開催できない場合キャンセル料はかかりません。",
+      "facilities": null,
+      "otherInfo": "服装：かかとの低い履物・防寒着\n持ち物：サングラス・日焼け止め・タオル・防寒着・駐車料金\n船酔い止め対策は事前に万全にお願いいたします。\n\nクレジットカードもご利用いただけます。ご予約の際にお問い合わせください。\nVISA／MasterCard／JCB／American Express／Diners／ Discover Card",
+      "rentalAndOptionsText": null,
+      "transferInfo": "送迎サービスは行っておりません。",
+      "schedule": [
+        {
+          "title": "宜野湾マリーナ集合",
+          "text": "宜野湾マリーナに30分前集合\n受付・説明後ボートに乗船♪慶良間に向け出港！！",
+          "image": "https://tagoo.jp/optour/img/entry/oa1613_14.jpg"
+        },
+        {
+          "title": "",
+          "text": "客席間を広めに確保した２５名様限定の優雅なツアー",
+          "image": "https://tagoo.jp/optour/img/entry/oa1613_15.jpg"
+        },
+        {
+          "title": "",
+          "text": "クジラ発見！ホエールウォッチング開始",
+          "image": "https://tagoo.jp/optour/img/entry/oa1613_17.jpg"
+        },
+        {
+          "title": "",
+          "text": "",
+          "image": "https://tagoo.jp/optour/img/entry/oa1613_13.jpg"
+        },
+        {
+          "title": "嬉しい特典その①",
+          "text": "スタッフより早くクジラを見つけてくれた素敵なお客様へ《ザトウクジラの可愛いグッズ》をプレゼント",
+          "image": "https://tagoo.jp/optour/img/entry/oa1613_19.jpg"
+        },
+        {
+          "title": "嬉しい特典その②",
+          "text": "クジラを見る事が出来なかった場合は無期限の『再チャレンジ乗船券』を贈呈。",
+          "image": null
+        },
+        {
+          "title": "体験終了",
+          "text": "お疲れ様でした♪\nアクティビティ終了！港に戻り解散♪",
+          "image": "https://tagoo.jp/optour/img/entry/oa1613_11.jpg"
+        }
+      ],
+      "images": [
+        "https://tagoo.jp/optour/img/entry/oa1613_11.jpg",
+        "https://tagoo.jp/optour/img/entry/oa1613_12.jpg",
+        "https://tagoo.jp/optour/img/entry/oa1613_13.jpg",
+        "https://tagoo.jp/optour/img/entry/oa1613_14.jpg",
+        "https://tagoo.jp/optour/img/entry/oa1613_15.jpg",
+        "https://tagoo.jp/optour/img/entry/oa1613_17.jpg",
+        "https://tagoo.jp/optour/img/entry/oa1613_19.jpg"
+      ],
+      "sourceUrl": "https://tagoo.jp/optour/whale-watching/oa1613/"
+    }
+  ],
+  "faq": [],
+  "policies": {
+    "bookingDeadline": {
+      "cocomarine": "※お申し込みは前日の18：00までとさせて頂きます。",
+      "recsea": "※お申し込みは前日の12：00までとさせて頂きます。",
+      "seaworks_charter": "※お申し込みは前日の18：00までとさせて頂きます。",
+      "seaworks_whale": "※お申し込みは前日の17：00までとさせて頂きます。",
+      "lateBookingNote": "間際予約は【リクエスト送信後】に利用施設連絡先、営業時間が表示されるので、お電話にて確認お願い致します。「沖縄の遊び」からリクエストメールした事をお伝え下さい。"
+    },
+    "cancellation": {
+      "cocomarine": "お客様都合によるキャンセル・変更は早目にご連絡下さい。\n当日キャンセル・無連絡はキャンセル料100％頂いております。",
+      "recsea": "天候、海況などにより開催できない場合もございます。\nその場合はキャンセル料はかかりませんのでご安心ください。\nお客様のご都合でキャンセルの場合は以下のキャンセル料金がかかります\n前日：50%\n当日：100%\nお早めにお電話でご連絡ください。",
+      "seaworks_charter": "キャンセルは参加日3日前の17時までに電話でご連絡ください。\n■参加日当日：ツアー料金の100％\n■無断キャンセル：ツアー料金の100％\n悪天候により弊社が中止の判断した場合キャンセル料はかかりません。",
+      "seaworks_whale": "キャンセルは参加日3日前の17時までに電話でご連絡ください。\n■参加日当日：ツアー料金の100％\n■無断キャンセル：ツアー料金の100％\n天候によりやむを得ず開催できない場合キャンセル料はかかりません。"
+    },
+    "weather": {
+      "cocomarine": "・当日の天候次第では現地到着後、中止になる場合もございますのでご了承ください。",
+      "recsea": "※天候、海況などにより開催できない場合もございます。その場合でもツアー開催場所までの交通費などの補償には応じられません。予めご了承下さい。\n天候、海況などにより開催できない場合もございます。\nその場合はキャンセル料はかかりませんのでご安心ください。",
+      "seaworks_charter": "・当日慶良間方面の海況が悪いと判断した場合、近くの波が穏やかなポイントで開催する事もできますので船酔いが心配な方でも急なご予定変更がなく１日中楽しめます。\n悪天候により弊社が中止の判断した場合キャンセル料はかかりません。",
+      "seaworks_whale": "・中止判断の場合はお客様の携帯電話へご連絡いたします。\n※開催日前日までのご連絡といたしますが、当日、海況の変化によって開催日当日早朝のご連絡となる場合もございます。\n・少量の雨が予想される場合でも出航しますので簡易雨具のご用意があると便利です。\n天候によりやむを得ず開催できない場合キャンセル料はかかりません。"
+    },
+    "minors": {
+      "general": "未成年者のみのご参加は保護者の同意書が必要となります。ご利用当日、参加受付の際に提出お願い致します。",
+      "seaworks_charter": "※１８歳未満の方だけのご利用はできません。"
+    },
+    "pregnancy": "妊娠中の方のご参加はご遠慮いただいております。（各プラン共通の趣旨）",
+    "cocoMarineSeason": "オン期：4/25~30・5/1~10・6/6,7,13,14,20,21,27,28・7/4,5,11,12,18~31・8/1~31・9/5,6,12,13,19~27・10/3,4,10~12,17,18,24,25,31・11/1~3,21~23・12/26~31・1/1~3,9~11 の期間\nオフ期：※上記以外の期間",
+    "payment": {
+      "general": "料金【現地払い】（全プラン）",
+      "recsea": "当日、現地にて現金でお支払いください。（クレジットカード不可）",
+      "seaworks": "クレジットカードもご利用いただけます。ご予約の際にお問い合わせください。\nVISA／MasterCard／JCB／American Express／Diners／ Discover Card",
+      "cocomarine": null
+    },
+    "bookingFlow": "（tagoo共通）予約リクエスト送信→ショップとお客様に自動メール→ショップが空き状況を確認して返信。※夜間・営業時間外の申し込みは基本翌日回答。"
+  },
+  "reviews": null,
+  "images": {
+    "hero": "https://tagoo.jp/optour/img/category/ginowan-marina_big.jpg",
+    "ogImage": "https://tagoo.jp/optour/img/category/ginowan-marina_big.jpg",
+    "operatorGalleries": {
+      "cocomarine": [
+        "https://tagoo.jp/optour/img/entry/coco_05.JPG",
+        "https://tagoo.jp/optour/img/entry/coco_13.jpg",
+        "https://tagoo.jp/optour/img/entry/00.jpg"
+      ],
+      "recsea": [
+        "https://tagoo.jp/optour/img/entry/oa4140_s_01.jpg",
+        "https://tagoo.jp/optour/img/entry/oa4140_s_02.jpg",
+        "https://tagoo.jp/optour/img/entry/oa4140_s_03.jpg"
+      ],
+      "seaworks": [
+        "https://tagoo.jp/optour/img/entry/oa1600_02.jpg",
+        "https://tagoo.jp/optour/img/entry/oa1600_01.jpg",
+        "https://tagoo.jp/optour/img/entry/oa1600_03.jpg"
+      ]
+    },
+    "allPlanImages": [
+      "https://tagoo.jp/optour/img/entry/00.jpg",
+      "https://tagoo.jp/optour/img/entry/01.jpg",
+      "https://tagoo.jp/optour/img/entry/02.jpg",
+      "https://tagoo.jp/optour/img/entry/03.jpg",
+      "https://tagoo.jp/optour/img/entry/04.jpg",
+      "https://tagoo.jp/optour/img/entry/DSC_0093.JPG",
+      "https://tagoo.jp/optour/img/entry/coco_01.jpg",
+      "https://tagoo.jp/optour/img/entry/coco_02.jpg",
+      "https://tagoo.jp/optour/img/entry/coco_03.jpg",
+      "https://tagoo.jp/optour/img/entry/coco_04.jpg",
+      "https://tagoo.jp/optour/img/entry/coco_05.JPG",
+      "https://tagoo.jp/optour/img/entry/coco_11.jpg",
+      "https://tagoo.jp/optour/img/entry/coco_13.jpg",
+      "https://tagoo.jp/optour/img/entry/coco_14.jpg",
+      "https://tagoo.jp/optour/img/entry/coco_15.jpg",
+      "https://tagoo.jp/optour/img/entry/oa1611_05_01.jpg",
+      "https://tagoo.jp/optour/img/entry/oa1611_05_02.jpg",
+      "https://tagoo.jp/optour/img/entry/oa1611_05_03.jpg",
+      "https://tagoo.jp/optour/img/entry/oa1611_05_04.jpg",
+      "https://tagoo.jp/optour/img/entry/oa1611_05_05.jpg",
+      "https://tagoo.jp/optour/img/entry/oa1611_05_06.jpg",
+      "https://tagoo.jp/optour/img/entry/oa1611_05_07.jpg",
+      "https://tagoo.jp/optour/img/entry/oa1611_05_08.jpg",
+      "https://tagoo.jp/optour/img/entry/oa1611_05_11.jpg",
+      "https://tagoo.jp/optour/img/entry/oa1611_05_m01.jpg",
+      "https://tagoo.jp/optour/img/entry/oa1611_05_m02.jpg",
+      "https://tagoo.jp/optour/img/entry/oa1611_05_m03.jpg",
+      "https://tagoo.jp/optour/img/entry/oa1613_11.jpg",
+      "https://tagoo.jp/optour/img/entry/oa1613_12.jpg",
+      "https://tagoo.jp/optour/img/entry/oa1613_13.jpg",
+      "https://tagoo.jp/optour/img/entry/oa1613_14.jpg",
+      "https://tagoo.jp/optour/img/entry/oa1613_15.jpg",
+      "https://tagoo.jp/optour/img/entry/oa1613_17.jpg",
+      "https://tagoo.jp/optour/img/entry/oa1613_19.jpg",
+      "https://tagoo.jp/optour/img/entry/oa1615_03_01.jpg",
+      "https://tagoo.jp/optour/img/entry/oa1615_03_02.jpg",
+      "https://tagoo.jp/optour/img/entry/oa1615_03_03.jpg",
+      "https://tagoo.jp/optour/img/entry/oa1615_03_04.jpg",
+      "https://tagoo.jp/optour/img/entry/oa1615_03_05.jpg",
+      "https://tagoo.jp/optour/img/entry/oa1615_03_08.jpg",
+      "https://tagoo.jp/optour/img/entry/oa1615_03_11.jpg",
+      "https://tagoo.jp/optour/img/entry/oa1615_03_m1.jpg",
+      "https://tagoo.jp/optour/img/entry/oa1615_03_m2.jpg",
+      "https://tagoo.jp/optour/img/entry/oa1615_03_m3.jpg",
+      "https://tagoo.jp/optour/img/entry/oa4140_001.jpg",
+      "https://tagoo.jp/optour/img/entry/oa4140_02.jpg",
+      "https://tagoo.jp/optour/img/entry/oa4140_03.jpg",
+      "https://tagoo.jp/optour/img/entry/oa4140_04.jpg",
+      "https://tagoo.jp/optour/img/entry/oa4140_05.jpg",
+      "https://tagoo.jp/optour/img/entry/oa4140_06.jpg",
+      "https://tagoo.jp/optour/img/entry/oa4140_07.jpg",
+      "https://tagoo.jp/optour/img/entry/oa4140_08.jpg",
+      "https://tagoo.jp/optour/img/entry/oa4140_ship.jpg",
+      "https://tagoo.jp/optour/img/entry/oa551_07.jpg",
+      "https://tagoo.jp/optour/img/entry/oa551_m1.jpg",
+      "https://tagoo.jp/optour/img/entry/oa554_01.jpg",
+      "https://tagoo.jp/optour/img/entry/oa554_02.jpg",
+      "https://tagoo.jp/optour/img/entry/oa554_05.jpg",
+      "https://tagoo.jp/optour/img/entry/oa554_07.jpg",
+      "https://tagoo.jp/optour/img/entry/oa554_08.jpg",
+      "https://tagoo.jp/optour/img/entry/oa554_09.jpg",
+      "https://tagoo.jp/optour/img/entry/oa554_10.jpg",
+      "https://tagoo.jp/optour/img/entry/oa554_13.jpg",
+      "https://tagoo.jp/optour/img/entry/oa555_02.jpg",
+      "https://tagoo.jp/optour/img/entry/oa555_04.jpg",
+      "https://tagoo.jp/optour/img/entry/oa555_05.jpg",
+      "https://tagoo.jp/optour/img/entry/oa555_06.jpg",
+      "https://tagoo.jp/optour/img/entry/oa555_07.jpg",
+      "https://tagoo.jp/optour/img/entry/oa555_09.jpg",
+      "https://tagoo.jp/optour/img/entry/oa555_m1.jpg",
+      "https://tagoo.jp/optour/img/entry/oa555_m2.jpg",
+      "https://tagoo.jp/optour/img/entry/oa555_m3.jpg",
+      "https://tagoo.jp/optour/img/entry/oa556_02.jpg",
+      "https://tagoo.jp/optour/img/entry/oa556_04.jpg",
+      "https://tagoo.jp/optour/img/entry/oa556_m1.jpg",
+      "https://tagoo.jp/optour/img/entry/oa556_m2.jpg",
+      "https://tagoo.jp/optour/img/entry/oa556_m3.jpg"
+    ]
+  }
+}

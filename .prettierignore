@@ -1,0 +1,10 @@
+node_modules
+.next
+drizzle
+public
+docs
+.tmp
+components.json
+package-lock.json
+src/components/ui
+src/db/schema/auth.ts
