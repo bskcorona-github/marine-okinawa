@@ -1,5 +1,5 @@
-import { and, eq, gte, inArray, lt, lte, ne, sql } from 'drizzle-orm';
-import type { Db } from '@/db/client';
+import { and, asc, eq, gte, inArray, lt, lte, ne, sql } from 'drizzle-orm';
+import type { Db, DbOrTx } from '@/db/client';
 import { bookings, menus, scheduleExceptions, scheduleRules, shops, slots } from '@/db/schema';
 import { addDays, localDate, zonedToUtc } from '@/lib/dates';
 import { generateSlots } from './generate';
@@ -7,8 +7,18 @@ import { generateSlots } from './generate';
 /** 何日先まで回を作っておくか */
 export const SLOT_HORIZON_DAYS = 180;
 
-/** closedBooked：この同期で休止になった、予約の入っている回の数（管理画面で警告する） */
-export type SyncResult = { inserted: number; updated: number; deleted: number; closed: number; closedBooked: number };
+/**
+ * closedBooked：この同期で休止になった、予約の入っている回の数
+ * overBooked：この同期で定員が予約済みの人数より少なくなった回の数（どちらも管理画面で警告する）
+ */
+export type SyncResult = {
+  inserted: number;
+  updated: number;
+  deleted: number;
+  closed: number;
+  closedBooked: number;
+  overBooked: number;
+};
 
 /**
  * ルール・例外から期間内の回を作り直し、DB の slots に反映する。
@@ -16,7 +26,7 @@ export type SyncResult = { inserted: number; updated: number; deleted: number; c
  * - weather_cancelled の回は変更しない
  */
 export async function syncSlots(
-  db: Db,
+  db: DbOrTx,
   params: { menuId: string; fromDate: string; toDate: string },
 ): Promise<SyncResult> {
   return db.transaction(async (tx) => {
@@ -29,7 +39,11 @@ export async function syncSlots(
       .where(eq(menus.id, params.menuId));
     if (!menu) throw new Error(`menu not found: ${params.menuId}`);
 
-    const rules = await tx.select().from(scheduleRules).where(eq(scheduleRules.menuId, menu.id));
+    const rules = await tx
+      .select()
+      .from(scheduleRules)
+      .where(eq(scheduleRules.menuId, menu.id))
+      .orderBy(asc(scheduleRules.validFrom), asc(scheduleRules.createdAt), asc(scheduleRules.id));
     const exceptions = await tx
       .select()
       .from(scheduleExceptions)
@@ -57,7 +71,7 @@ export async function syncSlots(
       .for('update');
     const remaining = new Map(existing.map((s) => [s.startsAt.getTime(), s]));
 
-    const result: SyncResult = { inserted: 0, updated: 0, deleted: 0, closed: 0, closedBooked: 0 };
+    const result: SyncResult = { inserted: 0, updated: 0, deleted: 0, closed: 0, closedBooked: 0, overBooked: 0 };
     const toInsert: (typeof slots.$inferInsert)[] = [];
 
     for (const g of generated) {
@@ -78,6 +92,9 @@ export async function syncSlots(
         await tx.update(slots).set({ capacity: g.capacity, status: g.status }).where(eq(slots.id, current.id));
         result.updated++;
         if (g.status === 'closed' && current.status === 'open' && current.reservedCount > 0) result.closedBooked++;
+        if (g.status === 'open' && g.capacity < current.reservedCount && g.capacity < current.capacity) {
+          result.overBooked++;
+        }
       }
     }
 

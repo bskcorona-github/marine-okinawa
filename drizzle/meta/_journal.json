@@ -22,6 +22,125 @@
       "when": 1790533215761,
       "tag": "0002_rate_limit",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1790695021714,
+      "tag": "0003_operator_contact",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1790699726371,
+      "tag": "0004_booking_guest_count",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1790701174458,
+      "tag": "0005_charter_pricing",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1790703122582,
+      "tag": "0006_charter_limits",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1790704065435,
+      "tag": "0007_min_party_size",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1790704390674,
+      "tag": "0008_exception_unique",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1790704764786,
+      "tag": "0009_auth_rate_limit",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1790705417461,
+      "tag": "0010_notification_unknown",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1790781124961,
+      "tag": "0011_kumiai_foundation",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1790781731540,
+      "tag": "0012_booking_access_tokens",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1790784703614,
+      "tag": "0013_partner_portal",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1790785634920,
+      "tag": "0014_cancel_details",
+      "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1790786143781,
+      "tag": "0015_operator_notifications",
+      "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1790788207887,
+      "tag": "0016_application_notifications",
+      "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1790789926889,
+      "tag": "0017_operator_assigned_via",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1790855878317,
+      "tag": "0018_operator_assigned_via_check",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1790860563113,
+      "tag": "0019_operator_plans",
+      "breakpoints": true
     }
   ]
 }

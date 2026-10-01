@@ -2,20 +2,24 @@ import { eq } from 'drizzle-orm';
 import { beforeEach, describe, expect, it } from 'vitest';
 import {
   auditLogs,
+  bookingAccessTokens,
   bookingItems,
   bookings,
+  bookingStatusEvents,
   customers,
   menuPrices,
   menus,
   operators,
   payments,
   seasonPeriods,
+  shops,
   slots,
 } from '@/db/schema';
 import { getTestDb, resetDb } from '../../../tests/helpers/db';
 import { seedMenu, seedShop, seedSlot } from '../../../tests/helpers/fixtures';
 import { hashAccessToken } from './access-token';
 import { createBooking, type CreateBookingInput } from './create-booking';
+import { getBookingSummaryById } from './queries';
 
 const db = getTestDb();
 const NOW = new Date('2026-09-28T00:00:00Z');
@@ -41,6 +45,7 @@ function webInput(ctx: Ctx, overrides: Partial<CreateBookingInput> = {}): Create
     ],
     contact: { name: ' 沖縄 太郎 ', email: 'Taro@Example.com', phone: '090-1234-5678' },
     locale: 'ja',
+    consented: true,
     now: NOW,
     ...overrides,
   };
@@ -54,24 +59,32 @@ async function reservedCount(slotId: string) {
 describe('createBooking', () => {
   beforeEach(() => resetDb(db));
 
-  it('Web 予約を現地払いで確定し、明細・支払い・顧客を作る', async () => {
+  it('Web の申込は仮受付（組合への事前払い）で作り、明細・支払い・顧客・履歴を作る', async () => {
     const ctx = await setup();
-    const result = await createBooking(db, webInput(ctx));
+    const result = await createBooking(
+      db,
+      webInput(ctx, { request: { secondChoice: ' 10/2 の午前 ', customerNote: '', participantAges: null } }),
+    );
 
     const [booking] = await db.select().from(bookings).where(eq(bookings.id, result.bookingId));
+    expect(result.status).toBe('requested');
     expect(booking).toMatchObject({
       bookingNo: result.bookingNo,
-      status: 'confirmed',
-      paymentMethod: 'onsite',
+      status: 'requested',
+      paymentMethod: 'online',
+      secondChoice: '10/2 の午前',
+      customerNote: null,
+      consentedAt: NOW,
       source: 'web',
       partySize: 3,
       totalAmount: 13000,
       contactName: '沖縄 太郎',
       contactEmail: 'taro@example.com',
       contactPhone: '+819012345678',
-      accessTokenHash: hashAccessToken(result.accessToken),
     });
     expect(booking.accessTokenExpiresAt.toISOString()).toBe('2026-10-31T03:00:00.000Z');
+    const tokens = await db.select().from(bookingAccessTokens).where(eq(bookingAccessTokens.bookingId, booking.id));
+    expect(tokens.map((t) => t.tokenHash)).toEqual([hashAccessToken(result.accessToken)]);
     expect(await reservedCount(ctx.slot.id)).toBe(3);
 
     const items = await db.select().from(bookingItems).where(eq(bookingItems.bookingId, booking.id));
@@ -80,9 +93,129 @@ describe('createBooking', () => {
       ['子供', 3000, 1],
     ]);
     const [payment] = await db.select().from(payments).where(eq(payments.bookingId, booking.id));
-    expect(payment).toMatchObject({ method: 'onsite', status: 'pending', amount: 13000 });
+    expect(payment).toMatchObject({ method: 'online', status: 'pending', amount: 13000, dueAt: null });
     const [customer] = await db.select().from(customers).where(eq(customers.id, booking.customerId));
     expect(customer).toMatchObject({ emailNormalized: 'taro@example.com', phoneE164: '+819012345678' });
+    const events = await db.select().from(bookingStatusEvents).where(eq(bookingStatusEvents.bookingId, booking.id));
+    expect(events).toMatchObject([{ fromStatus: null, toStatus: 'requested', actorType: 'customer', actorId: null }]);
+    expect(booking.policySnapshot).toMatchObject({ commonCancellationPolicy: '' });
+  });
+
+  it('Web の申込は同意がなければ AGREEMENT_REQUIRED（枠は押さえない）', async () => {
+    const ctx = await setup();
+    await expect(createBooking(db, webInput(ctx, { consented: false }))).rejects.toMatchObject({
+      code: 'AGREEMENT_REQUIRED',
+    });
+    expect(await reservedCount(ctx.slot.id)).toBe(0);
+  });
+
+  it('年齢の確認が必要なプランは、Web の申込で年齢が必須', async () => {
+    const ctx = await setup();
+    await db.update(menus).set({ requireAges: true }).where(eq(menus.id, ctx.menu.id));
+    await expect(createBooking(db, webInput(ctx))).rejects.toMatchObject({ code: 'AGES_REQUIRED' });
+    const ok = await createBooking(db, webInput(ctx, { request: { participantAges: '40歳、38歳、9歳' } }));
+    const [row] = await db.select().from(bookings).where(eq(bookings.id, ok.bookingId));
+    expect(row.participantAges).toBe('40歳、38歳、9歳');
+  });
+
+  it('サイト全体の受付停止中・プランの受付停止中は Web の申込を受け付けない（手動は受け付ける）', async () => {
+    const ctx = await setup();
+    await db
+      .update(shops)
+      .set({ settings: { bookingPaused: true } })
+      .where(eq(shops.id, ctx.shop.id));
+    await expect(createBooking(db, webInput(ctx))).rejects.toMatchObject({ code: 'BOOKING_PAUSED' });
+    await db.update(shops).set({ settings: {} }).where(eq(shops.id, ctx.shop.id));
+    await db.update(menus).set({ status: 'paused' }).where(eq(menus.id, ctx.menu.id));
+    await expect(createBooking(db, webInput(ctx))).rejects.toMatchObject({ code: 'MENU_PAUSED' });
+    const manual = webInput(ctx, { source: 'phone', consented: false });
+    await expect(createBooking(db, manual)).resolves.toMatchObject({ status: 'requested' });
+  });
+
+  it('手動予約は最初の状態を選べる。支払待ちは期限を入れ、事前払いの確定は入金済みで記録する', async () => {
+    const ctx = await setup();
+    const phone = (email: string) => ({ name: '電話 花子', email, phone: '090-9999-0000' });
+    const waiting = await createBooking(
+      db,
+      webInput(ctx, { source: 'phone', contact: phone('a@example.com'), initialStatus: 'awaiting_payment' }),
+    );
+    const confirmed = await createBooking(
+      db,
+      webInput(ctx, { source: 'phone', contact: phone('b@example.com'), initialStatus: 'confirmed', actorId: null }),
+    );
+    const onsite = await createBooking(
+      db,
+      webInput(ctx, {
+        source: 'walk_in',
+        contact: phone('c@example.com'),
+        initialStatus: 'confirmed',
+        paymentMethod: 'onsite',
+      }),
+    );
+    const pay = async (id: string) => (await db.select().from(payments).where(eq(payments.bookingId, id)))[0];
+    // 2026-09-28 から 3 日後の 23:59（JST）。参加日（10/1）の前日 23:59 と比べて早い方
+    expect(await pay(waiting.bookingId)).toMatchObject({
+      status: 'pending',
+      dueAt: new Date('2026-09-30T14:59:00Z'),
+    });
+    expect(await pay(confirmed.bookingId)).toMatchObject({ status: 'paid', method: 'online', receivedAt: NOW });
+    expect(await pay(onsite.bookingId)).toMatchObject({ status: 'pending', method: 'onsite' });
+    const [row] = await db.select().from(bookings).where(eq(bookings.id, confirmed.bookingId));
+    expect(row).toMatchObject({ status: 'confirmed', consentedAt: NOW });
+    const events = await db
+      .select()
+      .from(bookingStatusEvents)
+      .where(eq(bookingStatusEvents.bookingId, onsite.bookingId));
+    expect(events).toMatchObject([{ toStatus: 'confirmed', actorType: 'staff', note: '店頭で受付' }]);
+
+    // 入金額・入金日・メモを指定して確定で登録できる（0 円の入金では確定しない）
+    const receivedAt = new Date('2026-09-27T03:00:00Z');
+    const withPayment = await createBooking(
+      db,
+      webInput(ctx, {
+        source: 'phone',
+        contact: phone('d@example.com'),
+        initialStatus: 'confirmed',
+        payment: { amount: 4000, receivedAt, note: '振込 オキナワ' },
+        overCapacityReason: 'テストのため',
+      }),
+    );
+    expect(await pay(withPayment.bookingId)).toMatchObject({
+      status: 'paid',
+      amount: 4000,
+      receivedAt,
+      note: '振込 オキナワ',
+    });
+    await expect(
+      createBooking(
+        db,
+        webInput(ctx, {
+          source: 'phone',
+          contact: phone('e@example.com'),
+          initialStatus: 'confirmed',
+          payment: { amount: 0, receivedAt },
+          overCapacityReason: 'テストのため',
+        }),
+      ),
+    ).rejects.toMatchObject({ code: 'PAYMENT_REQUIRED' });
+  });
+
+  it('手動予約：現地払いは支払待ちにしない。事前払いの支払待ちは、支払方法の案内がないと作れない', async () => {
+    const ctx = await setup();
+    const manual = (overrides: Partial<CreateBookingInput>) =>
+      createBooking(
+        db,
+        webInput(ctx, { source: 'phone', contact: { name: '電話 花子', phone: '090-9999-0000' }, ...overrides }),
+      );
+    await expect(manual({ initialStatus: 'awaiting_payment', paymentMethod: 'onsite' })).rejects.toMatchObject({
+      code: 'INVALID_TRANSITION',
+    });
+    await db.update(shops).set({ settings: {} }).where(eq(shops.id, ctx.shop.id));
+    await expect(manual({ initialStatus: 'awaiting_payment', paymentMethod: 'online' })).rejects.toMatchObject({
+      code: 'PAYMENT_INSTRUCTIONS_MISSING',
+    });
+    // 枠は押さえない
+    expect(await reservedCount(ctx.slot.id)).toBe(0);
   });
 
   it('Web 予約で電話番号が無効なら CONTACT_REQUIRED', async () => {
@@ -258,5 +391,55 @@ describe('createBooking', () => {
     expect(rejected.every((r) => (r.reason as { code?: string }).code === 'SLOT_FULL')).toBe(true);
     expect(await reservedCount(ctx.slot.id)).toBe(5);
     expect(await db.select().from(bookings)).toHaveLength(5);
+  });
+
+  it('貸切（艇）のプランは乗船人数が必須で、人数で数えるプランでは乗船人数を保存しない', async () => {
+    const ctx = await setup(1);
+    await db.update(menus).set({ capacityUnit: '艇', maxPartySize: 1 }).where(eq(menus.id, ctx.menu.id));
+    const charter = webInput(ctx, { items: [{ priceId: ctx.adult.id, quantity: 1 }] });
+    await expect(createBooking(db, charter)).rejects.toMatchObject({ code: 'GUEST_COUNT_REQUIRED' });
+    await expect(createBooking(db, { ...charter, guestCount: 0.5 })).rejects.toMatchObject({
+      code: 'GUEST_COUNT_REQUIRED',
+    });
+
+    // 基本料金は 10 名まで、超えた 1 名ごとに 8,000 円。出発港（料金区分）ごとの集合場所を案内する
+    await db.update(menus).set({ includedGuests: 10, extraGuestPrice: 8000 }).where(eq(menus.id, ctx.menu.id));
+    await db.update(menuPrices).set({ meetingPoint: '那覇・三重城港' }).where(eq(menuPrices.id, ctx.adult.id));
+    const result = await createBooking(db, { ...charter, guestCount: 12 });
+    const [booking] = await db.select().from(bookings).where(eq(bookings.id, result.bookingId));
+    expect(booking).toMatchObject({
+      partySize: 1,
+      guestCount: 12,
+      extraGuestCount: 2,
+      extraGuestAmount: 16000,
+      totalAmount: 21000,
+    });
+    expect(await reservedCount(ctx.slot.id)).toBe(1);
+    const [payment] = await db.select().from(payments).where(eq(payments.bookingId, result.bookingId));
+    expect(payment.amount).toBe(21000);
+    expect((await getBookingSummaryById(db, result.bookingId))?.meetingPoint).toBe('那覇・三重城港');
+
+    // 乗船人数の上限（35 名）を超える予約は受け付けない
+    await db.update(menus).set({ maxGuests: 35 }).where(eq(menus.id, ctx.menu.id));
+    await db.update(slots).set({ capacity: 2 }).where(eq(slots.id, ctx.slot.id));
+    await expect(
+      createBooking(db, { ...charter, guestCount: 36, contact: { ...charter.contact, email: 'big@example.com' } }),
+    ).rejects.toMatchObject({ code: 'GUEST_COUNT_TOO_LARGE' });
+
+    const other = await setup();
+    const perPerson = await createBooking(db, { ...webInput(other), guestCount: 5 });
+    const [row] = await db.select().from(bookings).where(eq(bookings.id, perPerson.bookingId));
+    expect(row.guestCount).toBeNull();
+  });
+
+  it('Web 予約は最少人数（「2名から」など）に満たないと受け付けない', async () => {
+    const ctx = await setup();
+    await db.update(menus).set({ minPartySize: 2 }).where(eq(menus.id, ctx.menu.id));
+    await expect(
+      createBooking(db, webInput(ctx, { items: [{ priceId: ctx.adult.id, quantity: 1 }] })),
+    ).rejects.toMatchObject({ code: 'PARTY_TOO_SMALL' });
+    await expect(
+      createBooking(db, webInput(ctx, { items: [{ priceId: ctx.adult.id, quantity: 2 }] })),
+    ).resolves.toBeDefined();
   });
 });

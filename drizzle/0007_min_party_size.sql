@@ -1,0 +1,1 @@
+ALTER TABLE "menus" ADD COLUMN "min_party_size" integer DEFAULT 1 NOT NULL;

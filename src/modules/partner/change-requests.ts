@@ -1,0 +1,163 @@
+import { and, desc, eq } from 'drizzle-orm';
+import { z } from 'zod';
+import { invoiceNumberSchema } from '@/lib/invoice';
+import type { Db, DbOrTx } from '@/db/client';
+import { operatorChangeRequests, operators } from '@/db/schema';
+import { writeAuditLog } from '@/modules/audit/log';
+
+/** 事業者が更新を申請できる項目（画面の表示名つき）。組合の内部メモ（operators.about）は含めない */
+export const PROFILE_FIELDS = {
+  name: '事業者名',
+  address: '所在地',
+  representative: '代表者',
+  contactName: '担当者',
+  email: '連絡用メールアドレス',
+  phone: '当日の連絡先（電話）',
+  contactHours: '電話の受付時間',
+  emergencyPhone: '緊急連絡先',
+  invoiceNumber: 'インボイスの登録番号',
+  bankAccount: '精算口座',
+} as const;
+
+export type ProfileField = keyof typeof PROFILE_FIELDS;
+
+export const profileSchema = z.object({
+  name: z.string().trim().min(1).max(100),
+  address: z.string().trim().max(200),
+  representative: z.string().trim().max(60),
+  contactName: z.string().trim().max(60),
+  email: z
+    .string()
+    .trim()
+    .max(254)
+    .pipe(z.union([z.literal(''), z.email()])),
+  phone: z.string().trim().max(30),
+  contactHours: z.string().trim().max(100),
+  emergencyPhone: z.string().trim().max(30),
+  invoiceNumber: invoiceNumberSchema,
+  bankAccount: z.string().trim().max(300),
+});
+
+export type OperatorProfile = z.infer<typeof profileSchema>;
+
+/** 今の登録内容（事業者画面の更新申請の初期値） */
+export async function getOperatorProfile(db: DbOrTx, operatorId: string): Promise<OperatorProfile | null> {
+  const [row] = await db.select().from(operators).where(eq(operators.id, operatorId));
+  if (!row) return null;
+  return Object.fromEntries((Object.keys(PROFILE_FIELDS) as ProfileField[]).map((k) => [k, row[k]])) as OperatorProfile;
+}
+
+/**
+ * 登録情報の更新を申請する（変えた項目だけを残す）。変わった項目がなければ申請しない。
+ * すでに確認待ちの申請があれば、新しい内容で置き換える
+ */
+export async function submitChangeRequest(
+  db: Db,
+  input: { shopId: string; operatorId: string; profile: OperatorProfile; note: string; actorId: string | null },
+): Promise<{ ok: true; requestId: string } | { ok: false; error: 'NO_CHANGES' | 'NOT_FOUND' }> {
+  const current = await getOperatorProfile(db, input.operatorId);
+  if (!current) return { ok: false, error: 'NOT_FOUND' };
+  const payload = Object.fromEntries(
+    (Object.keys(PROFILE_FIELDS) as ProfileField[])
+      .filter((k) => input.profile[k] !== current[k])
+      .map((k) => [k, input.profile[k]]),
+  );
+  if (Object.keys(payload).length === 0) return { ok: false, error: 'NO_CHANGES' };
+  return db.transaction(async (tx) => {
+    await tx
+      .update(operatorChangeRequests)
+      .set({ status: 'rejected', reviewNote: '新しい申請に置き換え' })
+      .where(
+        and(eq(operatorChangeRequests.operatorId, input.operatorId), eq(operatorChangeRequests.status, 'pending')),
+      );
+    const [row] = await tx
+      .insert(operatorChangeRequests)
+      .values({
+        shopId: input.shopId,
+        operatorId: input.operatorId,
+        payload,
+        note: input.note.trim(),
+        requestedBy: input.actorId,
+      })
+      .returning({ id: operatorChangeRequests.id });
+    return { ok: true, requestId: row.id } as const;
+  });
+}
+
+export async function listChangeRequests(
+  db: DbOrTx,
+  params: { shopId: string; operatorId?: string; status?: 'pending' | 'approved' | 'rejected' },
+) {
+  return db
+    .select({
+      id: operatorChangeRequests.id,
+      operatorId: operatorChangeRequests.operatorId,
+      operatorName: operators.name,
+      payload: operatorChangeRequests.payload,
+      note: operatorChangeRequests.note,
+      status: operatorChangeRequests.status,
+      reviewNote: operatorChangeRequests.reviewNote,
+      createdAt: operatorChangeRequests.createdAt,
+      reviewedAt: operatorChangeRequests.reviewedAt,
+    })
+    .from(operatorChangeRequests)
+    .innerJoin(operators, eq(operators.id, operatorChangeRequests.operatorId))
+    .where(
+      and(
+        eq(operatorChangeRequests.shopId, params.shopId),
+        params.operatorId ? eq(operatorChangeRequests.operatorId, params.operatorId) : undefined,
+        params.status ? eq(operatorChangeRequests.status, params.status) : undefined,
+      ),
+    )
+    .orderBy(desc(operatorChangeRequests.createdAt))
+    .limit(50);
+}
+
+/** 更新申請を承認して事業者の情報に反映する、または見送る（確認待ちの申請だけ） */
+export async function reviewChangeRequest(
+  db: Db,
+  input: { shopId: string; requestId: string; approve: boolean; note: string; actorId: string | null; now: Date },
+): Promise<boolean> {
+  return db.transaction(async (tx) => {
+    const [request] = await tx
+      .select()
+      .from(operatorChangeRequests)
+      .where(
+        and(
+          eq(operatorChangeRequests.id, input.requestId),
+          eq(operatorChangeRequests.shopId, input.shopId),
+          eq(operatorChangeRequests.status, 'pending'),
+        ),
+      )
+      .for('update');
+    if (!request) return false;
+    if (input.approve) {
+      // 申請の内容をもう一度検証してから反映する（申請の後で入力の条件を変えても、壊れた値を入れない）
+      const [current] = await tx.select().from(operators).where(eq(operators.id, request.operatorId));
+      const merged = profileSchema.safeParse({
+        ...Object.fromEntries((Object.keys(PROFILE_FIELDS) as ProfileField[]).map((k) => [k, current[k]])),
+        ...request.payload,
+      });
+      if (!merged.success) return false;
+      await tx.update(operators).set(merged.data).where(eq(operators.id, request.operatorId));
+    }
+    await tx
+      .update(operatorChangeRequests)
+      .set({
+        status: input.approve ? 'approved' : 'rejected',
+        reviewNote: input.note.trim(),
+        reviewedBy: input.actorId,
+        reviewedAt: input.now,
+      })
+      .where(eq(operatorChangeRequests.id, request.id));
+    await writeAuditLog(tx, {
+      shopId: input.shopId,
+      actorId: input.actorId,
+      action: input.approve ? 'operator.change_approve' : 'operator.change_reject',
+      targetType: 'operator',
+      targetId: request.operatorId,
+      after: { requestId: request.id, payload: request.payload },
+    });
+    return true;
+  });
+}

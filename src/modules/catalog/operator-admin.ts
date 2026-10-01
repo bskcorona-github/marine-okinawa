@@ -1,5 +1,6 @@
 import { and, asc, eq } from 'drizzle-orm';
 import { z } from 'zod';
+import { invoiceNumberSchema } from '@/lib/invoice';
 import type { Db } from '@/db/client';
 import { isUniqueViolation } from '@/db/errors';
 import { operators, seasonPeriods } from '@/db/schema';
@@ -29,21 +30,27 @@ export function formatPeriodLines(periods: SeasonPeriod[]): string {
   return periods.map((p) => (p.startDate === p.endDate ? p.startDate : `${p.startDate}〜${p.endDate}`)).join('\n');
 }
 
+/**
+ * 組合が管理する事業者の情報。紹介文・規定・画像は、事業者名を表に出さない運用になったため画面から外した
+ * （列とデータは残す）
+ */
 export const operatorInputSchema = z.object({
   name: z.string().trim().min(1).max(100),
+  status: z.enum(['active', 'suspended']),
   about: z.string().trim().max(3000),
-  bookingDeadlineNote: z.string().trim().max(500),
-  cancellationPolicy: z.string().trim().max(3000),
-  weatherPolicy: z.string().trim().max(3000),
-  images: z
-    .array(
-      z
-        .string()
-        .trim()
-        .max(500)
-        .regex(/^(\/(?!\/)[^\s?#]+|https:\/\/[^\s]+)$/),
-    )
-    .max(10),
+  phone: z.string().trim().max(30),
+  contactHours: z.string().trim().max(100),
+  email: z
+    .string()
+    .trim()
+    .max(254)
+    .pipe(z.union([z.literal(''), z.email()])),
+  contactName: z.string().trim().max(60),
+  emergencyPhone: z.string().trim().max(30),
+  address: z.string().trim().max(200),
+  representative: z.string().trim().max(60),
+  invoiceNumber: invoiceNumberSchema,
+  bankAccount: z.string().trim().max(300),
 });
 
 export const newOperatorSchema = z.object({

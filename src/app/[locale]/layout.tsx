@@ -1,22 +1,32 @@
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import { hasLocale, NextIntlClientProvider } from 'next-intl';
 import { getTranslations, setRequestLocale } from 'next-intl/server';
 import { notFound } from 'next/navigation';
-import { Link } from '@/i18n/navigation';
+import { connection } from 'next/server';
+import { SiteFooter } from '@/components/site/site-footer';
+import { SiteHeader } from '@/components/site/site-header';
+import { db } from '@/db';
 import { routing } from '@/i18n/routing';
+import { getCurrentShop } from '@/modules/shop/shops';
+import { bodyFont, displayFont } from '../fonts';
 import '../globals.css';
 
 export function generateStaticParams() {
   return routing.locales.map((locale) => ({ locale }));
 }
 
+export const viewport: Viewport = { themeColor: '#0a3a5c' };
+
 export async function generateMetadata({ params }: LayoutProps<'/[locale]'>): Promise<Metadata> {
   const { locale } = await params;
+  await connection();
   const t = await getTranslations({ locale, namespace: 'site' });
+  // サイト名は設定値（組合の正式名称が決まったら管理画面で変える）
+  const { siteName } = (await getCurrentShop(db)).settings;
   return {
-    title: { default: t('title'), template: `%s | ${t('title')}` },
+    title: { default: siteName, template: `%s | ${siteName}` },
     description: t('description'),
-    openGraph: { images: ['/content/ginowan/ginowan-marina_big.jpg'] },
+    openGraph: { siteName, locale: 'ja_JP', type: 'website' },
   };
 }
 
@@ -24,32 +34,29 @@ export default async function LocaleLayout({ children, params }: LayoutProps<'/[
   const { locale } = await params;
   if (!hasLocale(routing.locales, locale)) notFound();
   setRequestLocale(locale);
-  const t = await getTranslations('site');
+  await connection();
+  const shop = await getCurrentShop(db);
 
+  // なめらかなスクロールは、OS で動きを減らす設定（prefers-reduced-motion）にしている人には使わない
+  // （data-scroll-behavior は、Next.js がページ遷移のときに一時的に解除するための目印）
+  // main は縦並びの flex にして、中身の短いページ（404 など）が flex-1 で画面の下まで背景を伸ばせるようにする
   return (
-    <html lang={locale} className="h-full scroll-smooth antialiased">
-      <body className="flex min-h-full flex-col bg-white text-slate-900">
+    <html
+      lang={locale}
+      data-scroll-behavior="smooth"
+      className={`${bodyFont.variable} ${displayFont.variable} h-full antialiased motion-safe:scroll-smooth`}
+    >
+      <body className="flex min-h-full flex-col bg-white text-ink">
         <NextIntlClientProvider>
-          <header className="sticky top-0 z-30 border-b border-white/10 bg-sky-950/90 text-white backdrop-blur">
-            <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-3">
-              <Link href="/" className="font-bold tracking-wide">
-                {t('title')}
-              </Link>
-              <nav className="hidden gap-5 text-sm text-sky-100 md:flex">
-                <Link href="/#plans">{t('nav.plans')}</Link>
-                <Link href="/#flow">{t('nav.flow')}</Link>
-                <Link href="/#about">{t('nav.about')}</Link>
-                <Link href="/#access">{t('nav.access')}</Link>
-              </nav>
-            </div>
-          </header>
-          <main className="flex-1">{children}</main>
-          <footer className="bg-sky-950 text-sky-100">
-            <div className="mx-auto max-w-6xl space-y-2 px-4 py-8 text-sm">
-              <p className="font-bold text-white">{t('title')}</p>
-              <p className="text-xs text-sky-300">{t('footerNote')}</p>
-            </div>
-          </footer>
+          <SiteHeader siteName={shop.settings.siteName} operatorName={shop.name} />
+          {/* 受付停止中も公開ページは見られる。申込だけ止めていることを全ページの上で知らせる */}
+          {shop.settings.bookingPaused && (
+            <p role="status" className="jp-auto bg-coral-deep px-4 py-2 text-center text-sm font-semibold text-white">
+              {shop.settings.bookingPausedMessage}
+            </p>
+          )}
+          <main className="flex flex-1 flex-col">{children}</main>
+          <SiteFooter siteName={shop.settings.siteName} shopName={shop.name} profile={shop.profile} />
         </NextIntlClientProvider>
       </body>
     </html>

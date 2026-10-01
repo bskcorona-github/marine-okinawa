@@ -1,6 +1,6 @@
 import { eq } from 'drizzle-orm';
 import { beforeEach, describe, expect, it } from 'vitest';
-import { bookings, menuTranslations } from '@/db/schema';
+import { bookings, menus, menuTranslations } from '@/db/schema';
 import { getTestDb, resetDb } from '../../tests/helpers/db';
 import { seedMenu, seedShop, seedSlot } from '../../tests/helpers/fixtures';
 import { createBooking } from './booking/create-booking';
@@ -12,7 +12,13 @@ import {
   searchBookings,
 } from './booking/queries';
 import { getPublishedMenuBySlug, listPublishedMenus } from './catalog/menus';
-import { getDaySlots, getMonthAvailability, getTimetable } from './inventory/queries';
+import {
+  getDateAvailabilityForMenus,
+  getDaySlots,
+  getFirstBookableDate,
+  getMonthAvailability,
+  getTimetable,
+} from './inventory/queries';
 
 const db = getTestDb();
 const NOW = new Date('2026-09-28T00:00:00Z');
@@ -53,6 +59,7 @@ function book(ctx: Ctx, slotId: string, quantity: number, name = '沖縄 太郎'
     items: [{ priceId: ctx.adult.id, quantity }],
     contact: { name, email: `${phone.replace(/-/g, '')}@example.com`, phone },
     locale: 'ja',
+    consented: true,
     now: NOW,
   });
 }
@@ -66,7 +73,13 @@ describe('queries', () => {
 
     const list = await listPublishedMenus(db, { shopId: ctx.shop.id, locale: 'en' });
     expect(list).toHaveLength(1);
-    expect(list[0]).toMatchObject({ slug: 'blue-cave', title: '青の洞窟シュノーケル', minPrice: 3000 });
+    // 「〜円」は先頭の料金区分（大人）が基準。子供料金があることは別に知らせる
+    expect(list[0]).toMatchObject({
+      slug: 'blue-cave',
+      title: '青の洞窟シュノーケル',
+      minPrice: 5000,
+      hasLowerPrices: true,
+    });
 
     await db.insert(menuTranslations).values({ menuId: ctx.menu.id, locale: 'en', title: 'Blue Cave Snorkeling' });
     const detail = await getPublishedMenuBySlug(db, { shopId: ctx.shop.id, slug: 'blue-cave', locale: 'en' });
@@ -94,13 +107,80 @@ describe('queries', () => {
     ]);
   });
 
+  it('日付から探す：複数メニューのその日の回と、人数で絞った空き', async () => {
+    const ctx = await setup();
+    const other = await seedMenu(db, ctx.shop.id);
+    await seedSlot(db, { shopId: ctx.shop.id, menuId: other.menu.id, startsAt: T.oct1_1000, capacity: 3 });
+    await book(ctx, ctx.slots.b.id, 4); // blue-cave 10:00 残り 1
+
+    const menus = [ctx.menu, other.menu];
+    const all = await getDateAvailabilityForMenus(db, { menus, shop: ctx.shop, date: '2026-10-01', now: NOW });
+    expect(all.get(ctx.menu.id)?.map((s) => [s.time, s.remaining, s.level])).toEqual([
+      ['08:00', 10, 'available'],
+      ['10:00', 1, 'low'],
+      ['13:00', 5, 'closed'],
+    ]);
+    expect(all.get(other.menu.id)?.map((s) => s.time)).toEqual(['10:00']);
+
+    const forTwo = await getDateAvailabilityForMenus(db, {
+      menus,
+      shop: ctx.shop,
+      date: '2026-10-01',
+      now: NOW,
+      people: 2,
+    });
+    expect(forTwo.get(ctx.menu.id)?.map((s) => s.level)).toEqual(['available', 'full', 'closed']);
+    // 貸切（艇で数える）プランは人数で絞り込まない：2 名で探しても、残り 1 艇の回は予約できる
+    const byBoat = menus.map((m) => (m.id === ctx.menu.id ? { ...m, capacityUnit: '艇' } : m));
+    const boatForTwo = await getDateAvailabilityForMenus(db, {
+      menus: byBoat,
+      shop: ctx.shop,
+      date: '2026-10-01',
+      now: NOW,
+      people: 2,
+    });
+    expect(boatForTwo.get(ctx.menu.id)?.map((s) => s.level)).toEqual(['available', 'low', 'closed']);
+
+    // 1 回の予約で申し込める人数（最大 10 名）を超えると、空きがあっても予約できない回として扱う
+    const forTwelve = await getDateAvailabilityForMenus(db, {
+      menus,
+      shop: ctx.shop,
+      date: '2026-10-01',
+      now: NOW,
+      people: 12,
+    });
+    expect(forTwelve.get(ctx.menu.id)?.map((s) => s.level)).toEqual(['full', 'full', 'closed']);
+    // 貸切は乗船人数の上限（maxGuests）で判定する
+    const boatForForty = await getDateAvailabilityForMenus(db, {
+      menus: byBoat.map((m) => (m.id === ctx.menu.id ? { ...m, maxGuests: 35 } : m)),
+      shop: ctx.shop,
+      date: '2026-10-01',
+      now: NOW,
+      people: 40,
+    });
+    expect(boatForForty.get(ctx.menu.id)?.map((s) => s.level)).toEqual(['full', 'full', 'closed']);
+    expect(
+      (await getDateAvailabilityForMenus(db, { menus: [], shop: ctx.shop, date: '2026-10-01', now: NOW })).size,
+    ).toBe(0);
+  });
+
+  it('予約できる最初の日（満席・休止・締切後を飛ばす）', async () => {
+    const ctx = await setup();
+    // 10/1 の 08:00 は締切後、10:00 は満席、13:00 は休止 → 10/2 の回が最初
+    await book(ctx, ctx.slots.b.id, 5);
+    const now = new Date('2026-09-30T22:00:00Z'); // 10/1 07:00 JST（08:00 の締切 120 分前を過ぎている）
+    expect(await getFirstBookableDate(db, { menu: ctx.menu, shop: ctx.shop, now })).toBe('2026-10-02');
+    await book(ctx, ctx.slots.d.id, 2, '次郎', '090-2222-3333');
+    expect(await getFirstBookableDate(db, { menu: ctx.menu, shop: ctx.shop, now })).toBeNull();
+  });
+
   it('アクセストークンで予約を取得でき、期限切れは null', async () => {
     const ctx = await setup();
     const result = await book(ctx, ctx.slots.a.id, 2);
 
     const found = await getBookingByAccessToken(db, { token: result.accessToken, now: NOW });
     expect(found).toMatchObject({ bookingNo: result.bookingNo, partySize: 2, menuTitle: '青の洞窟シュノーケル' });
-    expect(found?.items).toEqual([{ label: '大人', unitPrice: 5000, quantity: 2 }]);
+    expect(found?.items).toEqual([{ priceId: expect.any(String), label: '大人', unitPrice: 5000, quantity: 2 }]);
 
     expect(await getBookingByAccessToken(db, { token: 'wrong', now: NOW })).toBeNull();
     const later = new Date('2026-12-01T00:00:00Z');
@@ -112,16 +192,43 @@ describe('queries', () => {
     const r1 = await book(ctx, ctx.slots.a.id, 1, '沖縄 太郎', '090-1234-5678');
     await book(ctx, ctx.slots.a.id, 1, '那覇 花子', '090-2222-3333');
 
-    expect((await searchBookings(db, { shopId: ctx.shop.id, query: '' })).length).toBe(2);
-    expect(
-      (await searchBookings(db, { shopId: ctx.shop.id, query: r1.bookingNo.toLowerCase() })).map((b) => b.id),
-    ).toEqual([r1.bookingId]);
-    expect((await searchBookings(db, { shopId: ctx.shop.id, query: '花子' }))[0].contactName).toBe('那覇 花子');
-    expect((await searchBookings(db, { shopId: ctx.shop.id, query: '09012345678' }))[0].id).toBe(r1.bookingId);
-    expect(await searchBookings(db, { shopId: ctx.shop.id, query: '100%' })).toEqual([]);
+    const search = async (query: string, extra: Partial<Parameters<typeof searchBookings>[1]> = {}) =>
+      (await searchBookings(db, { shopId: ctx.shop.id, timezone: 'Asia/Tokyo', query, ...extra })).rows;
+    expect(await search('')).toHaveLength(2);
+    expect((await search(r1.bookingNo.toLowerCase())).map((b) => b.id)).toEqual([r1.bookingId]);
+    expect((await search('花子'))[0].contactName).toBe('那覇 花子');
+    expect((await search('09012345678'))[0].id).toBe(r1.bookingId);
+    // 電話番号は下 4 桁や途中からでも探せる
+    expect((await search('5678')).map((b) => b.id)).toEqual([r1.bookingId]);
+    expect((await search('090-2222')).map((b) => b.contactName)).toEqual(['那覇 花子']);
+    expect(await search('100%')).toEqual([]);
+
+    // 参加日・状態で絞り込み、ページを分ける
+    const r3 = await book(ctx, ctx.slots.d.id, 1, '北谷 三郎', '090-3333-4444');
+    expect((await search('', { date: '2026-10-02' })).map((b) => b.id)).toEqual([r3.bookingId]);
+    expect(await search('', { date: '2026-10-03' })).toEqual([]);
+    expect(await search('', { status: 'cancelled' })).toEqual([]);
+    // Web の申込は仮受付。「未確定の申込」にまとめて入り、「確定済み」には入らない
+    expect(await search('', { status: 'requested' })).toHaveLength(3);
+    expect(await search('', { status: 'open' })).toHaveLength(3);
+    expect(await search('', { status: 'active' })).toEqual([]);
+    expect(await search('', { menuId: ctx.menu.id })).toHaveLength(3);
+    expect(await search('', { menuId: crypto.randomUUID() })).toEqual([]);
+    const first = await searchBookings(db, { shopId: ctx.shop.id, timezone: 'Asia/Tokyo', query: '', pageSize: 2 });
+    expect(first.rows).toHaveLength(2);
+    expect(first.hasMore).toBe(true);
+    const second = await searchBookings(db, {
+      shopId: ctx.shop.id,
+      timezone: 'Asia/Tokyo',
+      query: '',
+      pageSize: 2,
+      page: 2,
+    });
+    expect(second).toMatchObject({ hasMore: false, page: 2 });
+    expect(second.rows).toHaveLength(1);
 
     const detail = await getBookingDetail(db, { shopId: ctx.shop.id, bookingId: r1.bookingId });
-    expect(detail?.payment).toMatchObject({ method: 'onsite', status: 'pending' });
+    expect(detail?.payment).toMatchObject({ method: 'online', status: 'pending' });
     const otherShop = await seedShop(db, { name: '別' });
     expect(await getBookingDetail(db, { shopId: otherShop.id, bookingId: r1.bookingId })).toBeNull();
 
@@ -143,15 +250,25 @@ describe('queries', () => {
       days: 1,
     });
     expect(table).toHaveLength(1);
-    expect(table[0].slots.map((s) => [s.time, s.reservedCount, s.capacity, s.status])).toEqual([
-      ['08:00', 3, 10, 'open'],
-      ['10:00', 1, 5, 'open'],
-      ['13:00', 0, 5, 'closed'],
+    expect(table[0].archived).toBe(false);
+    // 予約数には未確定の申込も入り、そのうち未確定の人数を別に数える（取消は数えない）
+    expect(table[0].slots.map((s) => [s.time, s.reservedCount, s.pendingCount, s.capacity, s.status])).toEqual([
+      ['08:00', 3, 3, 10, 'open'],
+      ['10:00', 1, 0, 5, 'open'],
+      ['13:00', 0, 0, 5, 'closed'],
     ]);
 
-    expect(await getDaySummary(db, { shopId: ctx.shop.id, timezone: 'Asia/Tokyo', date: '2026-10-01' })).toEqual({
-      bookings: 1,
-      participants: 3,
-    });
+    // アーカイブしたメニューは、期間内に予約のある回があるときだけ表示する
+    await db.update(menus).set({ status: 'archived' }).where(eq(menus.id, ctx.menu.id));
+    const params = { shopId: ctx.shop.id, timezone: 'Asia/Tokyo', days: 1 };
+    expect((await getTimetable(db, { ...params, fromDate: '2026-10-01' }))[0].archived).toBe(true);
+    expect(await getTimetable(db, { ...params, fromDate: '2026-10-02' })).toEqual([]);
+    await db.update(menus).set({ status: 'published' }).where(eq(menus.id, ctx.menu.id));
+
+    // 日のサマリは確定済み（予約確定〜精算）だけを数える
+    const summary = () => getDaySummary(db, { shopId: ctx.shop.id, timezone: 'Asia/Tokyo', date: '2026-10-01' });
+    expect(await summary()).toEqual({ bookings: 0, participants: 0, amount: 0 });
+    await db.update(bookings).set({ status: 'confirmed' }).where(eq(bookings.slotId, ctx.slots.a.id));
+    expect(await summary()).toEqual({ bookings: 1, participants: 3, amount: 15000 });
   });
 });

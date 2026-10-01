@@ -2,71 +2,46 @@
 
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
-import { db } from '@/db';
+import { isUuid } from '@/lib/validation';
 import { requireAdmin } from '@/modules/auth/guard';
 import {
-  addScheduleException,
-  addScheduleRule,
-  deleteScheduleException,
-  deleteScheduleRule,
-  exceptionInputSchema,
-  ruleInputSchema,
-} from '@/modules/schedule/rules';
+  runAddException,
+  runAddRule,
+  runDeleteException,
+  runDeleteRule,
+  runUpdateRuleCapacity,
+  type ScheduleActionContext,
+} from '@/modules/schedule/schedule-actions';
 
-function page(menuId: string, query: string) {
-  return `/admin/menus/${menuId}/schedule?${query}`;
-}
-
-/** 予約のある回が休止になった場合は、件数を渡して画面で警告する */
-function saved(menuId: string, kind: string, result: { closedBooked: number }) {
-  return page(menuId, `saved=${kind}${result.closedBooked > 0 ? `&closedBooked=${result.closedBooked}` : ''}`);
-}
-
-async function context() {
+/** 形式の正しくない id（URL の書き換えなど）はエラー画面にせず、メニュー一覧へ戻す */
+async function context(menuId: string, ...ids: string[]): Promise<ScheduleActionContext> {
   const admin = await requireAdmin();
-  return { shopId: admin.shopId, actorId: admin.userId, now: new Date() };
+  if (![menuId, ...ids].every(isUuid)) redirect('/admin/menus');
+  return { shopId: admin.shopId, actorId: admin.userId, now: new Date(), page: `/admin/menus/${menuId}/schedule` };
+}
+
+/** 保存したら公開サイト・タイムテーブルにも反映して、回の設定の画面へ戻る */
+function done(url: string): never {
+  revalidatePath('/', 'layout');
+  redirect(url);
 }
 
 export async function addRuleAction(menuId: string, formData: FormData) {
-  const ctx = await context();
-  const parsed = ruleInputSchema.safeParse({
-    validFrom: formData.get('validFrom'),
-    validTo: formData.get('validTo') || null,
-    weekdays: formData.getAll('weekdays'),
-    startTime: formData.get('startTime'),
-    capacity: formData.get('capacity'),
-  });
-  if (!parsed.success) redirect(page(menuId, `error=${encodeURIComponent(parsed.error.issues[0].message)}`));
-  const result = await addScheduleRule(db, ctx, menuId, parsed.data);
-  revalidatePath('/', 'layout');
-  redirect(saved(menuId, 'rule', result));
+  done(await runAddRule(await context(menuId), menuId, formData));
+}
+
+export async function updateRuleCapacityAction(menuId: string, ruleId: string, formData: FormData) {
+  done(await runUpdateRuleCapacity(await context(menuId, ruleId), menuId, ruleId, formData));
 }
 
 export async function deleteRuleAction(menuId: string, ruleId: string) {
-  const ctx = await context();
-  const result = await deleteScheduleRule(db, ctx, menuId, ruleId);
-  revalidatePath('/', 'layout');
-  redirect(saved(menuId, 'rule', result));
+  done(await runDeleteRule(await context(menuId, ruleId), menuId, ruleId));
 }
 
 export async function addExceptionAction(menuId: string, formData: FormData) {
-  const ctx = await context();
-  const type = formData.get('type');
-  const parsed = exceptionInputSchema.safeParse({
-    date: formData.get('date'),
-    startTime: formData.get('startTime') || null,
-    type,
-    capacity: type === 'closed' ? null : formData.get('capacity') || null,
-  });
-  if (!parsed.success) redirect(page(menuId, `error=${encodeURIComponent(parsed.error.issues[0].message)}`));
-  const result = await addScheduleException(db, ctx, menuId, parsed.data);
-  revalidatePath('/', 'layout');
-  redirect(saved(menuId, 'exception', result));
+  done(await runAddException(await context(menuId), menuId, formData));
 }
 
 export async function deleteExceptionAction(menuId: string, exceptionId: string) {
-  const ctx = await context();
-  const result = await deleteScheduleException(db, ctx, menuId, exceptionId);
-  revalidatePath('/', 'layout');
-  redirect(saved(menuId, 'exception', result));
+  done(await runDeleteException(await context(menuId, exceptionId), menuId, exceptionId));
 }

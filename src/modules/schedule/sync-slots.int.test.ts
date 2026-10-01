@@ -54,6 +54,7 @@ describe('syncSlots', () => {
       deleted: 0,
       closed: 0,
       closedBooked: 0,
+      overBooked: 0,
     });
   });
 

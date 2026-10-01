@@ -5,6 +5,7 @@ import {
   createOperator,
   formatPeriodLines,
   getOperatorForAdmin,
+  operatorInputSchema,
   parsePeriodLines,
   updateOperator,
 } from './operator-admin';
@@ -50,18 +51,31 @@ describe('operator admin', () => {
       error: 'SLUG_TAKEN',
     });
 
-    const input = {
+    const input = operatorInputSchema.parse({
       name: 'ココマリン',
-      about: '紹介',
-      bookingDeadlineNote: '',
-      cancellationPolicy: '当日 100%',
-      weatherPolicy: '',
-      images: [],
-    };
+      status: 'active',
+      about: '組合のメモ',
+      phone: '098-000-0000',
+      contactHours: '9:00〜18:00',
+      email: 'coco@example.com',
+      contactName: '担当 花子',
+      emergencyPhone: '090-0000-0000',
+      address: '宜野湾市',
+      representative: '代表 太郎',
+      invoiceNumber: 'T1234567890123',
+      bankAccount: '沖縄銀行 普通 1234567',
+    });
     const periods = [{ startDate: '2027-04-25', endDate: '2027-05-05' }];
     expect(await updateOperator(db, shop.id, created.operatorId, input, periods)).toBe(true);
     const op = await getOperatorForAdmin(db, shop.id, created.operatorId);
-    expect(op).toMatchObject({ cancellationPolicy: '当日 100%', periods });
+    expect(op).toMatchObject({
+      email: 'coco@example.com',
+      invoiceNumber: 'T1234567890123',
+      phone: '098-000-0000',
+      periods,
+    });
+    // インボイスの登録番号は T と 13 桁
+    expect(operatorInputSchema.safeParse({ ...input, invoiceNumber: '1234' }).success).toBe(false);
 
     const other = await seedShop(db, { name: '別' });
     expect(await updateOperator(db, other.id, created.operatorId, input, [])).toBe(false);

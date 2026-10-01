@@ -3,6 +3,8 @@
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { db } from '@/db';
+import { isUuid } from '@/lib/validation';
+import { invalidState, toFormIssues, type AdminFormState } from '@/lib/zod-ja';
 import { requireAdmin } from '@/modules/auth/guard';
 import { writeAuditLog } from '@/modules/audit/log';
 import {
@@ -30,21 +32,39 @@ export async function createOperatorAction(formData: FormData) {
   redirect(`/admin/operators/${result.operatorId}`);
 }
 
-export async function updateOperatorAction(operatorId: string, formData: FormData) {
+const OPERATOR_FIELD_LABELS: Record<string, string> = {
+  name: '事業者名',
+  status: '登録状態',
+  about: '組合のメモ',
+  phone: '当日の連絡先（電話）',
+  contactHours: '電話の受付時間',
+  email: '連絡用メールアドレス',
+  contactName: '担当者',
+  emergencyPhone: '緊急連絡先',
+  address: '所在地',
+  representative: '代表者',
+  invoiceNumber: 'インボイスの登録番号',
+  bankAccount: '精算口座',
+};
+
+export async function updateOperatorAction(
+  operatorId: string,
+  _prev: AdminFormState,
+  formData: FormData,
+): Promise<AdminFormState> {
   const admin = await requireAdmin();
+  if (!isUuid(operatorId)) redirect('/admin/operators');
   const raw = Object.fromEntries(formData) as Record<string, string>;
-  const images = (raw.images ?? '')
-    .split(/\r?\n/)
-    .map((l) => l.trim())
-    .filter(Boolean);
-  const parsed = operatorInputSchema.safeParse({ ...raw, images });
-  if (!parsed.success)
-    redirect(`/admin/operators/${operatorId}?error=${encodeURIComponent('入力内容を確認してください')}`);
+  const parsed = operatorInputSchema.safeParse(raw);
+  if (!parsed.success) return invalidState(toFormIssues(parsed.error, OPERATOR_FIELD_LABELS));
   const periods = parsePeriodLines(raw.periods ?? '');
   if (!periods.ok) {
-    redirect(
-      `/admin/operators/${operatorId}?error=${encodeURIComponent(`オン期の ${periods.line} 行目の形式が正しくありません`)}`,
-    );
+    return invalidState([
+      {
+        field: 'periods',
+        message: `オン期の期間（${periods.line} 件目）：日付を確認してください（終了日は開始日以降）`,
+      },
+    ]);
   }
   const ok = await updateOperator(db, admin.shopId, operatorId, parsed.data, periods.periods);
   if (!ok) redirect('/admin/operators');
@@ -57,5 +77,6 @@ export async function updateOperatorAction(operatorId: string, formData: FormDat
     after: { ...parsed.data, periods: periods.periods },
   });
   revalidatePath('/', 'layout');
-  redirect(`/admin/operators/${operatorId}?saved=1`);
+  // saved に時刻を入れて、保存後にフォームを作り直す（未保存の印を消す）
+  redirect(`/admin/operators/${operatorId}?saved=${Date.now()}`);
 }

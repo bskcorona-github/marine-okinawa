@@ -1,5 +1,17 @@
 import { sql } from 'drizzle-orm';
-import { check, date, index, integer, pgEnum, pgTable, time, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
+import {
+  check,
+  date,
+  index,
+  integer,
+  pgEnum,
+  pgTable,
+  time,
+  timestamp,
+  unique,
+  uniqueIndex,
+  uuid,
+} from 'drizzle-orm/pg-core';
 import { timestamps } from './_columns';
 import { menus } from './catalog';
 import { shops } from './shop';
@@ -34,6 +46,8 @@ export const scheduleExceptions = pgTable(
     ...timestamps,
   },
   (t) => [
+    // 同じ日・同じ時刻（終日を含む）・同じ種類の例外は 1 件だけ（登録時は置き換える）
+    unique('schedule_exceptions_slot_type_uq').on(t.menuId, t.date, t.startTime, t.type).nullsNotDistinct(),
     check('schedule_exceptions_extra_slot_time', sql`${t.type} <> 'extra_slot' OR ${t.startTime} IS NOT NULL`),
     check('schedule_exceptions_capacity_required', sql`${t.type} = 'closed' OR ${t.capacity} IS NOT NULL`),
   ],

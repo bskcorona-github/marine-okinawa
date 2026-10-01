@@ -1,96 +1,94 @@
-import Image from 'next/image';
-import { isRemoteImage } from '@/lib/image';
+import { BookOpen, ChevronRight, Mail, Search, ShieldCheck, Sparkles } from 'lucide-react';
 import { getTranslations, setRequestLocale } from 'next-intl/server';
 import { connection } from 'next/server';
-import { buttonVariants } from '@/components/ui/button';
+import { CATEGORY_META, type MenuCategory } from '@/components/site/category-meta';
+import { Phrase } from '@/components/site/phrase';
 import { db } from '@/db';
 import { Link } from '@/i18n/navigation';
 import { cn } from '@/lib/utils';
-import { listOperators, listPublishedMenus } from '@/modules/catalog/menus';
+import { listPublicActivities } from '@/modules/catalog/activities';
+import { listPublishedMenus } from '@/modules/catalog/menus';
 import { getCurrentShop } from '@/modules/shop/shops';
-import { MenuCard } from './menu-card';
+import { PlanCard } from './plan-card';
 
-export default async function HomePage({ params, searchParams }: PageProps<'/[locale]'>) {
+/** 「おすすめ・新着」に並べる数 */
+const PICKS = 6;
+
+export default async function HomePage({ params }: PageProps<'/[locale]'>) {
   const { locale } = await params;
   setRequestLocale(locale);
   await connection();
-  const { category } = await searchParams;
-  const t = await getTranslations();
   const shop = await getCurrentShop(db);
-  const profile = shop.profile;
-  const [menus, operators] = await Promise.all([
-    listPublishedMenus(db, { shopId: shop.id, locale }),
-    listOperators(db, shop.id),
+  const t = await getTranslations();
+  const now = new Date();
+  const [activities, featured, newest] = await Promise.all([
+    listPublicActivities(db, shop.id),
+    listPublishedMenus(db, { shopId: shop.id, locale, featured: true }),
+    listPublishedMenus(db, { shopId: shop.id, locale, order: 'newest', limit: PICKS }),
   ]);
-  const categories = [...new Set(menus.map((m) => m.category))];
-  const selected = typeof category === 'string' && categories.includes(category as never) ? category : null;
-  const visible = selected ? menus.filter((m) => m.category === selected) : menus;
+  // おすすめを先に、足りない分を新着で埋める（同じプランは 1 回だけ）
+  const picks = [...featured, ...newest.filter((m) => !featured.some((f) => f.id === m.id))].slice(0, PICKS);
+
+  const flow = (['step1', 'step2', 'step3', 'step4'] as const).map((step) => ({
+    title: t(`home.flow.${step}`),
+    body: t(`home.flow.${step}Body`),
+  }));
+  const help = [
+    { href: '/guide', icon: Sparkles, title: t('home.help.guide'), body: t('home.help.guideBody') },
+    { href: '/how-to-book', icon: BookOpen, title: t('home.help.howToBook'), body: t('home.help.howToBookBody') },
+    { href: '/safety', icon: ShieldCheck, title: t('home.help.safety'), body: t('home.help.safetyBody') },
+    { href: '/contact', icon: Mail, title: t('home.help.contact'), body: t('home.help.contactBody') },
+  ];
 
   return (
-    <>
-      {/* ヒーロー */}
-      <section className="relative isolate flex min-h-[70vh] items-end overflow-hidden bg-sky-900 text-white">
-        {profile.heroImage && (
-          <Image
-            unoptimized={isRemoteImage(profile.heroImage)}
-            src={profile.heroImage}
-            alt=""
-            fill
-            priority
-            sizes="100vw"
-            className="-z-10 object-cover"
-          />
-        )}
-        <div className="absolute inset-0 -z-10 bg-gradient-to-t from-sky-950/90 via-sky-950/40 to-transparent" />
-        <div className="mx-auto w-full max-w-6xl space-y-4 px-4 pt-32 pb-14">
-          {profile.areaLabel && <p className="text-sm font-medium tracking-widest text-sky-200">{profile.areaLabel}</p>}
-          <h1 className="max-w-3xl text-3xl leading-tight font-bold md:text-5xl">{profile.heading ?? shop.name}</h1>
-          {profile.catchCopy && <p className="text-lg text-sky-100 md:text-xl">{profile.catchCopy}</p>}
-          <Link
-            href="/#plans"
-            className={cn(buttonVariants({ size: 'lg' }), 'bg-white px-6 text-sky-900 hover:bg-sky-50')}
+    <div className="bg-sand">
+      {/* ファーストビュー：何ができるサイトか（体験を探して予約する）と、探す入口 */}
+      <section className="relative overflow-hidden bg-gradient-to-br from-ocean-deep via-ocean to-lagoon text-white">
+        <div aria-hidden className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-sand/15 to-transparent" />
+        <div className="relative mx-auto max-w-6xl space-y-6 px-4 pt-12 pb-14 md:pt-20 md:pb-20">
+          <p className="text-sm font-semibold tracking-wide text-lagoon-soft">{shop.name}</p>
+          <h1 className="jp-wrap font-heading text-[32px] leading-tight font-black md:text-5xl">
+            <Phrase>{t('home.title')}</Phrase>
+          </h1>
+          <p className="jp-wrap max-w-2xl text-[15px] leading-relaxed text-white/85 md:text-lg">
+            <Phrase>{t('home.lead')}</Phrase>
+          </p>
+          <form
+            action={`/${locale}/search`}
+            role="search"
+            className="flex max-w-xl gap-2 rounded-2xl bg-white p-2 shadow-xl"
           >
-            {t('site.heroCta')}
-          </Link>
-        </div>
-      </section>
-
-      {/* プラン一覧 */}
-      <section id="plans" className="scroll-mt-16 bg-sky-50/60 py-14">
-        <div className="mx-auto max-w-6xl space-y-6 px-4">
-          <h2 className="text-2xl font-bold">{t('site.menus')}</h2>
-          {categories.length > 1 && (
-            <nav className="flex flex-wrap gap-2" aria-label="カテゴリ">
-              <Link
-                href="/#plans"
-                className={cn(
-                  'rounded-full px-4 py-1.5 text-sm ring-1 ring-sky-200',
-                  !selected ? 'bg-sky-800 text-white' : 'bg-white',
-                )}
-              >
-                {t('site.allCategories')}
-              </Link>
-              {categories.map((c) => (
-                <Link
-                  key={c}
-                  href={`/?category=${c}#plans`}
-                  className={cn(
-                    'rounded-full px-4 py-1.5 text-sm ring-1 ring-sky-200',
-                    selected === c ? 'bg-sky-800 text-white' : 'bg-white',
-                  )}
-                >
-                  {t(`category.${c}`)}
-                </Link>
-              ))}
-            </nav>
-          )}
-          {visible.length === 0 ? (
-            <p className="text-slate-600">{t('site.empty')}</p>
-          ) : (
-            <ul className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-              {visible.map((menu) => (
-                <li key={menu.id}>
-                  <MenuCard menu={menu} />
+            <label htmlFor="home-search" className="sr-only">
+              {t('home.search.label')}
+            </label>
+            <div className="relative flex-1">
+              <Search aria-hidden className="absolute top-1/2 left-3 size-5 -translate-y-1/2 text-ink/40" />
+              <input
+                id="home-search"
+                name="q"
+                type="search"
+                maxLength={50}
+                placeholder={t('home.search.placeholder')}
+                className="h-12 w-full rounded-xl pr-3 pl-10 text-[16px] text-ink placeholder:text-ink/45 focus:ring-3 focus:ring-lagoon/30 focus:outline-none"
+              />
+            </div>
+            <button
+              type="submit"
+              className="min-h-12 shrink-0 rounded-xl bg-ocean px-5 font-bold text-white hover:bg-ocean-deep"
+            >
+              {t('home.search.submit')}
+            </button>
+          </form>
+          {activities.length > 0 && (
+            <ul className="flex flex-wrap gap-2" aria-label={t('home.activitiesTitle')}>
+              {activities.map((a) => (
+                <li key={a.id}>
+                  <Link
+                    href={`/activities/${a.slug}`}
+                    className="inline-flex min-h-11 items-center rounded-full bg-white/15 px-4 text-sm font-semibold text-white ring-1 ring-white/25 backdrop-blur hover:bg-white/25"
+                  >
+                    {a.name}
+                  </Link>
                 </li>
               ))}
             </ul>
@@ -98,121 +96,152 @@ export default async function HomePage({ params, searchParams }: PageProps<'/[lo
         </div>
       </section>
 
-      {/* 予約の流れ */}
-      <section id="flow" className="scroll-mt-16 py-14">
-        <div className="mx-auto max-w-6xl space-y-6 px-4">
-          <h2 className="text-2xl font-bold">{t('site.flow.title')}</h2>
-          <ol className="grid gap-4 md:grid-cols-3">
-            {(['step1', 'step2', 'step3'] as const).map((step, i) => (
-              <li key={step} className="rounded-2xl bg-sky-50 p-5">
-                <p className="text-3xl font-bold text-sky-300">{i + 1}</p>
-                <p className="mt-2 font-bold">{t(`site.flow.${step}`)}</p>
-                <p className="mt-1 text-sm text-slate-600">{t(`site.flow.${step}Body`)}</p>
+      <div className="mx-auto max-w-6xl space-y-16 px-4 py-12 md:py-16">
+        <section id="activities" className="scroll-mt-24 space-y-5" aria-labelledby="activities-title">
+          <div className="space-y-1">
+            <h2 id="activities-title" className="font-heading text-2xl font-bold text-ocean">
+              {t('home.activitiesTitle')}
+            </h2>
+            <p className="text-sm text-ink/75">{t('home.activitiesLead')}</p>
+          </div>
+          {activities.length === 0 ? (
+            <p className="rounded-3xl bg-white p-8 text-center text-ink/70 ring-1 ring-ocean/10">{t('home.empty')}</p>
+          ) : (
+            <ul className={cn('grid gap-4 sm:grid-cols-2', activities.length > 2 && 'lg:grid-cols-3')}>
+              {activities.map((a) => {
+                const meta = CATEGORY_META[a.category as MenuCategory] ?? CATEGORY_META.other;
+                const Icon = meta.icon;
+                return (
+                  <li key={a.id}>
+                    <Link
+                      href={`/activities/${a.slug}`}
+                      className="group flex h-full items-start gap-4 rounded-3xl bg-white p-5 shadow-sm ring-1 ring-ocean/10 transition hover:-translate-y-0.5 hover:shadow-lg hover:ring-ocean/20"
+                    >
+                      <span
+                        className={`flex size-14 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br text-white ${meta.gradients[0]}`}
+                      >
+                        <Icon aria-hidden className="size-7" />
+                      </span>
+                      <span className="min-w-0 flex-1 space-y-1">
+                        <span className="flex items-center justify-between gap-2">
+                          <span className="font-heading text-lg font-bold text-ink">{a.name}</span>
+                          <ChevronRight aria-hidden className="size-5 shrink-0 text-ocean/40 group-hover:text-ocean" />
+                        </span>
+                        {a.lead && (
+                          <span className="jp-wrap block text-sm leading-relaxed text-ink/75">
+                            <Phrase>{a.lead}</Phrase>
+                          </span>
+                        )}
+                        <span className="block text-xs font-semibold text-lagoon-ink">
+                          {t('home.activityPlans', { count: a.planCount })}
+                        </span>
+                      </span>
+                    </Link>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </section>
+
+        {picks.length > 0 && (
+          <section id="plans" className="scroll-mt-24 space-y-5" aria-labelledby="plans-title">
+            <h2 id="plans-title" className="font-heading text-2xl font-bold text-ocean">
+              {t('home.picksTitle')}
+            </h2>
+            <ul className={cn('grid gap-5 sm:grid-cols-2', picks.length > 2 && 'lg:grid-cols-3')}>
+              {picks.map((menu) => (
+                <li key={menu.id}>
+                  <PlanCard menu={menu} now={now} />
+                </li>
+              ))}
+            </ul>
+            <p>
+              <Link
+                href="/search"
+                className="inline-flex min-h-11 items-center gap-1 font-semibold text-lagoon-ink hover:underline"
+              >
+                {t('search.allPlans')}
+                <ChevronRight aria-hidden className="size-4" />
+              </Link>
+            </p>
+          </section>
+        )}
+
+        <section id="flow" className="scroll-mt-24 space-y-5" aria-labelledby="flow-title">
+          <div className="space-y-1">
+            <h2 id="flow-title" className="font-heading text-2xl font-bold text-ocean">
+              {t('home.flow.title')}
+            </h2>
+            <p className="jp-wrap max-w-3xl text-sm leading-relaxed text-ink/75">
+              <Phrase>{t('home.flow.lead')}</Phrase>
+            </p>
+          </div>
+          <ol className="grid gap-3 md:grid-cols-4">
+            {flow.map((step, i) => (
+              <li key={step.title} className="rounded-3xl bg-white p-5 ring-1 ring-ocean/10">
+                <span className="flex size-8 items-center justify-center rounded-full bg-ocean text-sm font-bold text-white">
+                  {i + 1}
+                </span>
+                <p className="mt-3 font-bold text-ink">{step.title}</p>
+                <p className="jp-wrap mt-1 text-sm leading-relaxed text-ink/75">
+                  <Phrase>{step.body}</Phrase>
+                </p>
               </li>
             ))}
           </ol>
-        </div>
-      </section>
+          <Link
+            href="/how-to-book"
+            className="inline-flex min-h-11 items-center gap-1 font-semibold text-lagoon-ink hover:underline"
+          >
+            {t('home.flow.more')}
+            <ChevronRight aria-hidden className="size-4" />
+          </Link>
+        </section>
 
-      {/* マリーナについて・事業者 */}
-      <section id="about" className="scroll-mt-16 bg-sky-950 py-14 text-white">
-        <div className="mx-auto max-w-6xl space-y-10 px-4">
-          <div className="max-w-3xl space-y-3">
-            <h2 className="text-2xl font-bold">{t('site.about')}</h2>
-            {profile.introduction && <p className="leading-relaxed text-sky-100">{profile.introduction}</p>}
-          </div>
-          {operators.length > 0 && (
-            <div className="space-y-4">
-              <h3 className="text-xl font-bold">{t('site.operators')}</h3>
-              <ul className="grid gap-5 md:grid-cols-3">
-                {operators.map((op) => (
-                  <li key={op.id} className="overflow-hidden rounded-2xl bg-white/5 ring-1 ring-white/10">
-                    {op.images[0] && (
-                      <div className="relative aspect-[16/9]">
-                        <Image
-                          unoptimized={isRemoteImage(op.images[0])}
-                          src={op.images[0]}
-                          alt={op.name}
-                          fill
-                          sizes="(min-width: 768px) 33vw, 100vw"
-                          className="object-cover"
-                        />
-                      </div>
-                    )}
-                    <div className="space-y-2 p-4">
-                      <p className="font-bold">{op.name}</p>
-                      <p className="line-clamp-4 text-sm text-sky-100">{op.about}</p>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-        </div>
-      </section>
+        <section className="space-y-5" aria-labelledby="help-title">
+          <h2 id="help-title" className="font-heading text-2xl font-bold text-ocean">
+            {t('home.help.title')}
+          </h2>
+          <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            {help.map(({ href, icon: Icon, title, body }) => (
+              <li key={href}>
+                <Link
+                  href={href}
+                  className="flex h-full flex-col gap-2 rounded-3xl bg-white p-5 ring-1 ring-ocean/10 transition hover:ring-ocean/30"
+                >
+                  <Icon aria-hidden className="size-6 text-lagoon" />
+                  <span className="flex items-center justify-between gap-2 font-bold text-ink">
+                    {title}
+                    <ChevronRight aria-hidden className="size-5 shrink-0 text-ocean/40" />
+                  </span>
+                  <span className="jp-wrap text-sm leading-relaxed text-ink/75">
+                    <Phrase>{body}</Phrase>
+                  </span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </section>
 
-      {/* アクセス */}
-      <section id="access" className="scroll-mt-16 py-14">
-        <div className="mx-auto grid max-w-6xl gap-8 px-4 md:grid-cols-2">
-          <div className="space-y-4">
-            <h2 className="text-2xl font-bold">{t('site.access')}</h2>
-            <dl className="space-y-3 text-sm">
-              {profile.address && (
-                <div>
-                  <dt className="font-semibold">{t('site.address')}</dt>
-                  <dd>
-                    {profile.address}
-                    {profile.landmark && <span className="text-slate-500">（{profile.landmark}）</span>}
-                  </dd>
-                </div>
-              )}
-              {profile.directions && profile.directions.length > 0 && (
-                <div>
-                  <dt className="font-semibold">{t('site.directions')}</dt>
-                  <dd>
-                    <ul className="list-inside list-disc">
-                      {profile.directions.map((d) => (
-                        <li key={d}>{d}</li>
-                      ))}
-                    </ul>
-                  </dd>
-                </div>
-              )}
-              {profile.parking && (
-                <div>
-                  <dt className="font-semibold">{t('site.parking')}</dt>
-                  <dd>{profile.parking}</dd>
-                </div>
-              )}
-              {profile.nearbyHotels && profile.nearbyHotels.length > 0 && (
-                <div>
-                  <dt className="font-semibold">{t('site.nearbyHotels')}</dt>
-                  <dd className="text-slate-600">{profile.nearbyHotels.join(' / ')}</dd>
-                </div>
-              )}
-            </dl>
-            {profile.mapLinkUrl && (
-              <a
-                href={profile.mapLinkUrl}
-                target="_blank"
-                rel="noreferrer"
-                className={buttonVariants({ variant: 'outline' })}
-              >
-                {t('site.openMap')}
-              </a>
-            )}
-          </div>
-          {profile.mapEmbedUrl && (
-            <iframe
-              src={profile.mapEmbedUrl}
-              title={t('site.access')}
-              className="h-80 w-full rounded-2xl border-0"
-              loading="lazy"
-              referrerPolicy="no-referrer-when-downgrade"
-            />
-          )}
-        </div>
-      </section>
-    </>
+        {shop.profile.introduction && (
+          <section className="rounded-3xl bg-ocean p-6 text-white md:p-10" aria-labelledby="about-title">
+            <h2 id="about-title" className="font-heading text-2xl font-bold">
+              {t('home.about.title')}
+            </h2>
+            <p className="jp-wrap mt-3 max-w-3xl leading-relaxed text-white/85">
+              <Phrase>{shop.profile.introduction}</Phrase>
+            </p>
+            <Link
+              href="/about"
+              className="mt-4 inline-flex min-h-11 items-center gap-1 font-semibold text-lagoon-soft hover:underline"
+            >
+              {t('home.about.more')}
+              <ChevronRight aria-hidden className="size-4" />
+            </Link>
+          </section>
+        )}
+      </div>
+    </div>
   );
 }

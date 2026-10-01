@@ -7,9 +7,23 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-sans);
-  --font-mono: var(--font-geist-mono);
-  --font-heading: var(--font-sans);
+  --font-sans: var(--font-body), 'Hiragino Sans', 'Yu Gothic', system-ui, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+  --font-heading: var(--font-display), var(--font-body), 'Hiragino Sans', system-ui, sans-serif;
+
+  /* ブランドカラー（docs/superpowers/specs/2026-09-29-ui-redesign.md） */
+  --color-ink: #0b1f2a;
+  --color-ocean: #0a3a5c;
+  --color-ocean-deep: #06243b;
+  --color-lagoon: #0b8793;
+  --color-lagoon-ink: #07707a; /* 小さい文字用（白地で 5.8:1） */
+  --color-lagoon-soft: #d9f1f2;
+  --color-foam: #eef8f9;
+  --color-sand: #faf6ef;
+  --color-sand-deep: #efe6d6;
+  --color-coral: #e8553a;
+  --color-coral-strong: #cf4128; /* 白文字で 4.7:1（ボタンの背景はこちら） */
+  --color-coral-deep: #ad3620;
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -55,10 +69,10 @@
   --card-foreground: oklch(0.145 0 0);
   --popover: oklch(1 0 0);
   --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
+  --primary: #0a3a5c;
+  --primary-foreground: #ffffff;
+  --secondary: #eef8f9;
+  --secondary-foreground: #0a3a5c;
   --muted: oklch(0.97 0 0);
   --muted-foreground: oklch(0.556 0 0);
   --accent: oklch(0.97 0 0);
@@ -66,13 +80,13 @@
   --destructive: oklch(0.577 0.245 27.325);
   --border: oklch(0.922 0 0);
   --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
+  --ring: #0b8793;
   --chart-1: oklch(0.87 0 0);
   --chart-2: oklch(0.556 0 0);
   --chart-3: oklch(0.439 0 0);
   --chart-4: oklch(0.371 0 0);
   --chart-5: oklch(0.269 0 0);
-  --radius: 0.625rem;
+  --radius: 0.75rem;
   --sidebar: oklch(0.985 0 0);
   --sidebar-foreground: oklch(0.145 0 0);
   --sidebar-primary: oklch(0.205 0 0);
@@ -126,5 +140,55 @@
   }
   html {
     @apply font-sans;
+    /* アンカー移動・入力エラー時のスクロールで、固定ヘッダーの下に隠れないようにする */
+    scroll-padding-top: 5.5rem;
+    -webkit-tap-highlight-color: transparent;
   }
+  h1,
+  h2,
+  h3 {
+    font-family: var(--font-heading);
+    text-wrap: balance;
+  }
+  :focus-visible {
+    outline: 3px solid var(--color-lagoon);
+    outline-offset: 2px;
+  }
+}
+
+@layer utilities {
+  /* 画像がないときのカバー用の波模様 */
+  .bg-waves {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='24' viewBox='0 0 120 24'%3E%3Cpath d='M0 12c15 0 15-8 30-8s15 8 30 8 15-8 30-8 15 8 30 8' fill='none' stroke='white' stroke-opacity='.18' stroke-width='2'/%3E%3C/svg%3E");
+    background-size: 120px 24px;
+  }
+  /* カバーの模様の別パターン（同じカテゴリのプランが並んでも単調にならないよう、slug ごとに選ぶ） */
+  .bg-dots {
+    background-image: radial-gradient(rgb(255 255 255 / 0.22) 1.5px, transparent 1.6px);
+    background-size: 18px 18px;
+  }
+  .bg-stripes {
+    background-image: repeating-linear-gradient(135deg, rgb(255 255 255 / 0.12) 0 2px, transparent 2px 16px);
+  }
+  /* <Phrase> で文節ごとに <wbr> を入れた日本語を、文節の途中で折り返さない */
+  .jp-wrap {
+    word-break: keep-all;
+    overflow-wrap: anywhere;
+  }
+  .pb-safe {
+    padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
+  }
+}
+
+/* スマホの画面下に固定した予約バーがあるページでは、フッターの下に同じ高さの余白を足して、
+   コピーライトまで読めるようにする（本文の下に空白を作らない） */
+@media (width < 64rem) {
+  body:has([data-mobile-cta]) footer {
+    padding-bottom: calc(6.5rem + env(safe-area-inset-bottom));
+  }
+}
+
+/* クライアントで出す短い案内文の折り返し。対応ブラウザでは文節で折り返す（BudouX を送らずに済む） */
+.jp-auto {
+  word-break: auto-phrase;
 }

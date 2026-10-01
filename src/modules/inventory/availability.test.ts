@@ -44,11 +44,46 @@ describe('availability', () => {
     expect(slotLevel({ ...base, now: new Date('2026-10-01T00:00:00Z') })).toBe('closed');
   });
 
+  it('定員が「残りわずか」の基準数以下の回（貸切 1 艇など）は、空きあり／満席の 2 段階', () => {
+    expect(slotLevel({ ...base, capacity: 1 })).toBe('available');
+    expect(slotLevel({ ...base, capacity: 1, reservedCount: 1 })).toBe('full');
+    expect(slotLevel({ ...base, capacity: 2, reservedCount: 1 })).toBe('available'); // 残り 1 でも 2 段階
+    expect(slotLevel({ ...base, capacity: 2, reservedCount: 2 })).toBe('full');
+    expect(slotLevel({ ...base, capacity: 1, thresholdCount: 0 })).toBe('available');
+  });
+
+  it('定員が少ない回でも、割合の基準は予約が入ってから効く', () => {
+    // 定員 3：基準数 2 を超えるので 3 段階。残り 2 から「残りわずか」
+    expect(slotLevel({ ...base, capacity: 3 })).toBe('available');
+    expect(slotLevel({ ...base, capacity: 3, reservedCount: 1 })).toBe('low');
+    // 定員 5・20%：残り 1 で「残りわずか」
+    expect(slotLevel({ ...base, capacity: 5, reservedCount: 3, thresholdCount: 0 })).toBe('available');
+    expect(slotLevel({ ...base, capacity: 5, reservedCount: 4, thresholdCount: 0 })).toBe('low');
+    // 割合を 100% にしても、予約がない回は「空きあり」
+    expect(slotLevel({ ...base, capacity: 4, thresholdPercent: 100, thresholdCount: 0 })).toBe('available');
+    expect(slotLevel({ ...base, capacity: 4, reservedCount: 1, thresholdPercent: 100, thresholdCount: 0 })).toBe('low');
+  });
+
   it('1 日分をまとめる', () => {
     expect(summarizeDay([])).toBe('closed');
     expect(summarizeDay(['closed', 'closed'])).toBe('closed');
     expect(summarizeDay(['full', 'available'])).toBe('available');
     expect(summarizeDay(['full', 'low', 'closed'])).toBe('low');
     expect(summarizeDay(['full', 'closed'])).toBe('full');
+  });
+
+  it('残りが最少人数より少ない回は、予約できないので満席と同じにする', () => {
+    const base = {
+      status: 'open' as const,
+      capacity: 8,
+      reservedCount: 7,
+      deadline: new Date('2026-10-01T00:00:00Z'),
+      now: new Date('2026-09-28T00:00:00Z'),
+      thresholdPercent: 20,
+      thresholdCount: 2,
+    };
+    expect(slotLevel({ ...base, minParty: 2 })).toBe('full');
+    expect(slotLevel({ ...base, reservedCount: 6, minParty: 2 })).toBe('low');
+    expect(slotLevel(base)).toBe('low');
   });
 });

@@ -7,20 +7,29 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { authClient } from '@/lib/auth-client';
+import { useHydrated } from '@/lib/use-hydrated';
 
 export default function TwoFactorVerifyPage() {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [useBackup, setUseBackup] = useState(false);
+  const [pending, setPending] = useState(false);
+  const hydrated = useHydrated();
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const code = String(new FormData(event.currentTarget).get('code')).trim();
+    setPending(true);
     const { error } = useBackup
       ? await authClient.twoFactor.verifyBackupCode({ code })
       : await authClient.twoFactor.verifyTotp({ code });
     if (error) {
-      setError('コードが正しくありません。ログインからやり直す場合は再度ログインしてください');
+      setPending(false);
+      setError(
+        error.status === 429
+          ? '試行回数が多すぎます。1 分ほど待ってからお試しください'
+          : 'コードが正しくありません。ログインからやり直す場合は再度ログインしてください',
+      );
       return;
     }
     router.replace('/admin');
@@ -34,7 +43,7 @@ export default function TwoFactorVerifyPage() {
           <CardTitle>2 要素認証</CardTitle>
         </CardHeader>
         <CardContent>
-          <form onSubmit={onSubmit} className="space-y-4">
+          <form method="post" onSubmit={onSubmit} className="space-y-4">
             <div className="space-y-1">
               <Label htmlFor="code">{useBackup ? 'バックアップコード' : '認証アプリの 6 桁のコード'}</Label>
               <Input
@@ -50,7 +59,7 @@ export default function TwoFactorVerifyPage() {
                 {error}
               </p>
             )}
-            <Button type="submit" className="w-full">
+            <Button type="submit" className="w-full" disabled={!hydrated || pending}>
               確認
             </Button>
             <button type="button" className="text-sm text-slate-600 underline" onClick={() => setUseBackup((v) => !v)}>

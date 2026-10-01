@@ -1,51 +1,31 @@
-import Link from 'next/link';
+import { PageHeader } from '@/components/admin/page-header';
 import { db } from '@/db';
 import { requireAdmin } from '@/modules/auth/guard';
+import { listActivitiesForAdmin } from '@/modules/catalog/activities';
 import { listOperators } from '@/modules/catalog/menus';
-import { createMenuAction } from '../actions';
+import { createMenuAction, uploadMenuImageAction } from '../actions';
+import { NEW_PLAN_VALUES } from '../form-values';
 import { MenuForm } from '../menu-form';
 
-export const metadata = { title: 'メニューを追加' };
+export const metadata = { title: 'プランを追加' };
 
 export default async function NewMenuPage() {
   const admin = await requireAdmin();
-  const operators = await listOperators(db, admin.shopId);
+  const [operators, activities] = await Promise.all([
+    listOperators(db, admin.shopId),
+    listActivitiesForAdmin(db, admin.shopId),
+  ]);
   return (
     <div className="space-y-4">
-      <Link href="/admin/menus" className="text-sm text-slate-600">
-        ← メニュー一覧へ
-      </Link>
-      <h1 className="text-xl font-bold">メニューを追加</h1>
+      <PageHeader back={{ href: '/admin/menus', label: 'プラン一覧へ' }} title="プランを追加" />
       <p className="text-sm text-slate-600">保存後、「回の設定」で開始時刻と定員を登録すると予約を受け付けられます。</p>
       <MenuForm
         action={createMenuAction}
+        uploadImage={uploadMenuImageAction}
         operators={operators}
+        activities={activities}
         submitLabel="作成して回の設定へ"
-        initial={{
-          slug: '',
-          status: 'draft',
-          category: 'snorkeling',
-          durationMin: 120,
-          minAge: null,
-          maxPartySize: 10,
-          bookingCutoffMin: 120,
-          cutoffPrevDayTime: null,
-          operatorId: null,
-          capacityUnit: '名',
-          title: '',
-          description: '',
-          meetingPoint: '',
-          whatToBring: '',
-          summary: '',
-          included: '',
-          conditions: '',
-          notes: '',
-          images: [],
-          prices: [
-            { label: '大人', price: 0, season: null },
-            { label: '子供', price: 0, season: null },
-          ],
-        }}
+        initial={NEW_PLAN_VALUES}
       />
     </div>
   );

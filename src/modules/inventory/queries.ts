@@ -1,6 +1,7 @@
-import { and, asc, eq, gte, lt, ne } from 'drizzle-orm';
+import { and, asc, eq, gte, inArray, lt, sql } from 'drizzle-orm';
 import type { DbOrTx } from '@/db/client';
-import { menus, menuTranslations, slots } from '@/db/schema';
+import { bookings, menus, menuTranslations, slots } from '@/db/schema';
+import { OPEN_REQUEST_STATUSES } from '@/modules/booking/status';
 import { addDays, localDate, localTime, monthDays, zonedToUtc } from '@/lib/dates';
 import {
   bookingDeadline,
@@ -12,9 +13,44 @@ import {
 } from './availability';
 
 type ShopLike = { timezone: string; lowStockThresholdPercent: number; lowStockThresholdCount: number };
-type MenuLike = { id: string } & DeadlineRule;
+/**
+ * capacityUnit が「名」以外（貸切の艇など）のプランは、残り枠を検索の人数で絞り込まない（1 回 1 艇）。
+ * 1 回の予約で申し込める人数（maxPartySize、貸切は乗船人数の上限 maxGuests）を超える人数では予約できない
+ */
+type MenuLike = {
+  id: string;
+  capacityUnit?: string;
+  maxPartySize?: number;
+  minPartySize?: number;
+  maxGuests?: number | null;
+} & DeadlineRule;
 
-function levelOf(slot: typeof slots.$inferSelect, menu: MenuLike, shop: ShopLike, now: Date): AvailabilityLevel {
+/** 1 回の予約で申し込める人数の範囲（人数で数えるプランは最少〜最大、貸切は乗船人数の上限まで）か */
+export function withinPartyRange(menu: MenuLike, people: number): boolean {
+  const perPerson = !menu.capacityUnit || menu.capacityUnit === '名';
+  if (perPerson) return people >= (menu.minPartySize ?? 1) && people <= (menu.maxPartySize ?? Infinity);
+  return people <= (menu.maxGuests ?? Infinity);
+}
+
+/** 検索の人数で、この回を予約できるか（人数の範囲内で、人数で数えるプランは残り枠が足りる） */
+function fitsParty(menu: MenuLike, people: number, remaining: number): boolean {
+  const perPerson = !menu.capacityUnit || menu.capacityUnit === '名';
+  return withinPartyRange(menu, people) && (!perPerson || remaining >= people);
+}
+
+/**
+ * 回の空き状況。people（検索の人数）を渡すと、人数で数えるプランはその人数分（上限は 1 回の最大人数）の空きが
+ * ない回を満席と同じに扱う（カレンダーの ○ と時間の一覧の「空きなし」を食い違わせない）
+ */
+function levelOf(
+  slot: typeof slots.$inferSelect,
+  menu: MenuLike,
+  shop: ShopLike,
+  now: Date,
+  people?: number | null,
+): AvailabilityLevel {
+  const perPerson = !menu.capacityUnit || menu.capacityUnit === '名';
+  const needed = people ? Math.min(people, menu.maxPartySize ?? people) : 1;
   return slotLevel({
     status: slot.status,
     capacity: slot.capacity,
@@ -23,6 +59,7 @@ function levelOf(slot: typeof slots.$inferSelect, menu: MenuLike, shop: ShopLike
     now,
     thresholdPercent: shop.lowStockThresholdPercent,
     thresholdCount: shop.lowStockThresholdCount,
+    minParty: perPerson ? Math.max(menu.minPartySize ?? 1, needed) : 1,
   });
 }
 
@@ -37,9 +74,9 @@ async function selectMenuSlots(db: DbOrTx, menuId: string, from: Date, to: Date)
 /** 月カレンダー用：日付ごとの空き状況 */
 export async function getMonthAvailability(
   db: DbOrTx,
-  params: { menu: MenuLike; shop: ShopLike; month: string; now: Date },
+  params: { menu: MenuLike; shop: ShopLike; month: string; now: Date; people?: number | null },
 ): Promise<Record<string, AvailabilityLevel>> {
-  const { menu, shop, month, now } = params;
+  const { menu, shop, month, now, people } = params;
   const days = monthDays(month);
   const from = zonedToUtc(days[0], '00:00', shop.timezone);
   const to = zonedToUtc(addDays(days[days.length - 1], 1), '00:00', shop.timezone);
@@ -48,7 +85,7 @@ export async function getMonthAvailability(
   const levelsByDate = new Map<string, AvailabilityLevel[]>();
   for (const slot of rows) {
     const date = localDate(slot.startsAt, shop.timezone);
-    levelsByDate.set(date, [...(levelsByDate.get(date) ?? []), levelOf(slot, menu, shop, now)]);
+    levelsByDate.set(date, [...(levelsByDate.get(date) ?? []), levelOf(slot, menu, shop, now, people)]);
   }
   return Object.fromEntries(days.map((d) => [d, summarizeDay(levelsByDate.get(d) ?? [])]));
 }
@@ -76,6 +113,70 @@ export async function getDaySlots(
   }));
 }
 
+/**
+ * トップページの「日付から探す」用：複数メニューの、その日の回をまとめて取得する。
+ * people を指定すると、残りがその人数に満たない回は満席扱い（予約できない）にする。
+ */
+export async function getDateAvailabilityForMenus(
+  db: DbOrTx,
+  params: { menus: MenuLike[]; shop: ShopLike; date: string; now: Date; people?: number },
+): Promise<Map<string, DaySlot[]>> {
+  const { menus: targets, shop, date, now, people } = params;
+  const result = new Map<string, DaySlot[]>(targets.map((m) => [m.id, []]));
+  if (targets.length === 0) return result;
+  const byId = new Map(targets.map((m) => [m.id, m]));
+  const rows = await db
+    .select()
+    .from(slots)
+    .where(
+      and(
+        inArray(
+          slots.menuId,
+          targets.map((m) => m.id),
+        ),
+        gte(slots.startsAt, zonedToUtc(date, '00:00', shop.timezone)),
+        lt(slots.startsAt, zonedToUtc(addDays(date, 1), '00:00', shop.timezone)),
+      ),
+    )
+    .orderBy(asc(slots.startsAt));
+  for (const slot of rows) {
+    const menu = byId.get(slot.menuId)!;
+    const remaining = remainingSeats(slot.capacity, slot.reservedCount);
+    let level = levelOf(slot, menu, shop, now);
+    if (people && (level === 'available' || level === 'low') && !fitsParty(menu, people, remaining)) level = 'full';
+    result.get(slot.menuId)!.push({
+      id: slot.id,
+      startsAt: slot.startsAt,
+      time: localTime(slot.startsAt, shop.timezone),
+      remaining,
+      level,
+    });
+  }
+  return result;
+}
+
+/**
+ * 予約できる最初の日（ショップのタイムゾーンの YYYY-MM-DD）。カレンダーを空きのある月から開くために使う。
+ * 締切・満席・休止を考慮し、見つからなければ null。
+ */
+export async function getFirstBookableDate(
+  db: DbOrTx,
+  params: { menu: MenuLike; shop: ShopLike; now: Date; people?: number | null },
+): Promise<string | null> {
+  const { menu, shop, now, people } = params;
+  const rows = await db
+    .select()
+    .from(slots)
+    .where(and(eq(slots.menuId, menu.id), eq(slots.status, 'open'), gte(slots.startsAt, now)))
+    .orderBy(asc(slots.startsAt))
+    .limit(500);
+  const first = rows.find((slot) => {
+    const level = levelOf(slot, menu, shop, now, people);
+    return level === 'available' || level === 'low';
+  });
+  return first ? localDate(first.startsAt, shop.timezone) : null;
+}
+
 /** お客様向け予約フォーム用：メニューに属する回 */
 export async function getSlotForMenu(db: DbOrTx, params: { menuId: string; slotId: string }) {
   const [slot] = await db
@@ -94,6 +195,11 @@ export async function getSlotForAdmin(db: DbOrTx, params: { shopId: string; slot
       durationMin: menus.durationMin,
       operatorId: menus.operatorId,
       capacityUnit: menus.capacityUnit,
+      includedGuests: menus.includedGuests,
+      extraGuestPrice: menus.extraGuestPrice,
+      maxGuests: menus.maxGuests,
+      minPartySize: menus.minPartySize,
+      requireAges: menus.requireAges,
     })
     .from(slots)
     .innerJoin(menus, eq(menus.id, slots.menuId))
@@ -106,6 +212,11 @@ export async function getSlotForAdmin(db: DbOrTx, params: { shopId: string; slot
         durationMin: row.durationMin,
         operatorId: row.operatorId,
         capacityUnit: row.capacityUnit,
+        includedGuests: row.includedGuests,
+        extraGuestPrice: row.extraGuestPrice,
+        maxGuests: row.maxGuests,
+        minPartySize: row.minPartySize,
+        requireAges: row.requireAges,
       }
     : null;
 }
@@ -125,23 +236,42 @@ export type TimetableSlot = {
   id: string;
   date: string;
   time: string;
+  startsAt: Date;
   capacity: number;
   reservedCount: number;
+  /** reservedCount のうち、まだ確定していない申込（仮受付〜支払待ち）の人数 */
+  pendingCount: number;
   status: 'open' | 'closed' | 'weather_cancelled';
 };
-export type TimetableRow = { menuId: string; title: string; slots: TimetableSlot[] };
+export type TimetableRow = {
+  menuId: string;
+  title: string;
+  operatorId: string | null;
+  capacityUnit: string;
+  archived: boolean;
+  slots: TimetableSlot[];
+};
 
-/** 管理画面のタイムテーブル：アーカイブ以外の全メニューと、期間内の回 */
+/**
+ * 管理画面のタイムテーブル：メニューと期間内の回。
+ * アーカイブしたメニューも、期間内に予約の入っている回があれば表示する（予約が見えなくならないように）
+ */
 export async function getTimetable(
   db: DbOrTx,
-  params: { shopId: string; timezone: string; fromDate: string; days: number },
+  params: { shopId: string; timezone: string; fromDate: string; days: number; operatorId?: string | null },
 ): Promise<TimetableRow[]> {
   const { shopId, timezone, fromDate, days } = params;
   const menuRows = await db
-    .select({ menuId: menus.id, title: menuTranslations.title })
+    .select({
+      menuId: menus.id,
+      title: menuTranslations.title,
+      operatorId: menus.operatorId,
+      capacityUnit: menus.capacityUnit,
+      status: menus.status,
+    })
     .from(menus)
     .innerJoin(menuTranslations, and(eq(menuTranslations.menuId, menus.id), eq(menuTranslations.locale, 'ja')))
-    .where(and(eq(menus.shopId, shopId), ne(menus.status, 'archived')))
+    .where(and(eq(menus.shopId, shopId), ...(params.operatorId ? [eq(menus.operatorId, params.operatorId)] : [])))
     .orderBy(asc(menus.createdAt));
 
   const slotRows = await db
@@ -156,17 +286,66 @@ export async function getTimetable(
     )
     .orderBy(asc(slots.startsAt));
 
-  return menuRows.map((m) => ({
-    ...m,
-    slots: slotRows
-      .filter((s) => s.menuId === m.menuId)
-      .map((s) => ({
-        id: s.id,
-        date: localDate(s.startsAt, timezone),
-        time: localTime(s.startsAt, timezone),
-        capacity: s.capacity,
-        reservedCount: s.reservedCount,
-        status: s.status,
-      })),
-  }));
+  // 未確定の申込（仮受付〜支払待ち）で押さえている人数。回の予約数のうち、まだ確定していない分を見分ける
+  const pendingRows =
+    slotRows.length > 0
+      ? await db
+          .select({ slotId: bookings.slotId, count: sql<number>`sum(${bookings.partySize})`.mapWith(Number) })
+          .from(bookings)
+          .where(
+            and(
+              inArray(
+                bookings.slotId,
+                slotRows.map((s) => s.id),
+              ),
+              inArray(bookings.status, [...OPEN_REQUEST_STATUSES]),
+            ),
+          )
+          .groupBy(bookings.slotId)
+      : [];
+  const pendingOf = new Map(pendingRows.map((r) => [r.slotId, r.count]));
+
+  return menuRows
+    .map(({ status, ...m }) => ({
+      ...m,
+      archived: status === 'archived',
+      slots: slotRows
+        .filter((s) => s.menuId === m.menuId)
+        .map((s) => ({
+          id: s.id,
+          date: localDate(s.startsAt, timezone),
+          time: localTime(s.startsAt, timezone),
+          startsAt: s.startsAt,
+          capacity: s.capacity,
+          reservedCount: s.reservedCount,
+          pendingCount: pendingOf.get(s.id) ?? 0,
+          status: s.status,
+        })),
+    }))
+    .filter((row) => !row.archived || row.slots.some((s) => s.reservedCount > 0));
+}
+
+/** 管理画面の日時変更用：あるプランの、ある日（ショップのタイムゾーン）の回すべて（休止中も含む） */
+export async function listMenuSlotsOnDate(
+  db: DbOrTx,
+  params: { shopId: string; menuId: string; date: string; timezone: string },
+) {
+  return db
+    .select({
+      id: slots.id,
+      startsAt: slots.startsAt,
+      capacity: slots.capacity,
+      reservedCount: slots.reservedCount,
+      status: slots.status,
+    })
+    .from(slots)
+    .where(
+      and(
+        eq(slots.shopId, params.shopId),
+        eq(slots.menuId, params.menuId),
+        gte(slots.startsAt, zonedToUtc(params.date, '00:00', params.timezone)),
+        lt(slots.startsAt, zonedToUtc(addDays(params.date, 1), '00:00', params.timezone)),
+      ),
+    )
+    .orderBy(asc(slots.startsAt));
 }

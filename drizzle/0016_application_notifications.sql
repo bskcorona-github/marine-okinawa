@@ -1,0 +1,2 @@
+ALTER TYPE "public"."notification_type" ADD VALUE 'operator_application' BEFORE 'confirmed';--> statement-breakpoint
+ALTER TYPE "public"."notification_type" ADD VALUE 'application_ack' BEFORE 'confirmed';

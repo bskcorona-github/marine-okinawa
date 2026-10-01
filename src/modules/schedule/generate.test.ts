@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { generateSlots, type ExceptionInput, type RuleInput } from './generate';
+import {
+  exceptionHasTarget,
+  generateSlots,
+  overlappingRuleTimes,
+  type ExceptionInput,
+  type RuleInput,
+} from './generate';
 
 const TZ = 'Asia/Tokyo';
 const EVERY_DAY = [0, 1, 2, 3, 4, 5, 6];
@@ -103,5 +109,71 @@ describe('generateSlots', () => {
       '2026-10-02 08:00 10',
       '2026-10-02 15:00 10',
     ]);
+  });
+
+  it('同じ開始日・同じ時刻のルールは、渡す順番によらず、あとから追加したルールの定員を使う', () => {
+    const older: RuleInput = {
+      validFrom: '2026-10-01',
+      validTo: null,
+      weekdays: [0, 1, 2, 3, 4, 5, 6],
+      startTime: '09:00',
+      capacity: 10,
+      createdAt: new Date('2026-09-01T00:00:00Z'),
+      id: 'b',
+    };
+    const newer: RuleInput = {
+      ...older,
+      weekdays: [0, 6],
+      capacity: 15,
+      createdAt: new Date('2026-09-02T00:00:00Z'),
+      id: 'a',
+    };
+    const capacities = (rules: RuleInput[]) =>
+      generateSlots({ rules, exceptions: [], fromDate: '2026-10-03', toDate: '2026-10-03', timezone: TZ }).map(
+        (s) => s.capacity,
+      );
+    expect(capacities([older, newer])).toEqual([15]);
+    expect(capacities([newer, older])).toEqual([15]);
+    expect(overlappingRuleTimes([older, newer])).toEqual(['09:00']);
+    expect(overlappingRuleTimes([older, { ...newer, startTime: '10:00' }])).toEqual([]);
+    expect(overlappingRuleTimes([older, { ...newer, validFrom: '2026-01-01', validTo: '2026-09-30' }])).toEqual([]);
+  });
+
+  it('同じ日の定員変更は、時刻を指定した例外を終日の例外より優先する（渡す順番によらない）', () => {
+    const rule: RuleInput = { validFrom: '2026-10-01', validTo: null, weekdays: [6], startTime: '09:00', capacity: 10 };
+    const allDay: ExceptionInput = { date: '2026-10-03', startTime: null, type: 'capacity_override', capacity: 6 };
+    const at9: ExceptionInput = { date: '2026-10-03', startTime: '09:00', type: 'capacity_override', capacity: 3 };
+    const capacities = (exceptions: ExceptionInput[]) =>
+      generateSlots({ rules: [rule], exceptions, fromDate: '2026-10-03', toDate: '2026-10-03', timezone: TZ }).map(
+        (s) => s.capacity,
+      );
+    expect(capacities([allDay, at9])).toEqual([3]);
+    expect(capacities([at9, allDay])).toEqual([3]);
+  });
+});
+
+describe('exceptionHasTarget', () => {
+  const rule = {
+    validFrom: '2026-10-01',
+    validTo: null,
+    weekdays: [0, 1, 2, 3, 4, 5, 6],
+    startTime: '10:00',
+    capacity: 8,
+  };
+  const closedAt = (startTime: string | null) =>
+    ({ date: '2026-10-05', startTime, type: 'closed', capacity: null }) as const;
+
+  it('ルールにその時刻の回があれば対象あり', () => {
+    expect(exceptionHasTarget(closedAt('10:00:00'), [rule], [])).toBe(true);
+  });
+
+  it('ルールにも臨時の回にもない時刻は対象なし', () => {
+    expect(exceptionHasTarget(closedAt('13:00'), [rule], [])).toBe(false);
+  });
+
+  it('臨時の回があれば対象あり、終日の例外は常に対象あり', () => {
+    const extra = { date: '2026-10-05', startTime: '13:00', type: 'extra_slot', capacity: 4 } as const;
+    expect(exceptionHasTarget(closedAt('13:00'), [], [extra])).toBe(true);
+    expect(exceptionHasTarget(closedAt(null), [], [])).toBe(true);
   });
 });

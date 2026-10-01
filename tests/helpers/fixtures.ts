@@ -6,7 +6,8 @@ import { bookings, customers, menuPrices, menus, menuTranslations, shops, slots 
 export async function seedShop(db: DbOrTx, overrides: Partial<typeof shops.$inferInsert> = {}) {
   const [shop] = await db
     .insert(shops)
-    .values({ name: 'テストマリン', ...overrides })
+    // 支払案内を送れるよう、支払方法の案内を入れておく（案内がないと支払待ちにできない）
+    .values({ name: 'テストマリン', settings: { paymentInstructions: 'テスト銀行 普通 0000000' }, ...overrides })
     .returning();
   return shop;
 }
@@ -86,7 +87,6 @@ export async function seedBooking(db: DbOrTx, params: { shopId: string; slotId: 
       partySize,
       locale: 'ja',
       contactName: 'テスト 顧客',
-      accessTokenHash: randomUUID(),
       accessTokenExpiresAt: new Date(Date.now() + 24 * 60 * 60_000),
     })
     .returning();

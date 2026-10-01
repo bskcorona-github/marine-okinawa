@@ -7,3 +7,5 @@ export * from './booking';
 export * from './notification';
 export * from './audit';
 export * from './security';
+export * from './content';
+export * from './partner';

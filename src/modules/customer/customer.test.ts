@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { decideCustomerMatch } from './match';
-import { normalizeEmail, normalizePhone } from './normalize';
+import { formatPhoneForDisplay, normalizeEmail, normalizePhone } from './normalize';
 
 describe('normalize', () => {
   it('メールは前後の空白を除いて小文字にする', () => {
@@ -15,6 +15,13 @@ describe('normalize', () => {
     expect(normalizePhone('+1 415 555 2671')).toBe('+14155552671');
     expect(normalizePhone('123')).toBeNull();
     expect(normalizePhone('')).toBeNull();
+  });
+
+  it('保存済みの電話番号は国内形式で表示する（海外の番号は国番号付き）', () => {
+    expect(formatPhoneForDisplay('+819012345678')).toBe('090-1234-5678');
+    expect(formatPhoneForDisplay('+81988970000')).toBe('098-897-0000');
+    expect(formatPhoneForDisplay('+14155552671')).toBe('+1 415 555 2671');
+    expect(formatPhoneForDisplay(null)).toBe('');
   });
 });
 

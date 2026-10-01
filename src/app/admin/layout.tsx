@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { bodyFont, displayFont } from '../fonts';
 import '../globals.css';
 
 export const metadata: Metadata = {
@@ -8,7 +9,7 @@ export const metadata: Metadata = {
 
 export default function AdminRootLayout({ children }: LayoutProps<'/admin'>) {
   return (
-    <html lang="ja" className="h-full antialiased">
+    <html lang="ja" className={`${bodyFont.variable} ${displayFont.variable} h-full antialiased`}>
       <body className="min-h-full bg-slate-50 text-slate-900">{children}</body>
     </html>
   );

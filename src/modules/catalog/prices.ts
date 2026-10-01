@@ -3,11 +3,24 @@ import type { DbOrTx } from '@/db/client';
 import { menuPrices, seasonPeriods } from '@/db/schema';
 import { pricesForSeason, seasonOf, type Season } from './season';
 
-export type PriceRow = { id: string; label: string; price: number; season: string | null };
+export type PriceRow = {
+  id: string;
+  label: string;
+  price: number;
+  season: string | null;
+  /** このコースだけの集合場所（出発港を選ぶ貸切など）。null ならメニューの集合場所 */
+  meetingPoint: string | null;
+};
 
 export async function listActivePriceRows(db: DbOrTx, menuId: string): Promise<PriceRow[]> {
   return db
-    .select({ id: menuPrices.id, label: menuPrices.label, price: menuPrices.price, season: menuPrices.season })
+    .select({
+      id: menuPrices.id,
+      label: menuPrices.label,
+      price: menuPrices.price,
+      season: menuPrices.season,
+      meetingPoint: menuPrices.meetingPoint,
+    })
     .from(menuPrices)
     .where(and(eq(menuPrices.menuId, menuId), isNull(menuPrices.archivedAt)))
     .orderBy(asc(menuPrices.sortOrder), asc(menuPrices.createdAt));

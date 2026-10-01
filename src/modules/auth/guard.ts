@@ -1,39 +1,79 @@
 import 'server-only';
-import { eq } from 'drizzle-orm';
+import { and, eq, isNull, ne } from 'drizzle-orm';
 import { headers } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { cache } from 'react';
 import { db } from '@/db';
-import { shopMembers } from '@/db/schema';
+import { operatorMembers, operators, shopMembers } from '@/db/schema';
 import { auth } from '@/lib/auth';
-import { evaluateAdminAccess } from './access';
+import { evaluateAccess, HOME_OF, type Role } from './access';
 
 export type AdminContext = { userId: string; email: string; shopId: string; role: 'admin' };
+export type OperatorContext = { userId: string; email: string; shopId: string; operatorId: string; role: 'operator' };
 
-const loadAdminState = cache(async () => {
+/** ログイン中の利用者と、その種類（組合の管理者か、停止されていない事業者アカウントか） */
+const loadState = cache(async () => {
   const session = await auth.api.getSession({ headers: await headers() });
-  const [member] = session
-    ? await db.select().from(shopMembers).where(eq(shopMembers.userId, session.user.id)).limit(1)
-    : [];
-  const access = evaluateAdminAccess({
-    hasSession: Boolean(session),
-    isMember: Boolean(member),
-    twoFactorEnabled: Boolean(session?.user.twoFactorEnabled),
-  });
-  return { session, member, access };
+  if (!session) return { session: null, role: null, shopId: null, operatorId: null };
+  const [member] = await db.select().from(shopMembers).where(eq(shopMembers.userId, session.user.id)).limit(1);
+  if (member) return { session, role: 'admin' as Role, shopId: member.shopId, operatorId: null };
+  // 停止中の事業者（取引の停止）のアカウントは、アカウントごとの停止と同じく入れない
+  const [operator] = await db
+    .select({ shopId: operatorMembers.shopId, operatorId: operatorMembers.operatorId })
+    .from(operatorMembers)
+    .innerJoin(operators, eq(operators.id, operatorMembers.operatorId))
+    .where(
+      and(
+        eq(operatorMembers.userId, session.user.id),
+        isNull(operatorMembers.disabledAt),
+        ne(operators.status, 'suspended'),
+      ),
+    )
+    .limit(1);
+  if (operator) return { session, role: 'operator' as Role, shopId: operator.shopId, operatorId: operator.operatorId };
+  return { session, role: null, shopId: null, operatorId: null };
 });
 
-/** 管理画面のページ・Server Action の先頭で必ず呼ぶ */
-export async function requireAdmin(): Promise<AdminContext> {
-  const { session, member, access } = await loadAdminState();
-  if (access === 'login') redirect('/admin/login');
+async function requireRole(required: Role) {
+  const state = await loadState();
+  const access = evaluateAccess({
+    hasSession: Boolean(state.session),
+    role: state.role,
+    twoFactorEnabled: Boolean(state.session?.user.twoFactorEnabled),
+    required,
+  });
+  // ログインはできているが、組合の管理者でも有効な事業者アカウントでもない（停止中など）
+  if (access === 'login') redirect(state.session ? '/admin/login?reason=no_access' : '/admin/login');
+  if (access === 'other_role') redirect(HOME_OF[state.role!]);
   if (access === 'setup_2fa') redirect('/admin/2fa/setup');
-  return { userId: session!.user.id, email: session!.user.email, shopId: member!.shopId, role: member!.role };
+  return state as typeof state & { session: NonNullable<typeof state.session>; shopId: string };
 }
 
-/** 2 要素認証の設定画面用（メンバーであれば未設定でも通す） */
-export async function requireAdminPending2fa(): Promise<{ email: string; twoFactorEnabled: boolean }> {
-  const { session, access } = await loadAdminState();
-  if (access === 'login') redirect('/admin/login');
-  return { email: session!.user.email, twoFactorEnabled: Boolean(session!.user.twoFactorEnabled) };
+/** 管理画面のページ・Server Action の先頭で必ず呼ぶ（組合の管理者だけ） */
+export async function requireAdmin(): Promise<AdminContext> {
+  const state = await requireRole('admin');
+  return { userId: state.session.user.id, email: state.session.user.email, shopId: state.shopId, role: 'admin' };
+}
+
+/** 事業者画面のページ・Server Action の先頭で必ず呼ぶ（停止されていない事業者アカウントだけ） */
+export async function requireOperator(): Promise<OperatorContext> {
+  const state = await requireRole('operator');
+  return {
+    userId: state.session.user.id,
+    email: state.session.user.email,
+    shopId: state.shopId,
+    operatorId: state.operatorId!,
+    role: 'operator',
+  };
+}
+
+/** 2 要素認証の設定画面用（管理者・事業者どちらも、設定前でも通す）。設定後の行き先も返す */
+export async function requirePending2fa(): Promise<{ email: string; twoFactorEnabled: boolean; home: string }> {
+  const state = await loadState();
+  if (!state.session || !state.role) redirect('/admin/login');
+  return {
+    email: state.session.user.email,
+    twoFactorEnabled: Boolean(state.session.user.twoFactorEnabled),
+    home: HOME_OF[state.role],
+  };
 }

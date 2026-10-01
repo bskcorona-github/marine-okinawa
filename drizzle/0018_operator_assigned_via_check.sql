@@ -1,0 +1,1 @@
+ALTER TABLE "bookings" ADD CONSTRAINT "bookings_operator_assigned_via_check" CHECK ("bookings"."operator_assigned_via" in ('default', 'response', 'staff'));

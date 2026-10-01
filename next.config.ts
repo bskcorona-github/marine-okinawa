@@ -4,6 +4,18 @@ import createNextIntlPlugin from 'next-intl/plugin';
 const withNextIntl = createNextIntlPlugin('./src/i18n/request.ts');
 
 const nextConfig: NextConfig = {
+  experimental: {
+    serverActions: {
+      // 事業者の資料（1 ファイル 10MB まで）を Server Action で受け取るため。multipart の区切りの分を足す
+      bodySizeLimit: '11mb',
+    },
+  },
+  async redirects() {
+    return [
+      // 印刷物などに書いたロケールなしの URL でも、事業者の登録申請フォームを開けるようにする
+      { source: '/partner/apply', destination: '/ja/partner/apply', permanent: false },
+    ];
+  },
   async headers() {
     return [
       {
@@ -17,6 +29,10 @@ const nextConfig: NextConfig = {
       },
       {
         source: '/admin/:path*',
+        headers: [{ key: 'X-Robots-Tag', value: 'noindex, nofollow' }],
+      },
+      {
+        source: '/partner/:path*',
         headers: [{ key: 'X-Robots-Tag', value: 'noindex, nofollow' }],
       },
     ];

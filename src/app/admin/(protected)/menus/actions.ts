@@ -2,52 +2,41 @@
 
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
-import { z } from 'zod';
 import { db } from '@/db';
+import { isUuid } from '@/lib/validation';
+import type { UploadImageResult } from '@/components/admin/plan-images-field';
+import type { AdminFormState } from '@/lib/zod-ja';
 import { requireAdmin } from '@/modules/auth/guard';
 import { writeAuditLog } from '@/modules/audit/log';
-import { createMenu, menuInputSchema, updateMenu } from '@/modules/catalog/menu-admin';
+import { createMenu, updateMenu } from '@/modules/catalog/menu-admin';
+import { menuFormInvalid, parseMenuForm } from '@/modules/catalog/menu-form-data';
+import { PLAN_IMAGE_ERROR_LABELS, savePlanImage } from '@/modules/catalog/plan-images';
+import { setMenuCandidates } from '@/modules/partner/requests';
+import { getFileStore } from '@/modules/storage/store';
+import { readUpload } from '@/modules/storage/upload';
 
-export type MenuFormState = { error: string | null };
+export type MenuFormState = AdminFormState;
 
 const ERROR_LABELS = {
   SLUG_TAKEN: 'この URL 名（slug）は既に使われています',
-  NOT_FOUND: 'メニューが見つかりません',
-  OPERATOR_NOT_FOUND: '提供事業者が見つかりません',
+  NOT_FOUND: 'プランが見つかりません',
+  OPERATOR_NOT_FOUND: '実施事業者が見つかりません',
+  ACTIVITY_NOT_FOUND: 'アクティビティが見つかりません',
+  UNIT_LOCKED: '予約のあるプランは、定員の単位（名／艇）を変えられません',
 } as const;
-
-function parseForm(formData: FormData) {
-  const raw = Object.fromEntries(formData) as Record<string, string>;
-  let prices: unknown = [];
-  try {
-    prices = JSON.parse(raw.prices ?? '[]');
-  } catch {
-    prices = [];
-  }
-  const images = (raw.images ?? '')
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter(Boolean);
-  return menuInputSchema.safeParse({
-    ...raw,
-    minAge: raw.minAge ? raw.minAge : null,
-    cutoffPrevDayTime: raw.cutoffPrevDayTime ? raw.cutoffPrevDayTime : null,
-    operatorId: raw.operatorId ? raw.operatorId : null,
-    images,
-    prices,
-  });
-}
-
-function firstIssue(error: z.ZodError): string {
-  const issue = error.issues[0];
-  return `入力内容を確認してください（${issue.path.join('.') || '入力'}：${issue.message}）`;
-}
 
 export async function createMenuAction(_prev: MenuFormState, formData: FormData): Promise<MenuFormState> {
   const admin = await requireAdmin();
-  const parsed = parseForm(formData);
-  if (!parsed.success) return { error: firstIssue(parsed.error) };
-  const result = await createMenu(db, admin.shopId, parsed.data);
+  const parsed = parseMenuForm(formData);
+  if (!parsed.success) return menuFormInvalid(parsed.error);
+  // プランと実施候補は一緒に保存する（候補の保存で失敗したら、プランも保存しない）
+  const result = await db.transaction(async (tx) => {
+    const saved = await createMenu(tx, admin.shopId, parsed.data);
+    if (saved.ok) {
+      await setMenuCandidates(tx, { shopId: admin.shopId, menuId: saved.menuId, operatorIds: candidateIds(formData) });
+    }
+    return saved;
+  });
   if (!result.ok) return { error: ERROR_LABELS[result.error] };
   await writeAuditLog(db, {
     shopId: admin.shopId,
@@ -67,9 +56,14 @@ export async function updateMenuAction(
   formData: FormData,
 ): Promise<MenuFormState> {
   const admin = await requireAdmin();
-  const parsed = parseForm(formData);
-  if (!parsed.success) return { error: firstIssue(parsed.error) };
-  const result = await updateMenu(db, admin.shopId, menuId, parsed.data);
+  if (!isUuid(menuId)) redirect('/admin/menus');
+  const parsed = parseMenuForm(formData);
+  if (!parsed.success) return menuFormInvalid(parsed.error);
+  const result = await db.transaction(async (tx) => {
+    const saved = await updateMenu(tx, admin.shopId, menuId, parsed.data);
+    if (saved.ok) await setMenuCandidates(tx, { shopId: admin.shopId, menuId, operatorIds: candidateIds(formData) });
+    return saved;
+  });
   if (!result.ok) return { error: ERROR_LABELS[result.error] };
   await writeAuditLog(db, {
     shopId: admin.shopId,
@@ -77,8 +71,28 @@ export async function updateMenuAction(
     action: 'menu.update',
     targetType: 'menu',
     targetId: menuId,
-    after: parsed.data,
+    after: { ...parsed.data, candidateIds: candidateIds(formData) },
   });
   revalidatePath('/', 'layout');
-  redirect(`/admin/menus/${menuId}?saved=1`);
+  // saved に時刻を入れて、保存後にフォームを作り直す（未保存の印を消す）
+  redirect(`/admin/menus/${menuId}?saved=${Date.now()}`);
+}
+
+/** 実施候補の事業者（フォームのチェック。別ショップ・存在しない事業者は setMenuCandidates が無視する） */
+function candidateIds(formData: FormData): string[] {
+  return formData.getAll('candidateId').filter((v): v is string => isUuid(v));
+}
+
+/** プランの写真のアップロード（組合）。保存した写真の URL を返し、フォームの写真の欄に入れる */
+export async function uploadMenuImageAction(formData: FormData): Promise<UploadImageResult> {
+  const admin = await requireAdmin();
+  const file = await readUpload(formData.get('file'));
+  if (!file) return { ok: false, error: PLAN_IMAGE_ERROR_LABELS.EMPTY };
+  const result = await savePlanImage(db, getFileStore(), {
+    shopId: admin.shopId,
+    operatorId: null,
+    actorId: admin.userId,
+    bytes: file.bytes,
+  });
+  return result.ok ? result : { ok: false, error: PLAN_IMAGE_ERROR_LABELS[result.error] };
 }

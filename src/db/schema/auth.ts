@@ -6,6 +6,7 @@ import {
   timestamp,
   boolean,
   integer,
+  bigint,
   index,
 } from "drizzle-orm/pg-core";
 
@@ -106,6 +107,14 @@ export const userRelations = relations(user, ({ many }) => ({
   accounts: many(account),
   twoFactors: many(twoFactor),
 }));
+
+// ログイン・2 要素認証の試行回数の記録（rateLimit.storage = "database"。サーバーレスでも回数制限が効くように DB に置く）
+export const rateLimit = pgTable("rate_limit", {
+  id: text("id").primaryKey(),
+  key: text("key").notNull().unique(),
+  count: integer("count").notNull(),
+  lastRequest: bigint("last_request", { mode: "number" }).notNull(),
+});
 
 export const sessionRelations = relations(session, ({ one }) => ({
   user: one(user, {

@@ -1,0 +1,1 @@
+ALTER TABLE "bookings" ADD COLUMN "operator_assigned_via" text DEFAULT 'default' NOT NULL;
