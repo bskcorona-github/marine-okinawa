@@ -3,16 +3,14 @@
 import { FileUp, X } from 'lucide-react';
 import { useId, useRef, useState } from 'react';
 import { cn } from '@/lib/utils';
-
-/** 1 ファイルの上限（サーバーの MAX_FILE_BYTES と同じ） */
-const MAX_BYTES = 10 * 1024 * 1024;
+import { MAX_FILE_BYTES as MAX_BYTES, MAX_FILE_MB } from '@/modules/storage/files';
 
 const sizeLabel = (bytes: number) =>
   bytes >= 1024 * 1024 ? `${(bytes / 1024 / 1024).toFixed(1)}MB` : `${Math.max(1, Math.round(bytes / 1024))}KB`;
 
 /**
  * ファイルの選択欄。ブラウザ標準のボタン（英語になることがある）の代わりに日本語のボタンを出し、
- * 選んだファイルの名前・大きさと「取り消す」を表示する。10MB を超えるファイルは、送る前にその場で知らせる
+ * 選んだファイルの名前・大きさと「取り消す」を表示する。上限（MAX_FILE_MB）を超えるファイルは、送る前にその場で知らせる
  */
 export function FileInput({
   name,
@@ -45,7 +43,7 @@ export function FileInput({
   function update(list: File[]) {
     setFiles(list);
     const input = ref.current;
-    if (input) input.setCustomValidity(list.some((f) => f.size > MAX_BYTES) ? '10MB を超えるファイルは送れません' : '');
+    if (input) input.setCustomValidity(list.some((f) => f.size > MAX_BYTES) ? `${MAX_FILE_MB}MB を超えるファイルは送れません` : '');
     onChange?.(list.reduce((sum, f) => sum + f.size, 0));
   }
 
@@ -89,7 +87,7 @@ export function FileInput({
           <ul className="space-y-1">
             {files.map((f) => (
               <li key={`${f.name}-${f.size}`} className={cn(f.size > MAX_BYTES ? 'text-red-700' : 'text-slate-700')}>
-                {f.name}（{sizeLabel(f.size)}）{f.size > MAX_BYTES && ' … 10MB を超えています'}
+                {f.name}（{sizeLabel(f.size)}）{f.size > MAX_BYTES && ` … ${MAX_FILE_MB}MB を超えています`}
               </li>
             ))}
           </ul>

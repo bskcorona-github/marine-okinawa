@@ -8,8 +8,12 @@ const ALLOWED_FILE_TYPES = {
 
 export type AllowedMimeType = keyof typeof ALLOWED_FILE_TYPES;
 
-/** 1 ファイルの上限（10MB） */
-export const MAX_FILE_BYTES = 10 * 1024 * 1024;
+/**
+ * 1 ファイルの上限（MB）。Vercel の関数は 1 回の送信の本文が 4.5MB までなので、ファイルは 1 回に 4MB まで
+ * （写真は 1 枚ずつ送る。登録申請の添付は合計で 4MB まで）
+ */
+export const MAX_FILE_MB = 4;
+export const MAX_FILE_BYTES = MAX_FILE_MB * 1024 * 1024;
 
 const startsWith = (bytes: Uint8Array, signature: number[], offset = 0) =>
   signature.every((b, i) => bytes[offset + i] === b);
@@ -53,6 +57,6 @@ export function safeFileName(name: string, mimeType: AllowedMimeType): string {
 
 export const FILE_ERROR_LABELS: Record<Exclude<FileCheck, { ok: true }>['error'], string> = {
   EMPTY: 'ファイルが空です',
-  TOO_LARGE: 'ファイルが大きすぎます（10MB まで）',
+  TOO_LARGE: `ファイルが大きすぎます（${MAX_FILE_MB}MB まで）`,
   UNSUPPORTED_TYPE: 'PDF・JPEG・PNG・WebP のファイルを選んでください',
 };

@@ -17,7 +17,7 @@ import {
   listOperatorDocuments,
 } from '@/modules/partner/documents';
 import { getShopById } from '@/modules/shop/shops';
-import { FILE_ERROR_LABELS } from '@/modules/storage/files';
+import { FILE_ERROR_LABELS, MAX_FILE_MB } from '@/modules/storage/files';
 import { uploadDocumentAction } from './actions';
 
 export const metadata = { title: '資料' };
@@ -80,7 +80,7 @@ export default async function PartnerDocumentsPage({ searchParams }: PageProps<'
 
       <Panel
         title="資料を提出する"
-        description="PDF・JPEG・PNG・WebP、1 ファイル 10MB まで。郵送・持参でも受け付けます（組合が受付を登録します）。"
+        description={`PDF・JPEG・PNG・WebP、1 ファイル ${MAX_FILE_MB}MB まで。郵送・持参でも受け付けます（組合が受付を登録します）。`}
       >
         <form action={uploadDocumentAction} className="grid gap-3 text-sm sm:grid-cols-2">
           <label className="space-y-1">

@@ -3,7 +3,7 @@ import type { DbOrTx } from '@/db/client';
 import { planImages } from '@/db/schema';
 import { logError, logWarn } from '@/lib/log';
 import { writeAuditLog } from '@/modules/audit/log';
-import { checkFile, type FileCheck } from '@/modules/storage/files';
+import { checkFile, MAX_FILE_MB, type FileCheck } from '@/modules/storage/files';
 import { newFileKey, type FileStore } from '@/modules/storage/store';
 
 /** プランの写真に使える形式（PDF は受け付けない） */
@@ -13,7 +13,7 @@ export type PlanImageError = Exclude<FileCheck, { ok: true }>['error'] | 'NOT_IM
 
 export const PLAN_IMAGE_ERROR_LABELS: Record<PlanImageError, string> = {
   EMPTY: 'ファイルが空です',
-  TOO_LARGE: '写真が大きすぎます（10MB まで）',
+  TOO_LARGE: `写真が大きすぎます（${MAX_FILE_MB}MB まで）`,
   UNSUPPORTED_TYPE: 'JPEG・PNG・WebP の写真を選んでください',
   NOT_IMAGE: 'JPEG・PNG・WebP の写真を選んでください',
 };

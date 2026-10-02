@@ -124,9 +124,10 @@ E2E_DATABASE_URL=postgres://postgres:postgres@localhost:5433/marine_e2e
 
 ## デプロイ（Vercel）
 
-- 環境変数: `.env.example` の項目（`MAIL_DRIVER=resend`、`RESEND_API_KEY`、`CRON_SECRET` を設定）
-- `vercel.json` の Cron が毎日 3:00（JST）に `/api/cron/sync-slots` を呼び、今日から 180 日分の回を作る
+- 環境変数: `.env.example` の項目（`MARINE_DATABASE_URL`、`BETTER_AUTH_SECRET`、`BETTER_AUTH_URL`・`APP_URL`（本番の URL）、`CRON_SECRET`、`BLOB_READ_WRITE_TOKEN`。メールを送るときは `MAIL_DRIVER=resend`・`RESEND_API_KEY`・`MAIL_FROM`）
+- `vercel.json` の Cron が毎日 3:00（JST）に `/api/cron/sync-slots` を呼び、今日から 180 日分の回を作る。関数は東京（`hnd1`）で動かす（DB・Blob も東京に置く）
 - マイグレーションはデプロイ前に `npm run db:migrate` で適用する
 - `APP_URL`（本番 URL）は必須。未設定だとメールのリンクが作れない
 - Web 申込は同じ IP から 10 分間に 5 件まで、お問い合わせは 10 分間に 3 件まで、事業者の登録申請は 1 時間に 3 件まで（`x-forwarded-for` を使う）
-- 事業者の資料のアップロードのため、Server Action の本文の上限を 11MB にしている（`next.config.ts`）。資料の保存先はサーバーのディスク（`STORAGE_DIR`）なので、Vercel では永続化されない。本番の前に保存先を決めて差し替える
+- 写真・資料の保存先は Vercel Blob の非公開のストア（`BLOB_READ_WRITE_TOKEN`。プロジェクトにストアをつなぐと入る）。鍵がない開発環境ではディスク（`STORAGE_DIR`）に保存し、Vercel の上で鍵がなければ保存しない
+- Vercel の関数は 1 回の送信の本文が 4.5MB までなので、写真・資料は 1 回 4MB まで（写真は 1 枚ずつ送る。登録申請の添付は合計 4MB まで）

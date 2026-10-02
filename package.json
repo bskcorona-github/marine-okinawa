@@ -25,6 +25,7 @@
   "dependencies": {
     "@base-ui/react": "^1.8.0",
     "@react-email/components": "^1.0.12",
+    "@vercel/blob": "^2.8.0",
     "better-auth": "^1.7.6",
     "budoux": "^0.9.3",
     "class-variance-authority": "^0.7.1",

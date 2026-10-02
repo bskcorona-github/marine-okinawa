@@ -5,6 +5,7 @@ import { useId, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { isRemoteImage } from '@/lib/image';
+import { MAX_FILE_MB } from '@/modules/storage/files';
 
 export type UploadImageResult = { ok: true; url: string } | { ok: false; error: string };
 
@@ -142,7 +143,7 @@ export function PlanImagesField({
         >
           写真を選んで追加
         </label>
-        <p className="text-xs text-slate-600">JPEG・PNG・WebP、1 枚 10MB まで。何枚かまとめて選べます。</p>
+        <p className="text-xs text-slate-600">JPEG・PNG・WebP、1 枚 {MAX_FILE_MB}MB まで。何枚かまとめて選べます。</p>
         {uploading && (
           <p role="status" className="text-xs text-slate-600">
             写真を送っています…

@@ -29,7 +29,7 @@ import {
 } from '@/modules/partner/documents';
 import { SLOT_HORIZON_DAYS } from '@/modules/schedule/sync-slots';
 import { getShopById } from '@/modules/shop/shops';
-import { FILE_ERROR_LABELS } from '@/modules/storage/files';
+import { FILE_ERROR_LABELS, MAX_FILE_MB } from '@/modules/storage/files';
 import { updateOperatorAction } from '../actions';
 import { AccountIssueForm, AccountResetForm } from './account-issue-form';
 import { OperatorForm } from './operator-form';
@@ -330,7 +330,7 @@ export default async function OperatorPage({ params, searchParams }: PageProps<'
                   </div>
                 </fieldset>
                 <div className="space-y-1 sm:col-span-2">
-                  <p className="font-medium">ファイル（Web で受け取ったとき・PDF / JPEG / PNG / WebP、10MB まで）</p>
+                  <p className="font-medium">ファイル（Web で受け取ったとき・PDF / JPEG / PNG / WebP、{MAX_FILE_MB}MB まで）</p>
                   <FileInput name="file" label="資料のファイル" />
                 </div>
                 <label className="space-y-1 sm:col-span-2">

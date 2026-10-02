@@ -6,8 +6,9 @@ const withNextIntl = createNextIntlPlugin('./src/i18n/request.ts');
 const nextConfig: NextConfig = {
   experimental: {
     serverActions: {
-      // 事業者の資料（1 ファイル 10MB まで）を Server Action で受け取るため。multipart の区切りの分を足す
-      bodySizeLimit: '11mb',
+      // 写真・資料（1 回 4MB まで）を Server Action で受け取るため。multipart の区切りの分を足す
+      // （Vercel の関数は送信の本文が 4.5MB までなので、これより大きくしても受け取れない）
+      bodySizeLimit: '4.5mb',
     },
   },
   async redirects() {

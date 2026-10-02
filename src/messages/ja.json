@@ -655,7 +655,7 @@
     "planInfoPlaceholder": "例：体験ダイビング／大人12,000円／約3時間",
     "message": "組合へのメッセージ",
     "files": "資料の添付",
-    "filesLead": "賠償責任保険の証券・許認可や届出の写しなどがあれば添付してください。PDF・JPEG・PNG・WebP で、すべての添付の合計が8MBまでです。あとから郵送・メールでも受け付けます。",
+    "filesLead": "賠償責任保険の証券・許認可や届出の写しなどがあれば添付してください。PDF・JPEG・PNG・WebP で、すべての添付の合計が4MBまでです。あとから郵送・メールでも受け付けます。",
     "fileInsurance": "保険（賠償責任保険など）",
     "fileLicense": "許認可・届出・資格",
     "fileOther": "その他（プランの資料・写真など）",
@@ -672,8 +672,8 @@
       "INVALID_INPUT": "入力内容を確認してください",
       "AGREEMENT_REQUIRED": "個人情報の取扱いをご確認のうえ、チェックを入れてください",
       "RATE_LIMITED": "短時間に送信が集中しています。しばらくしてからもう一度お試しください",
-      "FILE_INVALID": "添付できるのは PDF・JPEG・PNG・WebP のファイルです（すべての添付の合計が8MBまで）",
-      "FILES_TOO_LARGE": "添付の合計が8MBを超えています。ファイルを減らすか、あとから郵送・メールでお送りください"
+      "FILE_INVALID": "添付できるのは PDF・JPEG・PNG・WebP のファイルです（すべての添付の合計が4MBまで）",
+      "FILES_TOO_LARGE": "添付の合計が4MBを超えています。ファイルを減らすか、あとから郵送・メールでお送りください"
     },
     "validation": {
       "companyName": "事業者名を入力してください",
@@ -688,7 +688,7 @@
     "emergencyPhoneHint": "組合だけが使います。お客様には表示しません。",
     "emailConfirm": "メールアドレス（確認）",
     "phonePlaceholder": "例：098-000-0000",
-    "filesTotal": "選んだファイルの合計：{size}（8MBまで）",
+    "filesTotal": "選んだファイルの合計：{size}（4MBまで）",
     "filesMultiple": "1つの欄に、ファイルを{max}件まで選べます。"
   },
   "receipt": {
