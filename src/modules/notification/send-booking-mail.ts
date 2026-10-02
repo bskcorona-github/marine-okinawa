@@ -8,6 +8,7 @@ import { addBookingAccessToken } from '@/modules/booking/access-token';
 import { getBookingSummaryById, type BookingSummary } from '@/modules/booking/queries';
 import { mailKindForStatus, type BookingMailKind } from '@/modules/booking/status';
 import { splitPlanTitle } from '@/modules/catalog/display-title';
+import { cardPaymentsEnabled } from '@/modules/payment/card-payments';
 import { BookingEmail } from './booking-email';
 import {
   dayOfContactLine,
@@ -18,6 +19,8 @@ import {
   type SendResult,
 } from './booking-email-common';
 import type { Mailer } from './mailer';
+import { recipientName } from './recipient-name';
+import { isPerPerson } from '@/modules/catalog/capacity-unit';
 
 export type { SendResult } from './booking-email-common';
 
@@ -50,8 +53,8 @@ function content(booking: BookingSummary, kind: BookingMailKind) {
     { label: t('common.bookingNo'), value: booking.bookingNo },
     { label: t('common.menu'), value: title },
     { label: t(confirmed ? 'common.dateTimeConfirmed' : 'common.dateTime'), value: `${date} ${time}` },
-    { label: t('common.secondChoice'), value: kind === 'requested' ? booking.secondChoice : null },
-    { label: t(booking.capacityUnit === '名' ? 'common.people' : 'common.course'), value: peopleLine(booking) },
+
+    { label: t(isPerPerson(booking.capacityUnit) ? 'common.people' : 'common.course'), value: peopleLine(booking) },
     {
       label: t('common.guestCount'),
       value: booking.guestCount ? t('common.guestCountValue', { count: booking.guestCount }) : null,
@@ -67,7 +70,6 @@ function content(booking: BookingSummary, kind: BookingMailKind) {
             })
           : null,
     },
-    { label: t('common.participantAges'), value: kind === 'requested' ? booking.participantAges : null },
   ];
   const contact: Row = { label: t('common.contact'), value: shopContactLine(booking) };
 
@@ -80,7 +82,8 @@ function content(booking: BookingSummary, kind: BookingMailKind) {
         rows: [
           ...base,
           { label: priceLabel, value: formatYen(booking.totalAmount) },
-          { label: t('common.customerNote'), value: booking.customerNote },
+          // 第 2 希望・年齢・ご連絡事項は載せない（確かめていないアドレスへ、入力された文を組合の名前で送らないように。
+          // 予約確認ページで見られる）
           { label: t('requested.replyGuide'), value: booking.settings.replyGuide || null },
           contact,
         ],
@@ -106,7 +109,11 @@ function content(booking: BookingSummary, kind: BookingMailKind) {
         sections: [
           {
             title: t('paymentRequest.howTitle'),
-            body: booking.settings.paymentInstructions || t('paymentRequest.howEmpty'),
+            // カード決済（Stripe）が使えるときは、予約確認ページのボタンからカードで払ってもらう
+            body:
+              cardPaymentsEnabled() && booking.paymentMethod === 'online'
+                ? t('paymentRequest.howCard')
+                : booking.settings.paymentInstructions || t('paymentRequest.howEmpty'),
           },
         ],
         withLink: true,
@@ -148,7 +155,12 @@ function content(booking: BookingSummary, kind: BookingMailKind) {
           // 取消の理由は組合の記録（お客様には出さない）
           {
             label: t('cancelled.refund'),
-            value: refund !== null && refund > 0 ? t('cancelled.refundValue', { amount: formatYen(refund) }) : null,
+            value:
+              refund !== null && refund > 0
+                ? t(booking.stripePaymentIntentId ? 'cancelled.refundValueCard' : 'cancelled.refundValue', {
+                    amount: formatYen(refund),
+                  })
+                : null,
           },
           contact,
         ],
@@ -180,7 +192,7 @@ export async function sendBookingMail(
     subject: mail.subject,
     react: createElement(BookingEmail, {
       preview: mail.subject,
-      greeting: t('greeting', { name: booking.contactName }),
+      greeting: recipientName(booking.contactName),
       notice: 'notice' in mail ? mail.notice : undefined,
       intro: mail.intro,
       rows: mail.rows.filter((row): row is { label: string; value: string } => Boolean(row.value)),

@@ -13,6 +13,7 @@ import { adminNotifyEmailOf } from '@/modules/shop/shops';
 import { BookingEmail } from './booking-email';
 import { deliverBookingEmail, peopleLine, type SendResult } from './booking-email-common';
 import type { Mailer } from './mailer';
+import { isPerPerson } from '@/modules/catalog/capacity-unit';
 
 /** 1 通の送信先の上限（事業者のログイン用アドレスが多くても、送りすぎないように） */
 const MAX_RECIPIENTS = 5;
@@ -51,7 +52,7 @@ function operatorRows(t: ReturnType<typeof createTranslator<typeof messages, 'em
     { label: t('common.menu'), value: title },
     { label: t('common.dateTimeConfirmed'), value: `${date} ${time}` },
     { label: t('common.secondChoice'), value: booking.secondChoice },
-    { label: t(booking.capacityUnit === '名' ? 'common.people' : 'common.course'), value: peopleLine(booking) },
+    { label: t(isPerPerson(booking.capacityUnit) ? 'common.people' : 'common.course'), value: peopleLine(booking) },
     {
       label: t('common.guestCount'),
       value: booking.guestCount ? t('common.guestCountValue', { count: booking.guestCount }) : null,
@@ -230,6 +231,9 @@ export async function sendOperatorBookingMail(
           ? t('operatorBooking.paymentOnsite', { amount: formatYen(booking.totalAmount) })
           : t('operatorBooking.paymentOnline'),
     });
+  }
+  if (kind === 'Confirmed' && booking.operatorAgreement) {
+    rows.push({ label: t('operatorBooking.agreement'), value: booking.operatorAgreement });
   }
   if ((kind === 'Cancelled' || kind === 'Weather') && booking.cancelOperatorNote) {
     rows.push({ label: t('operatorBooking.kumiaiNote'), value: booking.cancelOperatorNote });

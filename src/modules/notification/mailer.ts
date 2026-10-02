@@ -1,6 +1,7 @@
 import type { ReactElement } from 'react';
 import { Resend } from 'resend';
 import { getEnv } from '@/lib/env';
+import { logError } from '@/lib/log';
 
 export type MailMessage = {
   to: string;
@@ -35,7 +36,7 @@ function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
   return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
 }
 
-export function createResendMailer(apiKey: string, from: string): Mailer {
+function createResendMailer(apiKey: string, from: string): Mailer {
   const resend = new Resend(apiKey);
   return {
     async send(message) {
@@ -58,12 +59,25 @@ export function createResendMailer(apiKey: string, from: string): Mailer {
   };
 }
 
-/** 開発・テスト用：送信せずにコンソールへ出す */
-export function createLogMailer(): Mailer {
+/** 開発・テスト用：送信せずにコンソールへ出す（宛先は伏せる。件名で確かめる） */
+function createLogMailer(): Mailer {
   return {
     async send(message) {
-      console.info(`[mail] to=${message.to} subject=${message.subject}`);
+      const to = message.to.replace(/^[^@]*/, (local) => `${local.slice(0, 1)}***`);
+      console.info(`[mail] to=${to} subject=${message.subject}`);
       return { id: `log-${Date.now()}` };
+    },
+  };
+}
+
+/**
+ * 送信の設定がないとき：送るたびに失敗にする（送信の記録は failed になり、画面に「送れなかった」と出る）。
+ * 準備の段階で例外を投げると、申込などの操作の画面までエラーになるため
+ */
+function createUnconfiguredMailer(reason: string): Mailer {
+  return {
+    async send() {
+      throw new Error(reason);
     },
   };
 }
@@ -71,8 +85,16 @@ export function createLogMailer(): Mailer {
 export function getMailer(): Mailer {
   const env = getEnv();
   if (env.MAIL_DRIVER === 'resend') {
-    if (!env.RESEND_API_KEY) throw new Error('RESEND_API_KEY is required when MAIL_DRIVER=resend');
+    if (!env.RESEND_API_KEY) {
+      logError('mail.config.missing_key', { status: env.MAIL_DRIVER });
+      return createUnconfiguredMailer('RESEND_API_KEY is not set');
+    }
     return createResendMailer(env.RESEND_API_KEY, env.MAIL_FROM);
+  }
+  // 本番で送信の設定がないと、お客様へのメールが黙って捨てられる。送るたびに失敗にして、画面と記録に出す
+  if (process.env.VERCEL_ENV === 'production') {
+    logError('mail.config.not_resend', { status: env.MAIL_DRIVER });
+    return createUnconfiguredMailer('MAIL_DRIVER must be "resend" in production');
   }
   return createLogMailer();
 }

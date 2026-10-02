@@ -84,7 +84,9 @@ describe('事業者へのメール', () => {
     expect(html).toContain('第2希望でも可能ですか');
     expect(html).toContain(`${APP_URL}/partner/requests/${requestIds[0]}`);
     expect(html).not.toContain('taro@example.com');
-    expect(html).not.toContain('090');
+    // 電話番号は載せない（id にたまたま 090 が入ることがあるので、番号そのもので確かめる）
+    expect(html).not.toContain('1234-5678');
+    expect(html).not.toContain('9012345678');
     expect(html).not.toContain('沖縄 太郎');
     const [row] = await db.select().from(notifications).where(eq(notifications.bookingId, bookingId));
     expect(row).toMatchObject({ type: 'operator_request', status: 'sent', toEmail: 'aqua@example.com' });

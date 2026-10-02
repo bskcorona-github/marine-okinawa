@@ -75,8 +75,9 @@ describe('sendBookingMail', () => {
     );
     const html = await render(mail.react);
     expect(html).toContain('まだご予約は確定していません');
-    expect(html).toContain('10/2 午前');
-    expect(html).toContain('子供は泳げません');
+    // 第 2 希望・ご連絡事項は載せない（確かめていないアドレスへ、入力された文を組合の名前で送らないように）
+    expect(html).not.toContain('10/2 午前');
+    expect(html).not.toContain('子供は泳げません');
     expect(html).toContain('お支払総額');
     expect(html).toContain(`${APP_URL}/ja/bookings/${booking.accessToken}`);
     expect(html).not.toContain('アクアマリン');
@@ -186,7 +187,9 @@ describe('sendAdminNewRequest / resendBookingMail', () => {
     const html = await render(mail.react);
     expect(html).toContain(`${APP_URL}/admin/bookings/${booking.bookingId}`);
     expect(html).not.toContain('taro@example.com');
-    expect(html).not.toContain('090');
+    // 電話番号は載せない（予約の id にたまたま 090 が入ることがあるので、番号そのもので確かめる）
+    expect(html).not.toContain('1234-5678');
+    expect(html).not.toContain('9012345678');
     const types = (await db.select().from(notifications)).map((n) => n.type);
     expect(types).toEqual(['admin_new_request', 'admin_new_request']);
   });
@@ -200,7 +203,7 @@ describe('sendAdminNewRequest / resendBookingMail', () => {
     expect(await resendBookingMail(db, mailer, params)).toEqual({ status: 'sent', kind: 'payment_request' });
     expect(mailer.sent.map((m) => m.subject.slice(0, 8))).toEqual(['【お申し込みを受', '【お支払いのご案']);
     await booking.change('confirmed', { payment: { amount: 10000, receivedAt: NOW } });
-    await booking.change('no_show', { now: new Date('2026-10-01T03:00:00Z') });
+    await booking.change('no_show', { now: new Date('2026-10-01T03:00:00Z'), refundDueAmount: 0 });
     expect(await resendBookingMail(db, mailer, params)).toEqual({ status: 'not_available', kind: null });
   });
 });

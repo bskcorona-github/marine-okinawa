@@ -10,6 +10,7 @@ import { adminNotifyEmailOf } from '@/modules/shop/shops';
 import { BookingEmail } from './booking-email';
 import { deliverBookingEmail, peopleLine, type SendResult } from './booking-email-common';
 import type { Mailer } from './mailer';
+import { isPerPerson } from '@/modules/catalog/capacity-unit';
 
 /**
  * 組合へ新規申込を知らせる。お客様の電話・メールはメール本文に載せず、管理画面で確認してもらう
@@ -36,7 +37,7 @@ export async function sendAdminNewRequest(
     { label: t('common.menu'), value: title },
     { label: t('common.dateTime'), value: `${date} ${time}` },
     { label: t('common.secondChoice'), value: booking.secondChoice },
-    { label: t(booking.capacityUnit === '名' ? 'common.people' : 'common.course'), value: people },
+    { label: t(isPerPerson(booking.capacityUnit) ? 'common.people' : 'common.course'), value: people },
     {
       label: t('common.guestCount'),
       value: booking.guestCount ? t('common.guestCountValue', { count: booking.guestCount }) : null,

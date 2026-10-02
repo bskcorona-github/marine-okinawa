@@ -8,6 +8,7 @@ import { adminNotifyEmailOf } from '@/modules/shop/shops';
 import { BookingEmail } from './booking-email';
 import { deliverEmail, type SendResult } from './booking-email-common';
 import type { Mailer } from './mailer';
+import { recipientName } from './recipient-name';
 
 /**
  * 事業者の登録申請の受付メール（申請者へ）と、組合への通知を送る。
@@ -43,7 +44,7 @@ export async function sendApplicationMails(
     subject: ackSubject,
     react: createElement(BookingEmail, {
       preview: ackSubject,
-      greeting: `${app.contactName} 様`,
+      greeting: recipientName(app.contactName),
       intro:
         '事業者の登録申請をお送りいただき、ありがとうございます。組合で内容を確認し、担当者からご連絡します。お心当たりのない場合は、このメールを破棄してください。',
       rows: [{ label: '受付日時', value: received }],

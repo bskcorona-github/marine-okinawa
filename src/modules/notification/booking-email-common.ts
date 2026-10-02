@@ -5,6 +5,8 @@ import { notifications, type notificationType } from '@/db/schema';
 import type { BookingSummary } from '@/modules/booking/queries';
 import { dayOfContact, shopContact, type Contact } from '@/modules/shop/contact';
 import { MailTimeoutError, type Mailer } from './mailer';
+import { formatPartyItems } from '@/modules/booking/party';
+import { logWarn } from '@/lib/log';
 
 /** unknown：送信サービスの応答がなく、送れたかどうか分からない */
 export type SendResult = { status: 'sent' | 'failed' | 'skipped' | 'unknown' };
@@ -31,7 +33,7 @@ export function dayOfContactLine(booking: BookingSummary): string {
 
 /** 人数の表示（例：大人 2名、子供 1名） */
 export function peopleLine(booking: Pick<BookingSummary, 'items' | 'capacityUnit'>): string {
-  return booking.items.map((i) => `${i.label} ${i.quantity}${booking.capacityUnit}`).join('、');
+  return formatPartyItems(booking.items, booking.capacityUnit, { separator: '、' });
 }
 
 /**
@@ -79,9 +81,16 @@ export async function deliverEmail(
     return { status: 'sent' };
   } catch (error) {
     const timedOut = error instanceof MailTimeoutError;
+    // 送信サービスの障害（キーの失効など）に気づけるよう、実行のログにも出す（宛先は出さない）
+    logWarn(
+      timedOut ? 'mail.send.unknown' : 'mail.send.failed',
+      { notificationId: notification.id, bookingId: target.bookingId, kind: message.type },
+      error,
+    );
+    const text = error instanceof Error ? error.message : String(error);
     await db
       .update(notifications)
-      .set({ status: timedOut ? 'unknown' : 'failed', error: error instanceof Error ? error.message : String(error) })
+      .set({ status: timedOut ? 'unknown' : 'failed', error: text.slice(0, 500) })
       .where(eq(notifications.id, notification.id));
     return { status: timedOut ? 'unknown' : 'failed' };
   }

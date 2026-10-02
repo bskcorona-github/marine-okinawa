@@ -9,6 +9,7 @@ import { BookingEmail } from './booking-email';
 import { deliverEmail, type SendResult } from './booking-email-common';
 import type { Mailer } from './mailer';
 import { operatorEmails } from './send-operator-mail';
+import { DEFAULT_LOCALE } from '@/lib/locale';
 
 type ReviewKind = 'publish' | 'revision';
 
@@ -26,7 +27,10 @@ async function loadPlan(db: DbOrTx, menuId: string) {
     })
     .from(menus)
     .innerJoin(shops, eq(shops.id, menus.shopId))
-    .innerJoin(menuTranslations, and(eq(menuTranslations.menuId, menus.id), eq(menuTranslations.locale, 'ja')))
+    .innerJoin(
+      menuTranslations,
+      and(eq(menuTranslations.menuId, menus.id), eq(menuTranslations.locale, DEFAULT_LOCALE)),
+    )
     .leftJoin(operators, eq(operators.id, menus.operatorId))
     .where(eq(menus.id, menuId));
   return row ?? null;

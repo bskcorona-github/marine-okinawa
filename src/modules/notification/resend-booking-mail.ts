@@ -1,6 +1,7 @@
 import { and, eq } from 'drizzle-orm';
 import type { Db } from '@/db/client';
 import { bookings } from '@/db/schema';
+import { logError } from '@/lib/log';
 import { writeAuditLog } from '@/modules/audit/log';
 import type { Mailer } from './mailer';
 import { mailKindForStatus, sendBookingMail, type BookingMailKind, type SendResult } from './send-booking-mail';
@@ -23,6 +24,8 @@ export async function resendBookingMail(
   const kind = booking ? mailKindForStatus(booking.status) : null;
   if (!kind) return { status: 'not_available', kind: null };
   const result = await sendBookingMail(db, mailer, { bookingId: params.bookingId, kind, appUrl: params.appUrl });
+  // 送ったあとの履歴（送信そのものは notifications に残っている）。書けなくても「送れなかった」とはしない
+  // （押し直しで二重に送らないように）
   await writeAuditLog(db, {
     shopId: params.shopId,
     actorId: params.actorId,
@@ -30,6 +33,6 @@ export async function resendBookingMail(
     targetType: 'booking',
     targetId: params.bookingId,
     after: { kind, status: result.status },
-  });
+  }).catch((error) => logError('audit.resend_mail.failed', { bookingId: params.bookingId }, error));
   return { status: result.status, kind };
 }
