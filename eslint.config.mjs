@@ -12,6 +12,8 @@ const eslintConfig = defineConfig([
     'out/**',
     'build/**',
     'next-env.d.ts',
+    // 作業用の一時ファイル（リポジトリに入れない）
+    '.tmp/**',
   ]),
 ]);
 

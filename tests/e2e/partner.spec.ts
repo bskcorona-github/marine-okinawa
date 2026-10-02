@@ -1,6 +1,6 @@
 import { expect, test, type Browser, type BrowserContext, type Page } from '@playwright/test';
 import { generate } from 'otplib';
-import { addDays, localDate, monthOf } from '../../src/lib/dates';
+import { addDays, addMonths, localDate, monthOf } from '../../src/lib/dates';
 import { E2E_PARTNER_ADMIN } from './constants';
 
 const today = localDate(new Date(), 'Asia/Tokyo');
@@ -80,10 +80,18 @@ test.describe.serial('事業者画面', () => {
     await expect(page.locator('code')).toHaveCount(0);
   });
 
-  test('事業者は初回ログインで 2 要素認証を設定し、事業者画面だけを使える', async ({ page }) => {
+  test('事業者は初回ログインで 2 要素認証を設定し、自分のパスワードに変えてから事業者画面だけを使える', async ({
+    page,
+  }) => {
     await signIn(page, OPERATOR_EMAIL, operatorPassword);
     const operatorSecret = await setUp2fa(page, operatorPassword);
-    await expect(page).toHaveURL(/\/partner$/);
+    // 仮パスワードのままでは、ほかの画面より先にパスワードの変更へ進む
+    await expect(page).toHaveURL(/\/partner\/password$/);
+    await page.getByLabel('仮パスワード').fill(operatorPassword);
+    operatorPassword = 'e2e-partner-own-password-2026';
+    await page.getByLabel('新しいパスワード（12 文字以上）').fill(operatorPassword);
+    await page.getByLabel('新しいパスワード（確認）').fill(operatorPassword);
+    await page.getByRole('button', { name: 'パスワードを変更する' }).click();
     await expect(page.getByRole('heading', { name: 'ホーム' })).toBeVisible();
     operatorState = await page.context().storageState();
     // 2 回目からは、2 要素認証のコードを入れてログインする
@@ -120,7 +128,7 @@ test.describe.serial('事業者画面', () => {
     await page.getByLabel('事業者へのメモ（任意）').fill('2 名です');
     await page.getByRole('button', { name: '受入確認を依頼する' }).click();
     await expect(page.getByText('1 社へ受入確認を依頼しました。')).toBeVisible();
-    await expect(page.getByRole('heading', { level: 1 })).toContainText('事業者確認中');
+    await expect(page.getByRole('heading', { level: 1 })).toContainText('受入確認中');
 
     // 事業者：照会には、お客様の氏名・連絡先を出さない
     const operator = await operatorPage(browser);
@@ -192,7 +200,9 @@ test.describe.serial('事業者画面', () => {
     await operator.getByRole('link', { name: 'プランを追加' }).click();
     await operator.getByLabel('プラン名').fill(title);
     await operator.getByLabel('アクティビティ').selectOption({ label: 'シュノーケル' });
+    // 料金は空欄から入れる（大人・子供）
     await operator.getByLabel('料金（円・税込）').first().fill('6000');
+    await operator.getByLabel('料金（円・税込）').nth(1).fill('4000');
     await operator.getByRole('button', { name: '下書きを保存して開催時間の登録へ' }).click();
     await operator.waitForURL(/\/partner\/plans\/[0-9a-f-]{36}\/schedule/);
     await expect(operator.getByText('プランを作成しました。')).toBeVisible();
@@ -222,6 +232,34 @@ test.describe.serial('事業者画面', () => {
     await expect(page.getByRole('heading', { level: 1 })).toContainText(title);
     await operator.reload();
     await expect(operator.getByText('公開中です。')).toBeVisible();
+    await operator.context().close();
+  });
+  test('組合が実績を確認して月次精算を作り、確定すると事業者画面に明細が出る', async ({ page, browser }) => {
+    await adminPage(page);
+    // 催行報告を受けた予約（報告 太郎）の実績を確認する
+    await page.goto('/admin/bookings?q=' + encodeURIComponent('報告 太郎'));
+    await page.getByRole('link', { name: /報告 太郎 様/ }).click();
+    await page.getByRole('button', { name: '実績を確認済みにする' }).click();
+    await page.getByRole('dialog').getByRole('button', { name: '実績を確認済みにする' }).click();
+    await expect(page.getByText('実績を確認済みにしました。')).toBeVisible();
+    await expect(page.getByText('月次精算の対象です。')).toBeVisible();
+
+    // 先月（締めた月）の精算を作る（参加日が先月までの、実績確認済みの予約が入る。今月の分は来月の精算）
+    const period = addMonths(monthOf(today), -1);
+    await page.goto(`/admin/settlements?period=${period}`);
+    await page.getByRole('button', { name: 'この月の精算を作る' }).click();
+    await expect(page.getByText(/の精算を計算しました/)).toBeVisible();
+    await page.getByRole('link', { name: 'アクアマリン E2E' }).click();
+    await expect(page.getByRole('heading', { name: '明細' })).toBeVisible();
+    await page.getByRole('button', { name: '確定する' }).click();
+    await page.getByRole('dialog').getByRole('button', { name: '確定する' }).click();
+    await expect(page.getByText('精算を確定しました。')).toBeVisible();
+
+    const operator = await operatorPage(browser);
+    await operator.goto('/partner/settlements');
+    await operator.getByRole('link', { name: /月分/ }).first().click();
+    await expect(operator.getByRole('heading', { name: '明細' })).toBeVisible();
+    await expect(operator.getByText('組合の手数料について')).toBeVisible();
     await operator.context().close();
   });
 });

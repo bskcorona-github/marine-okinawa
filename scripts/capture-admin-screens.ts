@@ -3,7 +3,7 @@
  *   npx tsx scripts/capture-admin-screens.ts [baseUrl]
  * .env.local の SEED_ADMIN_EMAIL / SEED_ADMIN_PASSWORD でログインする。初回は 2 要素認証を設定し、
  * TOTP の秘密鍵を .tmp/review-totp.txt に保存して次回以降のログインに使う。
- * 事業者画面は、照会先の事業者に確認用のアカウント（.tmp/review-operator.json）を発行して撮る。
+ * 事業者画面は、受入確認の依頼先の事業者に確認用のアカウント（.tmp/review-operator.json）を発行して撮る。
  * capture-screens.ts で申し込んだ予約（.tmp/review-booking-url.txt）を、受入確認 → 事業者の回答 → 支払案内 →
  * 入金確認で確定まで進め、そのたびにお客様の確認ページも撮る。
  * 支払方法の案内が未設定なら、開発用の仮の文面を「設定」に入れる。
@@ -80,7 +80,7 @@ async function ensurePaymentInstructions(page: Page) {
   await page.getByText('保存しました').first().waitFor();
 }
 
-/** 照会先の事業者に、確認用のアカウントを発行する（発行済みならそれを使う） */
+/** 受入確認の依頼先の事業者に、確認用のアカウントを発行する（発行済みならそれを使う） */
 async function ensureOperatorAccount(page: Page, operatorName: string): Promise<OperatorAccount> {
   if (existsSync(operatorFile)) {
     const saved = JSON.parse(readFileSync(operatorFile, 'utf8')) as OperatorAccount;
@@ -110,9 +110,9 @@ async function operatorSession(browser: Browser, options: BrowserContextOptions,
   return page;
 }
 
-/** 照会のフォームが畳んであれば開く（照会済みの事業者がいるとき） */
+/** 受入確認の依頼のフォームが畳んであれば開く（依頼済みの事業者がいるとき） */
 async function openRequestForm(page: Page) {
-  const summary = page.getByText('ほかの事業者にも照会する・依頼を送り直す');
+  const summary = page.getByText('ほかの事業者にも受入確認を依頼する・依頼を送り直す');
   if (await summary.count()) await summary.click();
 }
 
@@ -133,12 +133,12 @@ async function processRequest(page: Page, browser: Browser, options: BrowserCont
   const bookingUrl = page.url();
   await shot(page, 'admin-desktop-05-booking-requested');
 
-  // 申込を受けて自動で受入確認を送っていると、照会のフォームは畳んである
+  // 申込を受けて自動で受入確認を送っていると、依頼のフォームは畳んである
   await openRequestForm(page);
   const candidate = page.locator('input[type="checkbox"][name="operatorId"]').first();
-  // 候補の行は「事業者名」のあとに送り先・照会の状況が続くので、事業者名だけを取り出す
+  // 候補の行は「事業者名」のあとに送り先・依頼の状況が続くので、事業者名だけを取り出す
   const operatorName = (await candidate.locator('xpath=ancestor::label').textContent())!
-    .replace(/(送り先：|メールの送り先なし|照会済み|選ぶと)[\s\S]*$/, '')
+    .replace(/(送り先：|メールの送り先なし|依頼済み|選ぶと)[\s\S]*$/, '')
     .trim();
   const account = await ensureOperatorAccount(page, operatorName);
   await page.goto(bookingUrl);
@@ -270,6 +270,8 @@ async function run(kind: 'desktop' | 'mobile') {
   await shot(page, p('13-settings'));
   await page.goto(`${base}/admin/reports`);
   await shot(page, p('14-reports'));
+  await page.goto(`${base}/admin/settlements`);
+  await shot(page, p('14b-settlements'));
   await page.goto(`${base}/admin/operators`);
   await shot(page, p('15-operators'));
   await page.locator('a[href^="/admin/operators/"]').filter({ hasNotText: '登録申請' }).first().click();
@@ -303,6 +305,8 @@ async function run(kind: 'desktop' | 'mobile') {
     await shot(operator, q('09-plans'));
     await operator.goto(`${base}/partner/plans/new`);
     await shot(operator, q('10-plan-new'));
+    await operator.goto(`${base}/partner/settlements`);
+    await shot(operator, q('11-settlements'));
   }
   await browser.close();
 }

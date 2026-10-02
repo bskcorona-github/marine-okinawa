@@ -16,7 +16,7 @@ import {
   scheduleRules,
   shopMembers,
 } from '../../src/db/schema';
-import { addDays, localDate, zonedToUtc } from '../../src/lib/dates';
+import { addDays, addMonths, localDate, monthOf, zonedToUtc } from '../../src/lib/dates';
 import { createBooking } from '../../src/modules/booking/create-booking';
 import { syncSlots } from '../../src/modules/schedule/sync-slots';
 import { resetDb } from '../helpers/db';
@@ -129,6 +129,7 @@ async function main() {
       now: new Date(),
     });
     await db.update(bookings).set({ operatorId }).where(eq(bookings.id, bookingId));
+    return bookingId;
   };
   // 開始済みの確定予約（アクアマリンが催行報告する）
   const started = await seedSlot(db, {
@@ -138,6 +139,15 @@ async function main() {
     capacity: 5,
   });
   await phoneBooking(started.id, '報告 太郎', operator.id);
+  // 先月（締めた月）に実施して実績を確認した予約（アクアマリンの月次精算に入る。精算は締めた月だけ作れる）
+  const lastMonthSlot = await seedSlot(db, {
+    shopId: shop.id,
+    menuId: menu.id,
+    startsAt: zonedToUtc(`${addMonths(monthOf(today), -1)}-15`, '10:00', 'Asia/Tokyo'),
+    capacity: 5,
+  });
+  const settledId = await phoneBooking(lastMonthSlot.id, '精算 次郎', operator.id);
+  await db.update(bookings).set({ status: 'verified', reportResult: 'done' }).where(eq(bookings.id, settledId));
   // ココマリンの確定予約（アクアマリンの事業者からは開けない）
   const otherSlot = await seedSlot(db, {
     shopId: shop.id,
