@@ -1,4 +1,5 @@
 import {
+  boolean,
   date,
   index,
   integer,
@@ -34,6 +35,8 @@ export const operatorMembers = pgTable(
       .notNull()
       .references(() => operators.id, { onDelete: 'cascade' }),
     disabledAt: timestamp({ withTimezone: true }),
+    /** 仮パスワードのまま（発行・再発行のあと）。事業者が自分のパスワードに変えるまで、ほかの画面を使えない */
+    passwordChangeRequired: boolean().notNull().default(false),
     createdBy: text().references(() => user.id),
     ...timestamps,
   },
@@ -125,6 +128,7 @@ export const operatorDocuments = pgTable(
   },
   (t) => [
     index('operator_documents_operator_idx').on(t.operatorId),
+    index('operator_documents_application_idx').on(t.applicationId),
     index('operator_documents_expires_idx').on(t.expiresOn),
   ],
 );

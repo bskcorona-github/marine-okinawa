@@ -9,3 +9,4 @@ export * from './audit';
 export * from './security';
 export * from './content';
 export * from './partner';
+export * from './settlement';

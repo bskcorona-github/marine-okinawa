@@ -141,6 +141,90 @@
       "when": 1790860563113,
       "tag": "0019_operator_plans",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1790862621132,
+      "tag": "0020_settlements",
+      "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1790870057819,
+      "tag": "0021_review_round1",
+      "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1790871226164,
+      "tag": "0022_revision_base_data",
+      "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1790947656955,
+      "tag": "0023_money_ledger",
+      "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1790951621651,
+      "tag": "0024_log_indexes",
+      "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1790952560381,
+      "tag": "0025_operator_agreement",
+      "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1790953843971,
+      "tag": "0026_backfill_refund_receipt",
+      "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "7",
+      "when": 1790954073463,
+      "tag": "0027_menu_paused_by",
+      "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "7",
+      "when": 1790954402876,
+      "tag": "0028_more_indexes",
+      "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1790954419477,
+      "tag": "0029_status_events_restrict",
+      "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "7",
+      "when": 1790954832093,
+      "tag": "0030_password_change_required",
+      "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1790961011436,
+      "tag": "0031_drop_payment_mode",
+      "breakpoints": true
     }
   ]
 }

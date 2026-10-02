@@ -1,0 +1,1 @@
+ALTER TABLE "operator_members" ADD COLUMN "password_change_required" boolean DEFAULT false NOT NULL;

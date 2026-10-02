@@ -1,9 +1,22 @@
 import { drizzle } from 'drizzle-orm/node-postgres';
 import { Pool } from 'pg';
+import { logError } from '@/lib/log';
 import * as schema from './schema';
 
+/**
+ * 接続プール。待つ時間に上限を付け（DB が詰まってもリクエストが上限まで待ち続けないように）、
+ * 待機中の接続が切られたときの error を受ける（受けないとプロセスごと落ちる）
+ */
 export function createPool(connectionString: string) {
-  return new Pool({ connectionString, max: 10 });
+  const pool = new Pool({
+    connectionString,
+    max: 10,
+    connectionTimeoutMillis: 5_000,
+    idleTimeoutMillis: 10_000,
+    statement_timeout: 15_000,
+  });
+  pool.on('error', (error) => logError('db.pool.error', {}, error));
+  return pool;
 }
 
 /** 接続プールに Drizzle をかぶせる（スキーマはこのモジュールを読み込んだ時点のもの） */

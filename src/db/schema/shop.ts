@@ -2,7 +2,6 @@ import { integer, jsonb, pgEnum, pgTable, primaryKey, text, uuid } from 'drizzle
 import { timestamps } from './_columns';
 import { user } from './auth';
 
-export const paymentMode = pgEnum('payment_mode', ['online', 'onsite', 'both']);
 export const shopMemberRole = pgEnum('shop_member_role', ['admin']);
 
 /** トップページ等に出すショップ（サイト）の紹介情報 */
@@ -51,13 +50,32 @@ export type ShopSettings = {
   replyGuide: string;
   /** Web の申込があったら、プランの掲載元の事業者へ自動で受入確認を送る */
   autoRequestOwner: boolean;
+  /** 組合の手数料率（%）。月次精算で、事業者の受け取り分から差し引く */
+  commissionRate: number;
+  /** お客様の都合の取消：参加日の何日前までなら無料か（この日数以上前は 0%） */
+  cancelFreeDays: number;
+  /** お客様の都合の取消：無料の期間を過ぎてから前日までのキャンセル料率（%） */
+  cancelMidPercent: number;
+  /** お客様の都合の取消：当日・無断キャンセルのキャンセル料率（%） */
+  cancelSameDayPercent: number;
+  /** 天候中止のときの返金率（%。100 なら全額返金） */
+  weatherRefundPercent: number;
+  /** キャンセル料（返金しない額）を事業者の取り分にする（手数料率を引く）。false なら組合が受け取る */
+  cancellationFeeToOperator: boolean;
+  /** 事業者への支払日（締めた翌月の何日。0 は末日） */
+  payoutDay: number;
+  /** 組合のインボイスの登録番号（精算明細の手数料に載せる） */
+  invoiceNumber: string;
+  /** 領収書の型：agent（事業者の代理として受け取る）／seller（組合が売り手） */
+  receiptModel: 'agent' | 'seller';
+  /** 精算を始める月（YYYY-MM。空なら制限なし）。この月より前の予約は精算に入れない（それまでの分は別に精算済み） */
+  settlementStartMonth: string;
 };
 
 export const shops = pgTable('shops', {
   id: uuid().primaryKey().defaultRandom(),
   name: text().notNull(),
   timezone: text().notNull().default('Asia/Tokyo'),
-  defaultPaymentMode: paymentMode().notNull().default('onsite'),
   lowStockThresholdPercent: integer().notNull().default(20),
   lowStockThresholdCount: integer().notNull().default(2),
   profile: jsonb().$type<ShopProfile>().notNull().default({}),

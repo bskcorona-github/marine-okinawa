@@ -1,0 +1,2 @@
+ALTER TABLE "menus" ADD COLUMN "paused_by" text;--> statement-breakpoint
+ALTER TABLE "menus" ADD CONSTRAINT "menus_paused_by_check" CHECK (("menus"."paused_by" is null or "menus"."paused_by" in ('operator', 'staff')) and ("menus"."paused_by" is null or "menus"."status" = 'paused'));

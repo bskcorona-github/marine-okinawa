@@ -17,7 +17,7 @@ import {
 } from 'drizzle-orm/pg-core';
 import { timestamps } from './_columns';
 import { user } from './auth';
-import { paymentMode, shops } from './shop';
+import { shops } from './shop';
 
 /** paused：受付停止（ページは公開したまま申込だけ止める。「在庫確認中」などもこれで表す） */
 export const menuStatus = pgEnum('menu_status', ['draft', 'published', 'paused', 'archived']);
@@ -67,7 +67,10 @@ export const operators = pgTable(
     sortOrder: integer().notNull().default(0),
     ...timestamps,
   },
-  (t) => [uniqueIndex('operators_shop_slug_uq').on(t.shopId, t.slug)],
+  (t) => [
+    uniqueIndex('operators_shop_slug_uq').on(t.shopId, t.slug),
+    check('operators_status_check', sql`${t.status} in ('active', 'suspended')`),
+  ],
 );
 
 export const activityStatus = pgEnum('activity_status', ['published', 'hidden']);
@@ -118,11 +121,12 @@ export const menus = pgTable(
       .references(() => shops.id),
     slug: text().notNull(),
     status: menuStatus().notNull().default('draft'),
+    /** 受付を止めたのは誰か（事業者は、自分で止めた受付だけを再開できる。組合が止めた受付は組合が再開する） */
+    pausedBy: text().$type<'operator' | 'staff'>(),
     category: menuCategory().notNull().default('other'),
     durationMin: integer().notNull(),
     minAge: integer(),
     maxPartySize: integer().notNull().default(10),
-    paymentMode: paymentMode(),
     bookingCutoffMin: integer().notNull().default(120),
     /** 「前日 18:00 まで」型の締切。設定時は bookingCutoffMin より優先 */
     cutoffPrevDayTime: time(),
@@ -162,6 +166,14 @@ export const menus = pgTable(
   (t) => [
     uniqueIndex('menus_shop_slug_uq').on(t.shopId, t.slug),
     check('menus_review_status_check', sql`${t.reviewStatus} in ('none', 'pending', 'rejected')`),
+    // 公開の申請は下書きのプランだけ
+    check('menus_review_pending_draft', sql`${t.reviewStatus} <> 'pending' or ${t.status} = 'draft'`),
+    check('menus_capacity_unit_check', sql`${t.capacityUnit} in ('名', '艇')`),
+    // 受付を止めた人は、受付停止のときだけ持つ
+    check(
+      'menus_paused_by_check',
+      sql`(${t.pausedBy} is null or ${t.pausedBy} in ('operator', 'staff')) and (${t.pausedBy} is null or ${t.status} = 'paused')`,
+    ),
   ],
 );
 
@@ -182,6 +194,11 @@ export const menuRevisions = pgTable(
     data: jsonb().$type<Record<string, unknown>>().notNull(),
     /** 事業者から組合へのひとこと（変更の理由など） */
     note: text().notNull().default(''),
+    /**
+     * 申請のもとにしたプランの内容（MenuInput）。承認のときは、事業者が変えた項目だけを今のプランに反映する
+     * （申請のあとに組合が直した項目を巻き戻さない）。古い申請では null
+     */
+    baseData: jsonb().$type<Record<string, unknown>>(),
     status: text().$type<'pending' | 'approved' | 'rejected' | 'withdrawn'>().notNull().default('pending'),
     /** 差し戻しの理由（組合から事業者へ） */
     reviewNote: text().notNull().default(''),
