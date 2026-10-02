@@ -14,12 +14,18 @@ export type OperatorContext = { userId: string; email: string; shopId: string; o
 /** ログイン中の利用者と、その種類（組合の管理者か、停止されていない事業者アカウントか） */
 const loadState = cache(async () => {
   const session = await auth.api.getSession({ headers: await headers() });
-  if (!session) return { session: null, role: null, shopId: null, operatorId: null };
+  if (!session) return { session: null, role: null, shopId: null, operatorId: null, passwordChangeRequired: false };
   const [member] = await db.select().from(shopMembers).where(eq(shopMembers.userId, session.user.id)).limit(1);
-  if (member) return { session, role: 'admin' as Role, shopId: member.shopId, operatorId: null };
+  if (member) {
+    return { session, role: 'admin' as Role, shopId: member.shopId, operatorId: null, passwordChangeRequired: false };
+  }
   // 停止中の事業者（取引の停止）のアカウントは、アカウントごとの停止と同じく入れない
   const [operator] = await db
-    .select({ shopId: operatorMembers.shopId, operatorId: operatorMembers.operatorId })
+    .select({
+      shopId: operatorMembers.shopId,
+      operatorId: operatorMembers.operatorId,
+      passwordChangeRequired: operatorMembers.passwordChangeRequired,
+    })
     .from(operatorMembers)
     .innerJoin(operators, eq(operators.id, operatorMembers.operatorId))
     .where(
@@ -30,8 +36,16 @@ const loadState = cache(async () => {
       ),
     )
     .limit(1);
-  if (operator) return { session, role: 'operator' as Role, shopId: operator.shopId, operatorId: operator.operatorId };
-  return { session, role: null, shopId: null, operatorId: null };
+  if (operator) {
+    return {
+      session,
+      role: 'operator' as Role,
+      shopId: operator.shopId,
+      operatorId: operator.operatorId,
+      passwordChangeRequired: operator.passwordChangeRequired,
+    };
+  }
+  return { session, role: null, shopId: null, operatorId: null, passwordChangeRequired: false };
 });
 
 async function requireRole(required: Role) {
@@ -55,9 +69,13 @@ export async function requireAdmin(): Promise<AdminContext> {
   return { userId: state.session.user.id, email: state.session.user.email, shopId: state.shopId, role: 'admin' };
 }
 
-/** 事業者画面のページ・Server Action の先頭で必ず呼ぶ（停止されていない事業者アカウントだけ） */
+/**
+ * 事業者画面のページ・Server Action の先頭で必ず呼ぶ（停止されていない事業者アカウントだけ）。
+ * 仮パスワードのままなら、パスワードの変更へ進めてから使ってもらう
+ */
 export async function requireOperator(): Promise<OperatorContext> {
   const state = await requireRole('operator');
+  if (state.passwordChangeRequired) redirect('/partner/password');
   return {
     userId: state.session.user.id,
     email: state.session.user.email,
@@ -65,6 +83,12 @@ export async function requireOperator(): Promise<OperatorContext> {
     operatorId: state.operatorId!,
     role: 'operator',
   };
+}
+
+/** パスワードの変更画面用（仮パスワードのままでも通す。2 要素認証は設定済みであること） */
+export async function requireOperatorForPasswordChange(): Promise<{ email: string; required: boolean }> {
+  const state = await requireRole('operator');
+  return { email: state.session.user.email, required: state.passwordChangeRequired };
 }
 
 /** 2 要素認証の設定画面用（管理者・事業者どちらも、設定前でも通す）。設定後の行き先も返す */

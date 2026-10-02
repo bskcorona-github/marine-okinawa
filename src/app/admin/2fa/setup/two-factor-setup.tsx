@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { authClient } from '@/lib/auth-client';
+import { authErrorMessage } from '@/lib/auth-errors';
 import { useHydrated } from '@/lib/use-hydrated';
 
 type Enrollment = { totpURI: string; backupCodes: string[] };
@@ -28,7 +29,7 @@ export function TwoFactorSetup({ email }: { email: string }) {
     const { data, error } = await authClient.twoFactor.enable({ password });
     setPending(false);
     if (error || !data || !('totpURI' in data)) {
-      setError('パスワードが正しくありません');
+      setError(authErrorMessage(error, 'enable'));
       return;
     }
     setEnrollment({ totpURI: data.totpURI, backupCodes: data.backupCodes });
@@ -42,7 +43,7 @@ export function TwoFactorSetup({ email }: { email: string }) {
     const { error } = await authClient.twoFactor.verifyTotp({ code });
     if (error) {
       setPending(false);
-      setError('コードが正しくありません。認証アプリの最新のコードを入力してください');
+      setError(authErrorMessage(error, 'two_factor'));
       return;
     }
     router.replace('/admin');

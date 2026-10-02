@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { authClient } from '@/lib/auth-client';
+import { authErrorMessage } from '@/lib/auth-errors';
 import { useHydrated } from '@/lib/use-hydrated';
 
 export default function TwoFactorVerifyPage() {
@@ -25,11 +26,7 @@ export default function TwoFactorVerifyPage() {
       : await authClient.twoFactor.verifyTotp({ code });
     if (error) {
       setPending(false);
-      setError(
-        error.status === 429
-          ? '試行回数が多すぎます。1 分ほど待ってからお試しください'
-          : 'コードが正しくありません。ログインからやり直す場合は再度ログインしてください',
-      );
+      setError(authErrorMessage(error, useBackup ? 'backup_code' : 'two_factor'));
       return;
     }
     router.replace('/admin');

@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { authClient } from '@/lib/auth-client';
+import { authErrorMessage } from '@/lib/auth-errors';
 import { useHydrated } from '@/lib/use-hydrated';
 
 /** noAccess：ログインはできたが、停止中などで使えないアカウントだった（理由を出す） */
@@ -27,12 +28,8 @@ export function LoginForm({ noAccess }: { noAccess: boolean }) {
     });
     setPending(false);
     if (error) {
-      // 回数制限（429）は、パスワードの間違いとは別の案内にする
-      setError(
-        error.status === 429
-          ? 'ログインの試行回数が多すぎます。1 分ほど待ってからお試しください'
-          : 'メールアドレスまたはパスワードが違います',
-      );
+      // 回数制限・通信の失敗は、パスワードの間違いとは別の案内にする
+      setError(authErrorMessage(error, 'sign_in'));
       return;
     }
     // 2 要素認証が有効なら twoFactorClient が /admin/2fa へ移動させる
