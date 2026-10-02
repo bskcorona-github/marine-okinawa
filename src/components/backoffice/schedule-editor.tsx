@@ -1,9 +1,9 @@
 import Link from 'next/link';
 import type { ReactNode } from 'react';
-import { ConfirmDialog } from '@/components/admin/confirm-dialog';
-import { SELECT_CLASS } from '@/components/admin/field-styles';
-import { Notice, PageHeader, Panel } from '@/components/admin/page-header';
-import { SubmitButton } from '@/components/admin/submit-button';
+import { ConfirmDialog } from '@/components/backoffice/confirm-dialog';
+import { SELECT_CLASS } from '@/components/backoffice/field-styles';
+import { Notice, PageHeader, Panel } from '@/components/backoffice/page-header';
+import { SubmitButton } from '@/components/backoffice/submit-button';
 import { buttonVariants } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { db } from '@/db';
@@ -42,6 +42,8 @@ const ERRORS: Record<string, string> = {
   startTime: '開始時刻を入力してください（臨時の回には開始時刻が必要です）。',
   capacity: '定員を 0〜500 の整数で入力してください（休止以外は必須です）。',
   pastDate: '過去の日付には例外を追加できません。',
+  notFound:
+    'プランまたは開催時間が見つかりません（ほかの画面で削除された可能性があります）。画面を開き直してください。',
   input: '入力内容を確認してください。',
 };
 
@@ -196,7 +198,14 @@ export async function ScheduleEditor({
       <div className="space-y-4">
         {sp.created && <Notice tone="success">プランを作成しました。開始時刻と定員を登録してください。</Notice>}
         {intro}
-        {sp.saved && <Notice tone="success">保存し、今後 180 日分の回に反映しました。</Notice>}
+        {sp.saved && sp.resync !== 'failed' && (
+          <Notice tone="success">保存し、今後 180 日分の回に反映しました。</Notice>
+        )}
+        {sp.resync === 'failed' && (
+          <Notice tone="warning">
+            設定は保存しましたが、回への反映に失敗しました。少し待ってから画面を開き直して、タイムテーブルで回を確かめてください（毎日の自動の反映でも直ります）。
+          </Notice>
+        )}
         {error && <Notice tone="error">{error}</Notice>}
         {typeof sp.closedBooked === 'string' && (
           <Notice tone="warning">

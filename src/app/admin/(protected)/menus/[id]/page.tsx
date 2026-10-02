@@ -1,6 +1,6 @@
 import { buttonVariants } from '@/components/ui/button';
 import { splitPlanTitle } from '@/modules/catalog/display-title';
-import { Notice, PageHeader } from '@/components/admin/page-header';
+import { Notice, PageHeader } from '@/components/backoffice/page-header';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { db } from '@/db';
@@ -11,12 +11,13 @@ import { getMenuForAdmin, listOperators } from '@/modules/catalog/menus';
 import { updateMenuAction, uploadMenuImageAction } from '../actions';
 import { listMenuCandidates } from '@/modules/partner/requests';
 import { countUpcomingBookings, menuHasBookings } from '@/modules/booking/queries';
-import { MenuForm } from '../menu-form';
+import { MenuForm } from '@/components/backoffice/menu-form';
 import { formatDateLabel, localTime } from '@/lib/dates';
 import { ownValue } from '@/lib/own';
 import { getPendingRevision, PLAN_ERROR_LABELS } from '@/modules/catalog/operator-plans';
 import { getShopById } from '@/modules/shop/shops';
 import { ReviewPanel } from './review-panel';
+import { isPerPerson } from '@/modules/catalog/capacity-unit';
 
 const REVIEWED: Record<string, string> = {
   'publish-approved': '公開を承認し、プランを公開しました。事業者にメールで知らせました。',
@@ -107,7 +108,7 @@ export default async function EditMenuPage({ params, searchParams }: PageProps<'
           activityId: menu.activityId,
           featured: menu.featured,
           requireAges: menu.requireAges,
-          capacityUnit: menu.capacityUnit === '艇' ? '艇' : '名',
+          capacityUnit: !isPerPerson(menu.capacityUnit) ? '艇' : '名',
           title: menu.translation.title,
           description: menu.translation.description,
           meetingPoint: menu.translation.meetingPoint,

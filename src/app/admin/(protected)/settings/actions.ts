@@ -5,7 +5,6 @@ import { redirect } from 'next/navigation';
 import { db } from '@/db';
 import { invalidState, toFormIssues, type AdminFormState } from '@/lib/zod-ja';
 import { requireAdmin } from '@/modules/auth/guard';
-import { writeAuditLog } from '@/modules/audit/log';
 import { settingsSchema } from '@/modules/shop/settings';
 import { shopSettingsSchema, updateShopSettings } from '@/modules/shop/shops';
 
@@ -21,6 +20,16 @@ const FIELD_LABELS: Record<string, string> = {
   adminNotifyEmail: '新規申込の通知先',
   replyGuide: 'ご連絡の目安',
   autoRequestOwner: '自動の受入確認',
+  commissionRate: '組合の手数料率',
+  cancelFreeDays: 'キャンセル料が無料の日数',
+  cancelMidPercent: '前日までのキャンセル料率',
+  cancelSameDayPercent: '当日・無断のキャンセル料率',
+  weatherRefundPercent: '天候中止の返金率',
+  cancellationFeeToOperator: 'キャンセル料の配分',
+  payoutDay: '事業者への支払日',
+  invoiceNumber: '組合のインボイスの登録番号',
+  receiptModel: '領収書の型',
+  settlementStartMonth: '精算を始める月',
   phone: '電話番号',
   email: 'お問い合わせ用のメールアドレス',
   businessHours: '受付時間',
@@ -46,15 +55,7 @@ export async function updateSettingsAction(_prev: AdminFormState, formData: Form
     ];
     return invalidState(issues);
   }
-  await updateShopSettings(db, admin.shopId, parsed.data, settings.data);
-  await writeAuditLog(db, {
-    shopId: admin.shopId,
-    actorId: admin.userId,
-    action: 'shop.update',
-    targetType: 'shop',
-    targetId: admin.shopId,
-    after: { ...parsed.data, settings: settings.data },
-  });
+  await updateShopSettings(db, admin.shopId, parsed.data, settings.data, admin.userId);
   revalidatePath('/', 'layout');
   // saved に時刻を入れて、保存後にフォームを作り直す（未保存の印を消す）
   redirect(`/admin/settings?saved=${Date.now()}`);

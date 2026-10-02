@@ -1,6 +1,6 @@
 import { ExternalLink } from 'lucide-react';
 import Link from 'next/link';
-import { PageHeader } from '@/components/admin/page-header';
+import { PageHeader } from '@/components/backoffice/page-header';
 import { buttonVariants } from '@/components/ui/button';
 import { db } from '@/db';
 import { cn } from '@/lib/utils';

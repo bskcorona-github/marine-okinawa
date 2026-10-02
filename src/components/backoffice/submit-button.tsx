@@ -12,7 +12,8 @@ export function SubmitButton({
 }: Omit<ComponentProps<typeof Button>, 'type'> & { pendingLabel?: string }) {
   const { pending } = useFormStatus();
   return (
-    <Button type="submit" disabled={pending || props.disabled} {...props}>
+    // disabled は最後に渡す（呼び出し側の disabled={false} で、送信中の二度押しを許さないように）
+    <Button {...props} type="submit" disabled={pending || props.disabled}>
       {pending ? pendingLabel : children}
     </Button>
   );

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { invoiceNumberSchema, normalizeInvoiceNumber } from './invoice';
+import { invoiceNumberSchema } from './invoice';
+import { normalizeInvoiceNumber } from './invoice-number';
 
 describe('インボイスの登録番号', () => {
   it('全角・ハイフン・空白・小文字を直して受け付ける', () => {

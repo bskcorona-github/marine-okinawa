@@ -1,9 +1,10 @@
 import { randomUUID } from 'node:crypto';
-import { and, desc, eq, ne } from 'drizzle-orm';
+import { and, desc, eq } from 'drizzle-orm';
 import { z } from 'zod';
 import { invoiceNumberSchema } from '@/lib/invoice';
 import type { Db, DbOrTx } from '@/db/client';
 import { applicationStatus, operatorApplications, operatorDocuments, operators } from '@/db/schema';
+import { changedFields } from '@/modules/audit/diff';
 import { writeAuditLog } from '@/modules/audit/log';
 import { normalizeEmail } from '@/modules/customer/normalize';
 
@@ -82,28 +83,29 @@ export async function reviewApplication(
     now: Date;
   },
 ): Promise<boolean> {
-  const [row] = await db
-    .update(operatorApplications)
-    .set({ status: params.status, reviewNote: params.note.trim(), reviewedBy: params.actorId, reviewedAt: params.now })
-    .where(
-      and(
-        eq(operatorApplications.shopId, params.shopId),
-        eq(operatorApplications.id, params.applicationId),
-        // 登録済みの申請は戻さない
-        ne(operatorApplications.status, 'approved'),
-      ),
-    )
-    .returning({ status: operatorApplications.status });
-  if (!row) return false;
-  await writeAuditLog(db, {
-    shopId: params.shopId,
-    actorId: params.actorId,
-    action: 'operator_application.review',
-    targetType: 'operator_application',
-    targetId: params.applicationId,
-    after: { status: params.status, note: params.note },
+  return db.transaction(async (tx) => {
+    const [current] = await tx
+      .select({ status: operatorApplications.status, reviewNote: operatorApplications.reviewNote })
+      .from(operatorApplications)
+      .where(and(eq(operatorApplications.shopId, params.shopId), eq(operatorApplications.id, params.applicationId)))
+      .for('update');
+    // 登録済みの申請は戻さない
+    if (!current || current.status === 'approved') return false;
+    const next = { status: params.status, reviewNote: params.note.trim() };
+    await tx
+      .update(operatorApplications)
+      .set({ ...next, reviewedBy: params.actorId, reviewedAt: params.now })
+      .where(eq(operatorApplications.id, params.applicationId));
+    await writeAuditLog(tx, {
+      shopId: params.shopId,
+      actorId: params.actorId,
+      action: 'operator_application.review',
+      targetType: 'operator_application',
+      targetId: params.applicationId,
+      ...changedFields(current, next),
+    });
+    return true;
   });
-  return true;
 }
 
 /** slug を事業者名から作れないときの代わり（英数字の短い ID） */

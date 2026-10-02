@@ -6,7 +6,6 @@ import { db } from '@/db';
 import { isUuid } from '@/lib/validation';
 import { invalidState, toFormIssues, type AdminFormState } from '@/lib/zod-ja';
 import { requireAdmin } from '@/modules/auth/guard';
-import { writeAuditLog } from '@/modules/audit/log';
 import { activityInputSchema, saveActivity } from '@/modules/catalog/activities';
 
 const FIELD_LABELS: Record<string, string> = {
@@ -36,6 +35,7 @@ export async function saveActivityAction(
     shopId: admin.shopId,
     activityId: activityId ?? undefined,
     input: parsed.data,
+    actorId: admin.userId,
   });
   if (!result.ok) {
     return {
@@ -49,14 +49,6 @@ export async function saveActivityAction(
           : [],
     };
   }
-  await writeAuditLog(db, {
-    shopId: admin.shopId,
-    actorId: admin.userId,
-    action: activityId ? 'activity.update' : 'activity.create',
-    targetType: 'activity',
-    targetId: result.activityId,
-    after: parsed.data,
-  });
   revalidatePath('/', 'layout');
   redirect(`/admin/activities/${result.activityId}?saved=${Date.now()}`);
 }

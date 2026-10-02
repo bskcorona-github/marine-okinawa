@@ -1,7 +1,9 @@
 import { asc, eq } from 'drizzle-orm';
 import { z } from 'zod';
-import type { DbOrTx } from '@/db/client';
+import type { Db, DbOrTx } from '@/db/client';
 import { shops } from '@/db/schema';
+import { changedFields } from '@/modules/audit/diff';
+import { writeAuditLog } from '@/modules/audit/log';
 import { resolveSettings, settingsSchema, type ShopSettings } from './settings';
 
 /** ショップ（サイトの運営者＝組合）。settings は既定値を補った値 */
@@ -55,28 +57,47 @@ export type ShopSettingsInput = z.infer<typeof shopSettingsSchema>;
 export type OperationSettingsInput = z.infer<typeof settingsSchema>;
 
 /**
- * 基本設定・紹介情報（profile）・運用の設定値（settings）を更新する。
+ * 基本設定・紹介情報（profile）・運用の設定値（settings）を更新し、変わった項目を履歴に残す（同じトランザクションで）。
  * profile の他の項目（地図の URL など）は残す
  */
 export async function updateShopSettings(
-  db: DbOrTx,
+  db: Db,
   shopId: string,
   input: ShopSettingsInput,
   settings: OperationSettingsInput,
+  actorId: string | null = null,
 ): Promise<void> {
   const { name, lowStockThresholdPercent, lowStockThresholdCount, ...profile } = input;
-  const [current] = await db.select({ profile: shops.profile }).from(shops).where(eq(shops.id, shopId));
-  if (!current) throw new Error(`shop not found: ${shopId}`);
-  await db
-    .update(shops)
-    .set({
+  await db.transaction(async (tx) => {
+    const [current] = await tx
+      .select({
+        name: shops.name,
+        lowStockThresholdPercent: shops.lowStockThresholdPercent,
+        lowStockThresholdCount: shops.lowStockThresholdCount,
+        profile: shops.profile,
+        settings: shops.settings,
+      })
+      .from(shops)
+      .where(eq(shops.id, shopId))
+      .for('update');
+    if (!current) throw new Error(`shop not found: ${shopId}`);
+    const next = {
       name,
       lowStockThresholdPercent,
       lowStockThresholdCount,
       profile: { ...current.profile, ...profile },
       settings,
-    })
-    .where(eq(shops.id, shopId));
+    };
+    await tx.update(shops).set(next).where(eq(shops.id, shopId));
+    await writeAuditLog(tx, {
+      shopId,
+      actorId,
+      action: 'shop.update',
+      targetType: 'shop',
+      targetId: shopId,
+      ...changedFields(current, next),
+    });
+  });
 }
 
 /** 管理者・お問い合わせの通知を送るメールアドレス（設定の通知先 → お問い合わせ用のアドレス） */

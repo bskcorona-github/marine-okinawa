@@ -6,7 +6,6 @@ import { db } from '@/db';
 import { isUuid } from '@/lib/validation';
 import { invalidState, toFormIssues, type AdminFormState } from '@/lib/zod-ja';
 import { requireAdmin } from '@/modules/auth/guard';
-import { writeAuditLog } from '@/modules/audit/log';
 import {
   createOperator,
   newOperatorSchema,
@@ -19,16 +18,8 @@ export async function createOperatorAction(formData: FormData) {
   const admin = await requireAdmin();
   const parsed = newOperatorSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) redirect('/admin/operators?error=input');
-  const result = await createOperator(db, admin.shopId, parsed.data);
+  const result = await createOperator(db, admin.shopId, parsed.data, admin.userId);
   if (!result.ok) redirect('/admin/operators?error=slug');
-  await writeAuditLog(db, {
-    shopId: admin.shopId,
-    actorId: admin.userId,
-    action: 'operator.create',
-    targetType: 'operator',
-    targetId: result.operatorId,
-    after: parsed.data,
-  });
   redirect(`/admin/operators/${result.operatorId}`);
 }
 
@@ -62,20 +53,12 @@ export async function updateOperatorAction(
     return invalidState([
       {
         field: 'periods',
-        message: `オン期の期間（${periods.line} 件目）：日付を確認してください（終了日は開始日以降）`,
+        message: `繁忙期の期間（${periods.line} 件目）：日付を確認してください（終了日は開始日以降）`,
       },
     ]);
   }
-  const ok = await updateOperator(db, admin.shopId, operatorId, parsed.data, periods.periods);
+  const ok = await updateOperator(db, admin.shopId, operatorId, parsed.data, periods.periods, admin.userId);
   if (!ok) redirect('/admin/operators');
-  await writeAuditLog(db, {
-    shopId: admin.shopId,
-    actorId: admin.userId,
-    action: 'operator.update',
-    targetType: 'operator',
-    targetId: operatorId,
-    after: { ...parsed.data, periods: periods.periods },
-  });
   revalidatePath('/', 'layout');
   // saved に時刻を入れて、保存後にフォームを作り直す（未保存の印を消す）
   redirect(`/admin/operators/${operatorId}?saved=${Date.now()}`);

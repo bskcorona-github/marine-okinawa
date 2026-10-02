@@ -2,6 +2,8 @@ import { and, asc, eq, gte, inArray, lt, lte, ne, sql } from 'drizzle-orm';
 import type { Db, DbOrTx } from '@/db/client';
 import { bookings, menus, scheduleExceptions, scheduleRules, shops, slots } from '@/db/schema';
 import { addDays, localDate, zonedToUtc } from '@/lib/dates';
+import { logError, logWarn } from '@/lib/log';
+import { writeAuditLog } from '@/modules/audit/log';
 import { generateSlots } from './generate';
 
 /** 何日先まで回を作っておくか */
@@ -68,6 +70,7 @@ export async function syncSlots(
       .select()
       .from(slots)
       .where(and(eq(slots.menuId, menu.id), gte(slots.startsAt, rangeStart), lt(slots.startsAt, rangeEnd)))
+      .orderBy(asc(slots.id))
       .for('update');
     const remaining = new Map(existing.map((s) => [s.startsAt.getTime(), s]));
 
@@ -136,21 +139,44 @@ export async function resyncMenu(db: Db, params: { menuId: string; timezone: str
 }
 
 /** 全ショップのアーカイブ以外の全メニューを同期する（定期処理用） */
-export async function syncAllShops(db: Db, now: Date): Promise<{ menus: number; failed: number }> {
+export async function syncAllShops(
+  db: Db,
+  now: Date,
+): Promise<{ menus: number; failed: number; closedBooked: number; overBooked: number }> {
   const targets = await db
-    .select({ menuId: menus.id, timezone: shops.timezone })
+    .select({ menuId: menus.id, shopId: menus.shopId, timezone: shops.timezone })
     .from(menus)
     .innerJoin(shops, eq(shops.id, menus.shopId))
     .where(ne(menus.status, 'archived'));
   let failed = 0;
+  let closedBooked = 0;
+  let overBooked = 0;
   for (const t of targets) {
     // 1 メニューの失敗で残りのメニューの同期を止めない
     try {
-      await resyncMenu(db, { menuId: t.menuId, timezone: t.timezone, now });
+      const result = await resyncMenu(db, { menuId: t.menuId, timezone: t.timezone, now });
+      closedBooked += result.closedBooked;
+      overBooked += result.overBooked;
+      // 予約のある回を休止・定員超過にしたら、組合が気づけるよう履歴とログに残す（お客様への連絡が要る）
+      if (result.closedBooked > 0 || result.overBooked > 0) {
+        logWarn('cron.sync_slots.booked_slots_changed', {
+          menuId: t.menuId,
+          count: result.closedBooked,
+          status: `overBooked ${result.overBooked}`,
+        });
+        await writeAuditLog(db, {
+          shopId: t.shopId,
+          actorId: null,
+          action: 'schedule.auto_sync',
+          targetType: 'menu',
+          targetId: t.menuId,
+          after: { closedBooked: result.closedBooked, overBooked: result.overBooked },
+        });
+      }
     } catch (error) {
       failed++;
-      console.error(`syncAllShops: menu ${t.menuId} failed`, error);
+      logError('cron.sync_slots.menu_failed', { menuId: t.menuId }, error);
     }
   }
-  return { menus: targets.length, failed };
+  return { menus: targets.length, failed, closedBooked, overBooked };
 }

@@ -5,13 +5,13 @@ import { redirect } from 'next/navigation';
 import { z } from 'zod';
 import { db } from '@/db';
 import { isUuid } from '@/lib/validation';
-import { getEnv } from '@/lib/env';
 import { requireAdmin } from '@/modules/auth/guard';
 import { BookingError } from '@/modules/booking/errors';
 import { weatherCancelSlot } from '@/modules/booking/weather-cancel-slot';
-import { getMailer } from '@/modules/notification/mailer';
 import { sendBookingMail } from '@/modules/notification/send-booking-mail';
 import { sendOperatorBookingMail } from '@/modules/notification/send-operator-mail';
+import { sendQuietly } from '@/modules/notification/send-quietly';
+import { expireOpenCheckout, getCardPayments } from '@/modules/payment/card-payments';
 import { closeSlot, overrideSlotCapacity, reopenSlot, SlotOverrideError } from '@/modules/schedule/slot-overrides';
 
 const capacitySchema = z.coerce.number().int().min(0).max(500);
@@ -35,6 +35,8 @@ async function run(
   try {
     await action({ shopId: admin.shopId, actorId: admin.userId });
   } catch (error) {
+    // 回が消えていた（ほかの画面で開催時間を変えた）：回の画面は開けないので、タイムテーブルで知らせる
+    if (error instanceof SlotOverrideError && error.code === 'NOT_FOUND') redirect('/admin/timetable?gone=1');
     if (error instanceof SlotOverrideError) redirect(slotPage(slotId, formData, `error=${error.code}`));
     throw error;
   }
@@ -89,29 +91,27 @@ export async function weatherCancelSlotAction(slotId: string, formData: FormData
     if (error instanceof BookingError) redirect(slotPage(slotId, formData, `error=${error.code}`));
     throw error;
   }
-  const mailer = getMailer();
-  const appUrl = getEnv().APP_URL;
   let failed = 0;
+  const provider = getCardPayments();
   for (const b of result.bookings) {
-    if (parsed.data.notify && b.mail) {
-      const sent = await sendBookingMail(db, mailer, { bookingId: b.bookingId, kind: b.mail, appUrl }).catch(
-        (error) => {
-          console.error('booking mail failed', { bookingId: b.bookingId, error });
-          return { status: 'failed' as const };
-        },
+    const { bookingId, mail: kind } = b;
+    // 支払待ちだった予約：開いている支払いのページで払われないように
+    if (b.from === 'awaiting_payment') await expireOpenCheckout(db, provider, bookingId);
+    if (parsed.data.notify && kind) {
+      const sent = await sendQuietly('mail.booking.failed', { bookingId, kind }, (mailer, appUrl) =>
+        sendBookingMail(db, mailer, { bookingId, kind, appUrl }),
       );
       if (sent.status === 'failed' || sent.status === 'unknown') failed++;
     }
-    const operatorMails: Parameters<typeof sendOperatorBookingMail>[2][] = [];
-    if (parsed.data.notifyOperator && b.notifyOperator) operatorMails.push({ bookingId: b.bookingId, appUrl });
-    for (const operatorId of b.closedOperatorIds) {
-      operatorMails.push({ bookingId: b.bookingId, appUrl, notice: 'closed', operatorId });
-    }
+    const operatorMails: { notice?: 'closed'; operatorId?: string }[] = [];
+    if (parsed.data.notifyOperator && b.notifyOperator) operatorMails.push({});
+    for (const operatorId of b.closedOperatorIds) operatorMails.push({ notice: 'closed', operatorId });
     for (const params of operatorMails) {
-      const sent = await sendOperatorBookingMail(db, mailer, params).catch((error) => {
-        console.error('operator mail failed', { bookingId: b.bookingId, error });
-        return { status: 'failed' as const };
-      });
+      const sent = await sendQuietly(
+        'mail.operator_booking.failed',
+        { bookingId, kind: params.notice ?? 'booking' },
+        (mailer, appUrl) => sendOperatorBookingMail(db, mailer, { bookingId, appUrl, ...params }),
+      );
       if (sent.status === 'failed' || sent.status === 'unknown') failed++;
     }
   }

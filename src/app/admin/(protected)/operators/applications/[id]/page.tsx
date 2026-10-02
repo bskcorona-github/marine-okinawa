@@ -1,8 +1,9 @@
 import { Download } from 'lucide-react';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { Notice, PageHeader, Panel } from '@/components/admin/page-header';
-import { SubmitButton } from '@/components/admin/submit-button';
+import { DetailList } from '@/components/backoffice/detail-list';
+import { Notice, PageHeader, Panel } from '@/components/backoffice/page-header';
+import { SubmitButton } from '@/components/backoffice/submit-button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { db } from '@/db';
@@ -87,16 +88,7 @@ export default async function ApplicationPage({
         )}
 
         <Panel title="事業者の情報">
-          <dl className="divide-y divide-slate-100 text-sm">
-            {rows
-              .filter(([, v]) => v)
-              .map(([label, value]) => (
-                <div key={label} className="grid gap-1 py-2.5 sm:grid-cols-[10rem_1fr] sm:gap-3">
-                  <dt className="text-slate-600">{label}</dt>
-                  <dd className="font-medium break-all text-slate-900">{value}</dd>
-                </div>
-              ))}
-          </dl>
+          <DetailList rows={rows} />
         </Panel>
 
         <Panel title="提供したいプラン">

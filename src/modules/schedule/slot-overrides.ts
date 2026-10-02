@@ -22,7 +22,7 @@ async function replaceSlotException(
     .from(slots)
     .innerJoin(shops, eq(shops.id, slots.shopId))
     .where(and(eq(slots.id, slotId), eq(slots.shopId, ctx.shopId)));
-  if (!slot) throw new Error('slot not found');
+  if (!slot) throw new SlotOverrideError('NOT_FOUND');
 
   const date = localDate(slot.slot.startsAt, slot.timezone);
   const startTime = localTime(slot.slot.startsAt, slot.timezone);
@@ -62,7 +62,7 @@ async function replaceSlotException(
 }
 
 export class SlotOverrideError extends Error {
-  constructor(readonly code: 'BELOW_RESERVED' | 'NOT_OPEN' | 'STILL_CLOSED') {
+  constructor(readonly code: 'BELOW_RESERVED' | 'NOT_OPEN' | 'STILL_CLOSED' | 'NOT_FOUND') {
     super(code);
     this.name = 'SlotOverrideError';
   }
@@ -79,13 +79,14 @@ export async function overrideSlotCapacity(db: Db, ctx: Ctx, slotId: string, cap
       .select({ menuId: slots.menuId })
       .from(slots)
       .where(and(eq(slots.id, slotId), eq(slots.shopId, ctx.shopId)));
-    if (!target) throw new Error('slot not found');
+    if (!target) throw new SlotOverrideError('NOT_FOUND');
     await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${`sync-slots:${target.menuId}`}))`);
     const [slot] = await tx
       .select({ status: slots.status, reservedCount: slots.reservedCount })
       .from(slots)
       .where(eq(slots.id, slotId))
       .for('update');
+    if (!slot) throw new SlotOverrideError('NOT_FOUND');
     if (slot.status !== 'open') throw new SlotOverrideError('NOT_OPEN');
     if (capacity < slot.reservedCount) throw new SlotOverrideError('BELOW_RESERVED');
     await replaceSlotException(tx, ctx, slotId, { type: 'capacity_override', capacity });
@@ -99,9 +100,10 @@ export async function closeSlot(db: Db, ctx: Ctx, slotId: string): Promise<void>
       .select({ menuId: slots.menuId })
       .from(slots)
       .where(and(eq(slots.id, slotId), eq(slots.shopId, ctx.shopId)));
-    if (!target) throw new Error('slot not found');
+    if (!target) throw new SlotOverrideError('NOT_FOUND');
     await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${`sync-slots:${target.menuId}`}))`);
     const [slot] = await tx.select({ status: slots.status }).from(slots).where(eq(slots.id, slotId)).for('update');
+    if (!slot) throw new SlotOverrideError('NOT_FOUND');
     if (slot.status !== 'open') throw new SlotOverrideError('NOT_OPEN');
     await replaceSlotException(tx, ctx, slotId, { type: 'closed' });
   });
@@ -119,7 +121,7 @@ export async function reopenSlot(db: Db, ctx: Ctx, slotId: string): Promise<void
       .from(slots)
       .innerJoin(shops, eq(shops.id, slots.shopId))
       .where(and(eq(slots.id, slotId), eq(slots.shopId, ctx.shopId)));
-    if (!row) throw new Error('slot not found');
+    if (!row) throw new SlotOverrideError('NOT_FOUND');
     if (row.slot.status !== 'closed') throw new SlotOverrideError('NOT_OPEN');
 
     const date = localDate(row.slot.startsAt, row.timezone);

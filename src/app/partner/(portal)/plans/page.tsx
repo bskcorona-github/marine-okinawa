@@ -1,13 +1,13 @@
 import { ChevronRight } from 'lucide-react';
 import Link from 'next/link';
-import { PageHeader } from '@/components/admin/page-header';
+import { PageHeader } from '@/components/backoffice/page-header';
 import { buttonVariants } from '@/components/ui/button';
 import { db } from '@/db';
 import { cn } from '@/lib/utils';
 import { requireOperator } from '@/modules/auth/guard';
 import { splitPlanTitle } from '@/modules/catalog/display-title';
 import { listOperatorPlans } from '@/modules/catalog/operator-plans';
-import { PLAN_STATE_LABELS, PLAN_STATE_TONE, planState } from './plan-status';
+import { PLAN_STATE_LABELS, PLAN_STATE_TONE, planState } from '@/components/backoffice/plan-state';
 
 export const metadata = { title: 'プラン' };
 

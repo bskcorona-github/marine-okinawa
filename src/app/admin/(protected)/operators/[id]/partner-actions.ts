@@ -6,8 +6,13 @@ import { z } from 'zod';
 import { db } from '@/db';
 import { isUuid } from '@/lib/validation';
 import { requireAdmin } from '@/modules/auth/guard';
-import { createOperatorAccount, operatorAccountSchema, setOperatorAccountDisabled } from '@/modules/partner/accounts';
-import { createCredentialUser } from '@/modules/partner/auth-user';
+import {
+  createOperatorAccount,
+  operatorAccountSchema,
+  resetOperatorPassword,
+  setOperatorAccountDisabled,
+} from '@/modules/partner/accounts';
+import { createCredentialUser, resetCredential } from '@/modules/partner/auth-user';
 import { reviewChangeRequest } from '@/modules/partner/change-requests';
 import { addDocument, deleteDocument, documentInputSchema } from '@/modules/partner/documents';
 import { getFileStore } from '@/modules/storage/store';
@@ -53,6 +58,25 @@ export async function issueAccountAction(
   }
   revalidatePath(`/admin/operators/${operatorId}`);
   return { error: null, issued: { email: parsed.data.email.trim().toLowerCase(), password: result.password } };
+}
+
+/** 仮パスワードを発行し直す（新しい仮パスワードは画面に 1 回だけ出す） */
+export async function resetAccountAction(
+  operatorId: string,
+  _prev: IssueAccountState,
+  formData: FormData,
+): Promise<IssueAccountState> {
+  const admin = await guard(operatorId);
+  const userId = formData.get('userId');
+  if (typeof userId !== 'string' || !userId) return { error: 'アカウントが見つかりません' };
+  const result = await resetOperatorPassword(db, resetCredential, {
+    shopId: admin.shopId,
+    userId,
+    actorId: admin.userId,
+  });
+  if (!result.ok) return { error: 'アカウントが見つかりません' };
+  revalidatePath(`/admin/operators/${operatorId}`);
+  return { error: null, issued: { email: result.email, password: result.password } };
 }
 
 /** アカウントを停止・再開する */
@@ -120,7 +144,7 @@ export async function reviewChangeAction(operatorId: string, formData: FormData)
     note: formData.get('note') ?? '',
   });
   if (!parsed.success) redirect(page(operatorId, 'error=input#change-requests'));
-  const ok = await reviewChangeRequest(db, {
+  const result = await reviewChangeRequest(db, {
     shopId: admin.shopId,
     requestId: parsed.data.requestId,
     approve: parsed.data.decision === 'approve',
@@ -132,7 +156,9 @@ export async function reviewChangeAction(operatorId: string, formData: FormData)
   redirect(
     page(
       operatorId,
-      ok ? `saved=${parsed.data.decision === 'approve' ? 'change_approved' : 'change_rejected'}` : 'error=change_done',
+      result === 'ok'
+        ? `saved=${parsed.data.decision === 'approve' ? 'change_approved' : 'change_rejected'}`
+        : `error=change_${result}`,
     ),
   );
 }

@@ -1,6 +1,6 @@
 import { ExternalLink } from 'lucide-react';
 import Link from 'next/link';
-import { PageHeader } from '@/components/admin/page-header';
+import { PageHeader } from '@/components/backoffice/page-header';
 import { db } from '@/db';
 import { formatDateLabel } from '@/lib/dates';
 import { requireAdmin } from '@/modules/auth/guard';

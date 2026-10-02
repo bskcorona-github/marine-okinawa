@@ -1,6 +1,6 @@
 import { notFound } from 'next/navigation';
-import { Notice } from '@/components/admin/page-header';
-import { ScheduleEditor } from '@/components/admin/schedule-editor';
+import { Notice } from '@/components/backoffice/page-header';
+import { ScheduleEditor } from '@/components/backoffice/schedule-editor';
 import { db } from '@/db';
 import { isUuid } from '@/lib/validation';
 import { requireOperator } from '@/modules/auth/guard';

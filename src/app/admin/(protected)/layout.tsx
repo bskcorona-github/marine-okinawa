@@ -1,10 +1,10 @@
 import { Waves } from 'lucide-react';
 import Link from 'next/link';
-import { AdminNav } from '@/components/admin/admin-nav';
+import { AdminNav } from '@/components/backoffice/admin-nav';
 import { db } from '@/db';
 import { requireAdmin } from '@/modules/auth/guard';
 import { getShopById } from '@/modules/shop/shops';
-import { SignOutButton } from './sign-out-button';
+import { SignOutButton } from '@/components/backoffice/sign-out-button';
 
 export default async function ProtectedAdminLayout({ children }: LayoutProps<'/admin'>) {
   const admin = await requireAdmin();

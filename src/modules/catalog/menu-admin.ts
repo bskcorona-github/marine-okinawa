@@ -1,11 +1,22 @@
-import { and, eq, isNull } from 'drizzle-orm';
+import { and, eq, isNull, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import type { DbOrTx, Tx } from '@/db/client';
 import { isUniqueViolation } from '@/db/errors';
-import { activities, bookings, menuImages, menuPrices, menus, menuTranslations, operators, slots } from '@/db/schema';
+import {
+  activities,
+  bookings,
+  menuImages,
+  menuPrices,
+  menuRevisions,
+  menus,
+  menuTranslations,
+  operators,
+  slots,
+} from '@/db/schema';
 import { DEFAULT_LOCALE } from './menus';
+import { isPerPerson } from '@/modules/catalog/capacity-unit';
 
-export const MENU_CATEGORIES = [
+const MENU_CATEGORIES = [
   'parasailing',
   'marine_sports',
   'fishing',
@@ -17,7 +28,7 @@ export const MENU_CATEGORIES = [
   'kayak',
   'other',
 ] as const;
-export const MENU_STATUSES = ['draft', 'published', 'paused', 'archived'] as const;
+const MENU_STATUSES = ['draft', 'published', 'paused', 'archived'] as const;
 
 export const menuInputSchema = z
   .object({
@@ -113,7 +124,7 @@ function menuColumns(input: MenuInput) {
     durationMin: input.durationMin,
     minAge: input.minAge,
     maxPartySize: input.maxPartySize,
-    minPartySize: input.capacityUnit === '名' ? input.minPartySize : 1,
+    minPartySize: isPerPerson(input.capacityUnit) ? input.minPartySize : 1,
     bookingCutoffMin: input.bookingCutoffMin,
     cutoffPrevDayTime: input.cutoffPrevDayTime,
     operatorId: input.operatorId,
@@ -123,9 +134,9 @@ function menuColumns(input: MenuInput) {
     meetingMapUrl: input.meetingMapUrl,
     capacityUnit: input.capacityUnit,
     // 追加料金は貸切（艇）のプランだけで使う
-    includedGuests: input.capacityUnit === '名' ? null : input.includedGuests,
-    extraGuestPrice: input.capacityUnit === '名' ? null : input.extraGuestPrice,
-    maxGuests: input.capacityUnit === '名' ? null : input.maxGuests,
+    includedGuests: isPerPerson(input.capacityUnit) ? null : input.includedGuests,
+    extraGuestPrice: isPerPerson(input.capacityUnit) ? null : input.extraGuestPrice,
+    maxGuests: isPerPerson(input.capacityUnit) ? null : input.maxGuests,
   };
 }
 
@@ -206,6 +217,18 @@ export async function createMenu(db: DbOrTx, shopId: string, input: MenuInput): 
   }
 }
 
+/** 予約のあるプランは、定員の単位（名／艇）を変えられない（予約済みの数の意味が変わってしまうため） */
+export async function unitChangeBlocked(db: DbOrTx, menuId: string, from: string, to: string): Promise<boolean> {
+  if (from === to) return false;
+  const [booked] = await db
+    .select({ id: bookings.id })
+    .from(bookings)
+    .innerJoin(slots, eq(slots.id, bookings.slotId))
+    .where(eq(slots.menuId, menuId))
+    .limit(1);
+  return Boolean(booked);
+}
+
 /**
  * メニューを更新する。料金区分は id があれば更新、なければ追加、送られてこなかったものはアーカイブする
  * （過去の予約明細が参照しているため削除しない）。
@@ -222,26 +245,44 @@ export async function updateMenu(
     return await db.transaction(async (tx) => {
       // 予約があるメニューは定員の単位（名／艇）を変えない（予約済みの数の意味が変わってしまうため）
       const [current] = await tx
-        .select({ capacityUnit: menus.capacityUnit, publishedAt: menus.publishedAt })
+        .select({
+          capacityUnit: menus.capacityUnit,
+          publishedAt: menus.publishedAt,
+          status: menus.status,
+          operatorId: menus.operatorId,
+        })
         .from(menus)
         .where(and(eq(menus.id, menuId), eq(menus.shopId, shopId)))
         .for('update');
       if (!current) return { ok: false, error: 'NOT_FOUND' } as const;
-      if (current.capacityUnit !== input.capacityUnit) {
-        const [booked] = await tx
-          .select({ id: bookings.id })
-          .from(bookings)
-          .innerJoin(slots, eq(slots.id, bookings.slotId))
-          .where(eq(slots.menuId, menuId))
-          .limit(1);
-        if (booked) return { ok: false, error: 'UNIT_LOCKED' } as const;
+      if (await unitChangeBlocked(tx, menuId, current.capacityUnit, input.capacityUnit)) {
+        return { ok: false, error: 'UNIT_LOCKED' } as const;
       }
       const updated = await tx
         .update(menus)
-        .set({ ...menuColumns(input), publishedAt: publishedAtFor(input.status, current.publishedAt, new Date()) })
+        .set({
+          ...menuColumns(input),
+          publishedAt: publishedAtFor(input.status, current.publishedAt, new Date()),
+          // 組合が受付停止にしたら、事業者からは再開できない（組合が止めた理由があるため）
+          pausedBy: input.status === 'paused' ? (current.status === 'paused' ? undefined : 'staff') : null,
+          // 組合が下書き以外（公開・受付停止・掲載終了）にしたら、公開の申請は終わり
+          ...(input.status !== 'draft' ? { reviewStatus: 'none' as const, reviewNote: '' } : {}),
+        })
         .where(and(eq(menus.id, menuId), eq(menus.shopId, shopId)))
         .returning({ id: menus.id });
       if (updated.length === 0) return { ok: false, error: 'NOT_FOUND' } as const;
+      // 公開中の変更の申請は、公開中・受付停止中で同じ掲載元のときだけ意味がある
+      const live = (status: string) => status === 'published' || status === 'paused';
+      if ((live(current.status) && !live(input.status)) || current.operatorId !== input.operatorId) {
+        await tx
+          .update(menuRevisions)
+          .set({
+            status: 'withdrawn',
+            reviewNote: '組合がプランの公開状態・掲載元を変えたため、取り下げました',
+            updatedAt: sql`now()`,
+          })
+          .where(and(eq(menuRevisions.menuId, menuId), eq(menuRevisions.status, 'pending')));
+      }
 
       await tx
         .insert(menuTranslations)

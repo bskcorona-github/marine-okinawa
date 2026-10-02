@@ -1,7 +1,7 @@
 'use client';
 
 import { useActionState, useState } from 'react';
-import { Notice } from '@/components/admin/page-header';
+import { Notice } from '@/components/backoffice/page-header';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import type { OperatorResponse } from '@/modules/partner/requests';

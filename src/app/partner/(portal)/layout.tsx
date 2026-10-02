@@ -1,12 +1,10 @@
-import { eq } from 'drizzle-orm';
 import { Waves } from 'lucide-react';
 import Link from 'next/link';
-import { SignOutButton } from '@/app/admin/(protected)/sign-out-button';
+import { SignOutButton } from '@/components/backoffice/sign-out-button';
 import { PartnerNav } from '@/components/partner/partner-nav';
 import { db } from '@/db';
-import { operators, shops } from '@/db/schema';
 import { requireOperator } from '@/modules/auth/guard';
-import { listAwaitingReport } from '@/modules/partner/bookings';
+import { countAwaitingReport, getPortalHeader } from '@/modules/partner/bookings';
 import { countPendingRequests } from '@/modules/partner/requests';
 import { telHref } from '@/modules/shop/contact';
 
@@ -14,20 +12,15 @@ import { telHref } from '@/modules/shop/contact';
 export default async function PartnerPortalLayout({ children }: LayoutProps<'/partner'>) {
   const operator = await requireOperator();
   const now = new Date();
-  const [[row], pending, started] = await Promise.all([
-    db
-      .select({ name: operators.name, shopName: shops.name, profile: shops.profile })
-      .from(operators)
-      .innerJoin(shops, eq(shops.id, operators.shopId))
-      .where(eq(operators.id, operator.operatorId)),
+  const [row, pending, awaitingReport] = await Promise.all([
+    getPortalHeader(db, operator.operatorId),
     countPendingRequests(db, operator.operatorId),
-    listAwaitingReport(db, { operatorId: operator.operatorId, now }),
+    countAwaitingReport(db, { operatorId: operator.operatorId, now }),
   ]);
-  const awaitingReport = started.length;
   const contact = row?.profile;
   return (
     <div className="min-h-screen lg:flex">
-      <aside className="z-30 flex shrink-0 flex-col gap-3 bg-[#053a40] px-3 py-3 text-white lg:sticky lg:top-0 lg:h-screen lg:w-60 lg:px-4 lg:py-5">
+      <aside className="on-dark z-30 flex shrink-0 flex-col gap-3 bg-[#053a40] px-3 py-3 text-white lg:sticky lg:top-0 lg:h-screen lg:w-60 lg:px-4 lg:py-5">
         <div className="flex items-center justify-between gap-3 lg:mb-4">
           <Link href="/partner" className="flex min-w-0 items-center gap-2" title={row?.name}>
             <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-white/10">
@@ -53,6 +46,9 @@ export default async function PartnerPortalLayout({ children }: LayoutProps<'/pa
           <p className="truncate" title={operator.email}>
             {operator.email}
           </p>
+          <Link href="/partner/password" className="inline-flex min-h-9 items-center underline pointer-coarse:min-h-11">
+            パスワードを変更
+          </Link>
           <SignOutButton />
         </div>
       </aside>

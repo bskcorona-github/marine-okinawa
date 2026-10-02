@@ -3,7 +3,6 @@ import { getTestDb, resetDb } from '../../../tests/helpers/db';
 import { seedShop } from '../../../tests/helpers/fixtures';
 import {
   createOperator,
-  formatPeriodLines,
   getOperatorForAdmin,
   operatorInputSchema,
   parsePeriodLines,
@@ -27,15 +26,6 @@ describe('parsePeriodLines', () => {
   it('不正な行は行番号を返す', () => {
     expect(parsePeriodLines('2026-06-06\n2026-02-30')).toEqual({ ok: false, line: 2 });
     expect(parsePeriodLines('2026-06-10〜2026-06-01')).toEqual({ ok: false, line: 1 });
-  });
-
-  it('期間を入力形式に戻せる', () => {
-    expect(
-      formatPeriodLines([
-        { startDate: '2026-06-06', endDate: '2026-06-06' },
-        { startDate: '2026-08-01', endDate: '2026-08-31' },
-      ]),
-    ).toBe('2026-06-06\n2026-08-01〜2026-08-31');
   });
 });
 

@@ -2,11 +2,11 @@
 
 import { headers } from 'next/headers';
 import { db } from '@/db';
-import { getEnv } from '@/lib/env';
-import { getMailer } from '@/modules/notification/mailer';
 import { sendApplicationMails } from '@/modules/notification/send-application-mails';
-import { applicationInputSchema, createApplication } from '@/modules/partner/applications';
-import { addDocument, DOCUMENT_KIND_LABELS, type DocumentKind } from '@/modules/partner/documents';
+import { sendQuietly } from '@/modules/notification/send-quietly';
+import { applicationInputSchema } from '@/modules/partner/applications';
+import type { DocumentKind } from '@/modules/partner/documents';
+import { createApplicationWithDocuments } from '@/modules/partner/application-submit';
 import { clientIp, consumeRateLimit } from '@/modules/security/rate-limit';
 import { getCurrentShop } from '@/modules/shop/shops';
 import { checkFile } from '@/modules/storage/files';
@@ -18,8 +18,6 @@ import { MAX_FILES_PER_FIELD, MAX_TOTAL_UPLOAD } from './limits';
 const APPLY_IP_LIMIT = { limit: 3, windowSec: 3600 };
 const APPLY_EMAIL_LIMIT = { limit: 2, windowSec: 86_400 };
 const APPLY_UNKNOWN_IP_LIMIT = { limit: 20, windowSec: 3600 };
-
-/** 1 つの欄に添付できるファイルの数 */
 
 /** 添付の欄と、資料の種類 */
 const FILE_FIELDS: { name: string; kind: DocumentKind }[] = [
@@ -82,26 +80,16 @@ export async function submitApplication(_prev: ApplyState, formData: FormData): 
   if (!allowed) return { error: 'RATE_LIMITED' };
 
   const shop = await getCurrentShop(db);
-  const { id } = await createApplication(db, { shopId: shop.id, input: parsed.data, now: new Date() });
-  const store = getFileStore();
-  for (const file of files) {
-    await addDocument(db, store, {
-      shopId: shop.id,
-      owner: { applicationId: id },
-      document: {
-        kind: file.kind,
-        title: `${DOCUMENT_KIND_LABELS[file.kind]}（登録申請の添付：${file.name.slice(0, 60)}）`,
-        expiresOn: null,
-        note: '',
-        receivedVia: 'upload',
-      },
-      file,
-      actorId: null,
-    });
-  }
+  // 申請と添付はまとめて保存する（途中で失敗したら何も残さない）
+  const { id } = await createApplicationWithDocuments(db, getFileStore(), {
+    shopId: shop.id,
+    input: parsed.data,
+    files,
+    now: new Date(),
+  });
   // 保存できていれば受付済み。メールの失敗で送信し直させない（同じ申請が重ならないように）
-  await sendApplicationMails(db, getMailer(), { applicationId: id, appUrl: getEnv().APP_URL }).catch((error) =>
-    console.error('application mail failed', { applicationId: id, error }),
+  await sendQuietly('mail.application.failed', { applicationId: id }, (mailer, appUrl) =>
+    sendApplicationMails(db, mailer, { applicationId: id, appUrl }),
   );
   return { error: null, done: true };
 }

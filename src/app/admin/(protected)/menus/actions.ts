@@ -4,14 +4,17 @@ import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { db } from '@/db';
 import { isUuid } from '@/lib/validation';
-import type { UploadImageResult } from '@/components/admin/plan-images-field';
+import type { UploadImageResult } from '@/components/backoffice/plan-images-field';
 import type { AdminFormState } from '@/lib/zod-ja';
 import { requireAdmin } from '@/modules/auth/guard';
+import { changedFields } from '@/modules/audit/diff';
 import { writeAuditLog } from '@/modules/audit/log';
 import { createMenu, updateMenu } from '@/modules/catalog/menu-admin';
+import { getMenuForAdmin } from '@/modules/catalog/menus';
+import { menuToInput } from '@/modules/catalog/operator-plans';
 import { menuFormInvalid, parseMenuForm } from '@/modules/catalog/menu-form-data';
 import { PLAN_IMAGE_ERROR_LABELS, savePlanImage } from '@/modules/catalog/plan-images';
-import { setMenuCandidates } from '@/modules/partner/requests';
+import { listMenuCandidates, setMenuCandidates } from '@/modules/partner/requests';
 import { getFileStore } from '@/modules/storage/store';
 import { readUpload } from '@/modules/storage/upload';
 
@@ -30,22 +33,24 @@ export async function createMenuAction(_prev: MenuFormState, formData: FormData)
   const parsed = parseMenuForm(formData);
   if (!parsed.success) return menuFormInvalid(parsed.error);
   // プランと実施候補は一緒に保存する（候補の保存で失敗したら、プランも保存しない）
+  // プラン・実施候補・履歴は一緒に保存する（どれかで失敗したら、どれも保存しない）
   const result = await db.transaction(async (tx) => {
     const saved = await createMenu(tx, admin.shopId, parsed.data);
     if (saved.ok) {
-      await setMenuCandidates(tx, { shopId: admin.shopId, menuId: saved.menuId, operatorIds: candidateIds(formData) });
+      const operatorIds = candidateIds(formData);
+      await setMenuCandidates(tx, { shopId: admin.shopId, menuId: saved.menuId, operatorIds });
+      await writeAuditLog(tx, {
+        shopId: admin.shopId,
+        actorId: admin.userId,
+        action: 'menu.create',
+        targetType: 'menu',
+        targetId: saved.menuId,
+        after: { ...parsed.data, candidateIds: operatorIds },
+      });
     }
     return saved;
   });
   if (!result.ok) return { error: ERROR_LABELS[result.error] };
-  await writeAuditLog(db, {
-    shopId: admin.shopId,
-    actorId: admin.userId,
-    action: 'menu.create',
-    targetType: 'menu',
-    targetId: result.menuId,
-    after: parsed.data,
-  });
   revalidatePath('/', 'layout');
   redirect(`/admin/menus/${result.menuId}/schedule?created=1`);
 }
@@ -59,20 +64,34 @@ export async function updateMenuAction(
   if (!isUuid(menuId)) redirect('/admin/menus');
   const parsed = parseMenuForm(formData);
   if (!parsed.success) return menuFormInvalid(parsed.error);
+  // プラン・実施候補・履歴（変わった項目の前後）は一緒に保存する
   const result = await db.transaction(async (tx) => {
+    const current = await getMenuForAdmin(tx, admin.shopId, menuId);
+    const beforeCandidates = current
+      ? (await listMenuCandidates(tx, { shopId: admin.shopId, menuId, includeSuspended: true })).map((o) => o.id)
+      : [];
     const saved = await updateMenu(tx, admin.shopId, menuId, parsed.data);
-    if (saved.ok) await setMenuCandidates(tx, { shopId: admin.shopId, menuId, operatorIds: candidateIds(formData) });
+    if (saved.ok && current) {
+      const operatorIds = candidateIds(formData);
+      await setMenuCandidates(tx, { shopId: admin.shopId, menuId, operatorIds });
+      const afterCandidates = (
+        await listMenuCandidates(tx, { shopId: admin.shopId, menuId, includeSuspended: true })
+      ).map((o) => o.id);
+      await writeAuditLog(tx, {
+        shopId: admin.shopId,
+        actorId: admin.userId,
+        action: 'menu.update',
+        targetType: 'menu',
+        targetId: menuId,
+        ...changedFields(
+          { ...menuToInput(current), candidateIds: beforeCandidates },
+          { ...parsed.data, candidateIds: afterCandidates },
+        ),
+      });
+    }
     return saved;
   });
   if (!result.ok) return { error: ERROR_LABELS[result.error] };
-  await writeAuditLog(db, {
-    shopId: admin.shopId,
-    actorId: admin.userId,
-    action: 'menu.update',
-    targetType: 'menu',
-    targetId: menuId,
-    after: { ...parsed.data, candidateIds: candidateIds(formData) },
-  });
   revalidatePath('/', 'layout');
   // saved に時刻を入れて、保存後にフォームを作り直す（未保存の印を消す）
   redirect(`/admin/menus/${menuId}?saved=${Date.now()}`);

@@ -1,7 +1,7 @@
 import { AlertTriangle, ChevronRight } from 'lucide-react';
 import Link from 'next/link';
-import { ExpiryBadge } from '@/components/admin/expiry-badge';
-import { PageHeader, Panel } from '@/components/admin/page-header';
+import { ExpiryBadge } from '@/components/backoffice/expiry-badge';
+import { Notice, PageHeader, Panel } from '@/components/backoffice/page-header';
 import { OperatorBookingRow } from '@/components/partner/booking-row';
 import { db } from '@/db';
 import { addDays, formatDateLabel, localDate, localTime, zonedToUtc } from '@/lib/dates';
@@ -33,8 +33,9 @@ const CHANGE_LABELS: Record<RecentChangeKind, string> = {
   items: '人数・内容が変わりました',
 };
 
-export default async function PartnerHomePage() {
+export default async function PartnerHomePage({ searchParams }: PageProps<'/partner'>) {
   const operator = await requireOperator();
+  const sp = await searchParams;
   const shop = await getShopById(db, operator.shopId);
   const now = new Date();
   const today = localDate(now, shop.timezone);
@@ -42,6 +43,7 @@ export default async function PartnerHomePage() {
     listOperatorRequests(db, { operatorId: operator.operatorId, status: ['pending'], limit: 20 }),
     listOperatorBookings(db, {
       operatorId: operator.operatorId,
+      now,
       from: now,
       to: zonedToUtc(addDays(today, UPCOMING_DAYS), '00:00', shop.timezone),
     }),
@@ -73,6 +75,7 @@ export default async function PartnerHomePage() {
         title="ホーム"
         description={`${shop.name}からの受入確認と、自社で実施する予約です。お客様の連絡先は、予約が確定したあとに表示します。`}
       />
+      {sp.password === 'changed' && <Notice tone="success">パスワードを変更しました。</Notice>}
 
       <Panel
         title={`回答待ちの受入確認（${pending.length} 件）`}

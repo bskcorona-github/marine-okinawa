@@ -1,11 +1,11 @@
 import { and, asc, count, eq, inArray, sql } from 'drizzle-orm';
 import { z } from 'zod';
-import type { DbOrTx } from '@/db/client';
+import type { Db, DbOrTx } from '@/db/client';
 import { isUniqueViolation } from '@/db/errors';
 import { activities, menuCategory, menus } from '@/db/schema';
+import { changedFields } from '@/modules/audit/diff';
+import { writeAuditLog } from '@/modules/audit/log';
 import { PUBLIC_MENU_STATUSES } from './menus';
-
-export type Activity = typeof activities.$inferSelect;
 
 /**
  * 公開サイトの「アクティビティから探す」。公開中のアクティビティのうち、公開中・受付停止中のプランが
@@ -89,24 +89,42 @@ export type ActivityInput = z.infer<typeof activityInputSchema>;
 
 /** アクティビティを作る・更新する（activityId がなければ作る）。URL（slug）が重なれば SLUG_TAKEN */
 export async function saveActivity(
-  db: DbOrTx,
-  params: { shopId: string; activityId?: string; input: ActivityInput },
+  db: Db,
+  params: { shopId: string; activityId?: string; input: ActivityInput; actorId?: string | null },
 ): Promise<{ ok: true; activityId: string } | { ok: false; error: 'SLUG_TAKEN' | 'NOT_FOUND' }> {
   try {
-    if (params.activityId) {
-      const [row] = await db
-        .update(activities)
-        .set(params.input)
-        .where(and(eq(activities.id, params.activityId), eq(activities.shopId, params.shopId)))
-        .returning({ id: activities.id });
-      return row ? { ok: true, activityId: row.id } : { ok: false, error: 'NOT_FOUND' };
-    }
-    const [row] = await db
-      .insert(activities)
-      .values({ shopId: params.shopId, ...params.input })
-      .returning({ id: activities.id });
-    return { ok: true, activityId: row.id };
+    return await db.transaction(async (tx) => {
+      let before: Record<string, unknown> | null = null;
+      let activityId: string;
+      if (params.activityId) {
+        const [current] = await tx
+          .select()
+          .from(activities)
+          .where(and(eq(activities.id, params.activityId), eq(activities.shopId, params.shopId)))
+          .for('update');
+        if (!current) return { ok: false, error: 'NOT_FOUND' } as const;
+        before = Object.fromEntries(Object.keys(params.input).map((k) => [k, current[k as keyof typeof current]]));
+        await tx.update(activities).set(params.input).where(eq(activities.id, current.id));
+        activityId = current.id;
+      } else {
+        const [row] = await tx
+          .insert(activities)
+          .values({ shopId: params.shopId, ...params.input })
+          .returning({ id: activities.id });
+        activityId = row.id;
+      }
+      await writeAuditLog(tx, {
+        shopId: params.shopId,
+        actorId: params.actorId ?? null,
+        action: params.activityId ? 'activity.update' : 'activity.create',
+        targetType: 'activity',
+        targetId: activityId,
+        ...changedFields(before, params.input),
+      });
+      return { ok: true, activityId } as const;
+    });
   } catch (error) {
+    // URL 名の重複（トランザクションの外で受ける）
     if (isUniqueViolation(error)) return { ok: false, error: 'SLUG_TAKEN' };
     throw error;
   }

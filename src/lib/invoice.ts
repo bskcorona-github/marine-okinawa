@@ -1,8 +1,6 @@
 import { z } from 'zod';
 import { isInvoiceNumber, normalizeInvoiceNumber } from './invoice-number';
 
-export { normalizeInvoiceNumber } from './invoice-number';
-
 /** インボイスの登録番号の入力（空欄、または T と 13 桁の数字） */
 export const invoiceNumberSchema = z.preprocess(
   (v) => (typeof v === 'string' ? normalizeInvoiceNumber(v) : v),

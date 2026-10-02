@@ -1,11 +1,14 @@
-import { ConfirmDialog } from '@/components/admin/confirm-dialog';
-import { Notice, Panel } from '@/components/admin/page-header';
-import { SubmitButton } from '@/components/admin/submit-button';
+import { ConfirmDialog } from '@/components/backoffice/confirm-dialog';
+import { Notice, Panel } from '@/components/backoffice/page-header';
+import { SubmitButton } from '@/components/backoffice/submit-button';
 import { Textarea } from '@/components/ui/textarea';
 import type { menuRevisions } from '@/db/schema';
+import { formatYen } from '@/lib/format';
+import { cn } from '@/lib/utils';
 import type { MenuInput } from '@/modules/catalog/menu-admin';
 import type { AdminMenu } from '@/modules/catalog/menus';
-import { diffPlanInput, menuToInput } from '@/modules/catalog/operator-plans';
+import { MENU_FIELD_LABELS } from '@/modules/catalog/menu-form-data';
+import { diffPlanInput, menuToInput, mergePlanRevision } from '@/modules/catalog/operator-plans';
 import {
   approvePublishAction,
   approveRevisionAction,
@@ -54,7 +57,15 @@ export function ReviewPanel({
   activityName: (id: string | null) => string;
 }) {
   if (menu.reviewStatus !== 'pending' && !revision) return null;
-  const changes = revision ? diffPlanInput(menuToInput(menu), revision.data as MenuInput, activityName) : [];
+  const current = menuToInput(menu);
+  // 承認したときに反映される内容：申請のもとにした内容から事業者が変えた項目だけを、今の内容に重ねる
+  const merged = revision
+    ? revision.baseData
+      ? mergePlanRevision(revision.baseData as MenuInput, current, revision.data as MenuInput)
+      : { input: revision.data as MenuInput, conflicts: [] }
+    : null;
+  const changes = merged ? diffPlanInput(current, merged.input, activityName) : [];
+  const conflictLabels = (merged?.conflicts ?? []).map((field) => MENU_FIELD_LABELS[field] ?? field);
   return (
     <section id="review" className="scroll-mt-6 space-y-4">
       {menu.reviewStatus === 'pending' && (
@@ -64,6 +75,7 @@ export function ReviewPanel({
         >
           <div className="flex flex-wrap items-start gap-6">
             <form action={approvePublishAction.bind(null, menu.id)}>
+              <input type="hidden" name="seenUpdatedAt" value={menu.updatedAt.toISOString()} />
               <ConfirmDialog
                 tone="default"
                 triggerLabel="承認して公開する"
@@ -71,6 +83,17 @@ export function ReviewPanel({
                 confirmLabel="公開する"
               >
                 <p>お客様のサイトに表示し、申込を受け付けます。事業者には結果をメールで知らせます。</p>
+                <div className="rounded-lg border border-slate-200 p-3">
+                  <p className="mb-1 font-medium">料金（このまま公開します）</p>
+                  <ul className="space-y-0.5 tabular-nums">
+                    {menu.prices.map((p) => (
+                      <li key={p.id} className={cn(p.price === 0 && 'font-semibold text-amber-800')}>
+                        {p.label}：{formatYen(p.price)}
+                        {p.price === 0 && '（無料）'}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
               </ConfirmDialog>
             </form>
             <div className="min-w-64 flex-1">
@@ -82,7 +105,7 @@ export function ReviewPanel({
       {revision && (
         <Panel
           title="内容の変更の申請"
-          description={`${operatorName ?? '事業者'}から、公開中のプランの変更の申請がありました（${at(revision.updatedAt)}）。承認すると、公開中の内容を申請の内容に変えます。`}
+          description={`${operatorName ?? '事業者'}から、公開中のプランの変更の申請がありました（${at(revision.updatedAt)}）。承認すると、事業者が変えた項目を公開中の内容に反映します。`}
         >
           <div className="space-y-4 text-sm">
             {revision.note && (
@@ -90,10 +113,18 @@ export function ReviewPanel({
                 事業者からのひとこと：{revision.note}
               </p>
             )}
-            {menu.updatedAt > revision.updatedAt && (
-              <Notice tone="warning">
-                申請のあとに、組合がこのプランを直しています。承認すると、申請の内容で上書きします（下の差分は今の内容との違いです）。
+            {conflictLabels.length > 0 ? (
+              <Notice tone="error">
+                申請のあとに組合が同じ項目（{conflictLabels.join('・')}
+                ）を直したため、このままでは承認できません。差し戻して、事業者にもう一度申請してもらってください。
               </Notice>
+            ) : (
+              revision.baseData &&
+              menu.updatedAt > revision.createdAt && (
+                <Notice tone="info">
+                  申請のあとに組合が直した項目は、そのまま残します（下の差分は、承認すると変わるところです）。
+                </Notice>
+              )
             )}
             {changes.length === 0 ? (
               <p className="text-slate-600">今の内容と違うところはありません。</p>
@@ -131,13 +162,16 @@ export function ReviewPanel({
             )}
             <div className="flex flex-wrap items-start gap-6">
               <form action={approveRevisionAction.bind(null, menu.id)}>
+                <input type="hidden" name="seenRevisionId" value={revision.id} />
+                <input type="hidden" name="seenUpdatedAt" value={revision.updatedAt.toISOString()} />
                 <ConfirmDialog
                   tone="default"
+                  disabled={conflictLabels.length > 0}
                   triggerLabel="承認して反映する"
                   title="変更を反映しますか？"
                   confirmLabel="反映する"
                 >
-                  <p>公開中のプランを申請の内容に変えます。事業者には結果をメールで知らせます。</p>
+                  <p>上の差分を公開中のプランに反映します。事業者には結果をメールで知らせます。</p>
                 </ConfirmDialog>
               </form>
               <div className="min-w-64 flex-1">

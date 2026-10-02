@@ -1,6 +1,7 @@
 import { ChevronRight } from 'lucide-react';
 import Link from 'next/link';
-import { PageHeader } from '@/components/admin/page-header';
+import { PageHeader } from '@/components/backoffice/page-header';
+import { REQUEST_STATUS_TONE } from '@/components/backoffice/request-status-tone';
 import { db } from '@/db';
 import { formatDateLabel, localTime } from '@/lib/dates';
 import { cn } from '@/lib/utils';
@@ -11,14 +12,6 @@ import { REQUEST_STATUS_LABELS, listOperatorRequests } from '@/modules/partner/r
 import { getShopById } from '@/modules/shop/shops';
 
 export const metadata = { title: '受入確認' };
-
-const TONE: Record<string, string> = {
-  pending: 'bg-orange-100 text-orange-900',
-  accepted: 'bg-emerald-100 text-emerald-900',
-  conditional: 'bg-sky-100 text-sky-900',
-  declined: 'bg-slate-200 text-slate-700',
-  withdrawn: 'bg-slate-100 text-slate-600',
-};
 
 export default async function PartnerRequestsPage() {
   const operator = await requireOperator();
@@ -66,7 +59,7 @@ export default async function PartnerRequestsPage() {
                 <span
                   className={cn(
                     'rounded-full px-2.5 py-0.5 text-xs font-semibold',
-                    confirmedForMe ? TONE.accepted : closed ? TONE.withdrawn : TONE[r.status],
+                    REQUEST_STATUS_TONE[confirmedForMe ? 'accepted' : closed ? 'withdrawn' : r.status],
                   )}
                 >
                   {confirmedForMe

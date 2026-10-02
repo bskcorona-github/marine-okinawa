@@ -4,7 +4,7 @@ import { CheckCircle2 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { startTransition, useActionState, useState, type FormEvent, type ReactNode } from 'react';
 import { Phrase } from '@/components/site/phrase';
-import { FileInput } from '@/components/admin/file-input';
+import { FileInput } from '@/components/backoffice/file-input';
 import { Link } from '@/i18n/navigation';
 import { isInvoiceNumber, normalizeInvoiceNumber } from '@/lib/invoice-number';
 import { useHydrated } from '@/lib/use-hydrated';

@@ -1,5 +1,5 @@
 import { notFound } from 'next/navigation';
-import { ScheduleEditor } from '@/components/admin/schedule-editor';
+import { ScheduleEditor } from '@/components/backoffice/schedule-editor';
 import { db } from '@/db';
 import { isUuid } from '@/lib/validation';
 import { requireAdmin } from '@/modules/auth/guard';

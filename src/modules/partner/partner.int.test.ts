@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { bookings, menus, operatorMembers, operators, shops, user } from '@/db/schema';
+import { auditLogs, bookings, menus, operatorMembers, operators, shops, user } from '@/db/schema';
 import { getTestDb, resetDb } from '../../../tests/helpers/db';
 import { seedMenu, seedShop, seedSlot } from '../../../tests/helpers/fixtures';
 import { changeBookingStatus } from '../booking/change-status';
@@ -220,10 +220,10 @@ describe('事業者の予約と催行報告', () => {
   it('自社に割り当てられた確定予約だけが見え、連絡先は氏名と電話だけ', async () => {
     const { a, b, bookingId, change } = await setup();
     await db.update(bookings).set({ operatorId: a.id }).where(eq(bookings.id, bookingId));
-    expect(await getOperatorBooking(db, { operatorId: a.id, bookingId })).toBeNull();
+    expect(await getOperatorBooking(db, { operatorId: a.id, bookingId, now: NOW })).toBeNull();
     await change('awaiting_payment');
     await change('confirmed', { payment: { amount: 10000, receivedAt: NOW } });
-    const booking = await getOperatorBooking(db, { operatorId: a.id, bookingId });
+    const booking = await getOperatorBooking(db, { operatorId: a.id, bookingId, now: NOW });
     expect(booking).toMatchObject({
       contactName: '沖縄 太郎',
       contactPhone: '+819012345678',
@@ -231,13 +231,13 @@ describe('事業者の予約と催行報告', () => {
     });
     expect(Object.keys(booking!)).not.toContain('contactEmail');
     expect(Object.keys(booking!)).not.toContain('adminNote');
-    expect(await getOperatorBooking(db, { operatorId: b.id, bookingId })).toBeNull();
-    expect(await listOperatorBookings(db, { operatorId: b.id })).toEqual([]);
-    expect(await listOperatorBookings(db, { operatorId: a.id })).toHaveLength(1);
+    expect(await getOperatorBooking(db, { operatorId: b.id, bookingId, now: NOW })).toBeNull();
+    expect(await listOperatorBookings(db, { operatorId: b.id, now: NOW })).toEqual([]);
+    expect(await listOperatorBookings(db, { operatorId: a.id, now: NOW })).toHaveLength(1);
 
     // 取り消した予約は結果として見えるが、代表者の連絡先は出さない
     await change('cancelled', { cancel: { category: 'customer' }, refundDueAmount: 10000 });
-    expect(await getOperatorBooking(db, { operatorId: a.id, bookingId })).toMatchObject({
+    expect(await getOperatorBooking(db, { operatorId: a.id, bookingId, now: NOW })).toMatchObject({
       status: 'cancelled',
       contactName: null,
       contactPhone: null,
@@ -488,8 +488,12 @@ describe('事業者アカウント・資料・登録申請・更新申請', () =
         actorId: null,
         now: NOW,
       }),
-    ).toBe(true);
+    ).toBe('ok');
     expect(await getOperatorProfile(db, a.id)).toMatchObject({ phone: '098-999-0000', contactHours: '8:00〜17:00' });
+    // 履歴には変わった項目の前後だけ（口座などの値は残さない）
+    const [log] = await db.select().from(auditLogs).where(eq(auditLogs.action, 'operator.change_approve'));
+    expect(log.before).toMatchObject({ phone: expect.any(String) });
+    expect(log.after).toMatchObject({ phone: '098-999-0000', requestId: submitted.requestId });
     // 反映済みの申請はもう一度処理できない
     expect(
       await reviewChangeRequest(db, {
@@ -500,7 +504,7 @@ describe('事業者アカウント・資料・登録申請・更新申請', () =
         actorId: null,
         now: NOW,
       }),
-    ).toBe(false);
+    ).toBe('done');
     expect((await db.select().from(menus)).length).toBeGreaterThan(0);
   });
 });

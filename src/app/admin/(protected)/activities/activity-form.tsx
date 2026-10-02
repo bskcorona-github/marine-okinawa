@@ -1,9 +1,9 @@
 'use client';
 
 import { startTransition, useActionState, type FormEvent } from 'react';
-import { SELECT_CLASS } from '@/components/admin/field-styles';
-import { StickySaveBar, useUnsavedChanges } from '@/components/admin/form-kit';
-import { Panel } from '@/components/admin/page-header';
+import { SELECT_CLASS } from '@/components/backoffice/field-styles';
+import { StickySaveBar, useUnsavedChanges } from '@/components/backoffice/form-kit';
+import { Panel } from '@/components/backoffice/page-header';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';

@@ -16,6 +16,8 @@ type Props = {
   tone?: 'danger' | 'default';
   triggerClassName?: string;
   disabled?: boolean;
+  /** 押せない理由などの説明の要素の id（読み上げでボタンと結びつける） */
+  describedBy?: string;
 };
 
 function ConfirmButton({
@@ -60,6 +62,7 @@ export function ConfirmDialog({
   tone = 'danger',
   triggerClassName,
   disabled,
+  describedBy,
 }: Props) {
   const ref = useRef<HTMLDialogElement>(null);
   const titleId = useId();
@@ -70,6 +73,7 @@ export function ConfirmDialog({
         variant={tone === 'danger' ? 'destructive' : 'outline'}
         className={triggerClassName}
         disabled={disabled}
+        aria-describedby={describedBy}
         onClick={() => ref.current?.showModal()}
       >
         {triggerLabel}
@@ -77,16 +81,16 @@ export function ConfirmDialog({
       <dialog
         ref={ref}
         aria-labelledby={titleId}
-        className="m-auto w-[min(32rem,calc(100vw-2rem))] rounded-2xl bg-white p-0 text-slate-900 shadow-xl backdrop:bg-slate-900/50"
+        className="m-auto max-h-[calc(100dvh-2rem)] w-[min(32rem,calc(100vw-2rem))] overflow-hidden rounded-2xl bg-white p-0 text-slate-900 shadow-xl backdrop:bg-slate-900/50"
         // 背景（ダイアログの外側）をクリックしたら閉じる
         onClick={(event) => event.target === ref.current && ref.current?.close()}
       >
-        <div className="space-y-4 p-5">
-          <h2 id={titleId} className="text-lg font-bold">
+        <div className="flex max-h-[calc(100dvh-2rem)] flex-col">
+          <h2 id={titleId} className="px-5 pt-5 pb-3 text-lg font-bold">
             {title}
           </h2>
-          <div className="space-y-3 text-sm">{children}</div>
-          <div className="flex flex-wrap justify-end gap-2 border-t border-slate-100 pt-4">
+          <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-5 pb-4 text-sm">{children}</div>
+          <div className="flex flex-wrap justify-end gap-2 border-t border-slate-100 px-5 py-4">
             <Button type="button" variant="outline" onClick={() => ref.current?.close()}>
               やめる
             </Button>

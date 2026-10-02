@@ -6,7 +6,7 @@ import { seedMenu, seedShop, seedSlot } from '../../../tests/helpers/fixtures';
 import { changeBookingSlot } from '../booking/change-slot';
 import { assignOperator, changeBookingStatus } from '../booking/change-status';
 import { createBooking } from '../booking/create-booking';
-import { getOperatorSummary } from '../booking/queries';
+import { getOperatorSummary } from '../booking/reports';
 import { listAwaitingReport, listRecentChanges } from './bookings';
 
 const db = getTestDb();

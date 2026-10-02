@@ -3,9 +3,10 @@ import { alias } from 'drizzle-orm/pg-core';
 import type { DbOrTx } from '@/db/client';
 import { activities, menuImages, menuPrices, menuRevisions, menus, menuTranslations, operators } from '@/db/schema';
 import { basePriceOf } from './base-price';
+import { DEFAULT_LOCALE } from '@/lib/locale';
 import { listActivePriceRows, listSeasonPeriods, type PriceRow } from './prices';
 
-export const DEFAULT_LOCALE = 'ja';
+export { DEFAULT_LOCALE };
 
 // 指定ロケールの翻訳 → なければ日本語
 const tr = alias(menuTranslations, 'tr');

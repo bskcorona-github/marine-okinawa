@@ -1,16 +1,23 @@
 'use client';
 
 import { startTransition, useActionState, useState, type FormEvent } from 'react';
-import { SELECT_CLASS } from '@/components/admin/field-styles';
-import { StickySaveBar, useUnsavedChanges } from '@/components/admin/form-kit';
-import { PlanImagesField, type UploadImageResult } from '@/components/admin/plan-images-field';
+import { SELECT_CLASS } from '@/components/backoffice/field-styles';
+import { StickySaveBar, useUnsavedChanges } from '@/components/backoffice/form-kit';
+import { PlanImagesField, type UploadImageResult } from '@/components/backoffice/plan-images-field';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
 import { Textarea } from '@/components/ui/textarea';
 import { MENU_CATEGORY_LABELS, MENU_STATUS_LABELS } from '@/modules/booking/labels';
-import type { MenuFormState } from './actions';
+import type { AdminFormState as MenuFormState } from '@/lib/zod-ja';
+import { isPerPerson } from '@/modules/catalog/capacity-unit';
+import { SEASON_LABELS, type Season } from '@/modules/catalog/season';
+
+/** 必須の欄の印（色だけでなく文字でも伝える） */
+function RequiredMark() {
+  return <span className="ml-1.5 rounded bg-red-50 px-1.5 py-0.5 text-xs font-semibold text-red-700">必須</span>;
+}
 
 export type MenuFormValues = {
   slug: string;
@@ -40,7 +47,8 @@ export type MenuFormValues = {
   conditions: string;
   notes: string;
   images: string[];
-  prices: { id?: string; label: string; price: number; season: string | null; meetingPoint: string | null }[];
+  /** 料金（null は未入力。新しいプランは空欄から） */
+  prices: { id?: string; label: string; price: number | null; season: string | null; meetingPoint: string | null }[];
   includedGuests: number | null;
   extraGuestPrice: number | null;
   maxGuests: number | null;
@@ -66,6 +74,8 @@ type Props = {
   uploadImage: (formData: FormData) => Promise<UploadImageResult>;
   /** 公開中のプランの変更を申請するときの、組合へのひとこと（事業者画面だけ） */
   noteField?: { label: string; defaultValue: string };
+  /** 一緒に送る値（フォームを開いたときのプランの更新日時など） */
+  hiddenFields?: Record<string, string>;
 };
 
 type PriceRow = { key: string; id?: string; label: string; price: string; season: string; meetingPoint: string };
@@ -84,6 +94,7 @@ export function MenuForm({
   mode = 'admin',
   uploadImage,
   noteField,
+  hiddenFields,
 }: Props) {
   const admin = mode === 'admin';
   const [state, formAction, pending] = useActionState(action, { error: null });
@@ -95,7 +106,7 @@ export function MenuForm({
       key: newKey(),
       id: p.id,
       label: p.label,
-      price: String(p.price),
+      price: p.price === null ? '' : String(p.price),
       season: p.season ?? '',
       meetingPoint: p.meetingPoint ?? '',
     })),
@@ -114,9 +125,14 @@ export function MenuForm({
   };
   const update = (key: string, patch: Partial<PriceRow>) =>
     changePrices((rows) => rows.map((r) => (r.key === key ? { ...r, ...patch } : r)));
+  // 0 円の区分（無料の区分のときだけ。入れ忘れに気づけるように知らせる）
+  const freeRows = prices.filter((r) => r.price.trim() !== '' && Number(r.price) === 0);
 
   return (
     <form method="post" onSubmit={onSubmit} onChange={markDirty} className="max-w-2xl space-y-6">
+      {Object.entries(hiddenFields ?? {}).map(([name, value]) => (
+        <input key={name} type="hidden" name={name} value={value} />
+      ))}
       <input
         type="hidden"
         name="prices"
@@ -133,14 +149,20 @@ export function MenuForm({
       <section className="space-y-3 rounded-lg border bg-white p-4">
         <h2 className="font-semibold">基本情報</h2>
         <div className="space-y-1">
-          <Label htmlFor="title">プラン名</Label>
+          <Label htmlFor="title">
+            プラン名
+            <RequiredMark />
+          </Label>
           <Input id="title" name="title" defaultValue={initial.title} required />
         </div>
         {admin && (
           <div className="space-y-3">
             <div className="grid gap-3 sm:grid-cols-3">
               <div className="space-y-1 sm:col-span-2">
-                <Label htmlFor="slug">URL 名（半角英小文字・数字・ハイフン）</Label>
+                <Label htmlFor="slug">
+                  URL 名（半角英小文字・数字・ハイフン）
+                  <RequiredMark />
+                </Label>
                 <Input id="slug" name="slug" defaultValue={initial.slug} required pattern="[a-z0-9]+(-[a-z0-9]+)*" />
               </div>
               <div className="space-y-1">
@@ -222,7 +244,10 @@ export function MenuForm({
             </select>
           </div>
           <div className="space-y-1">
-            <Label htmlFor="durationMin">所要時間（分）</Label>
+            <Label htmlFor="durationMin">
+              所要時間（分）
+              <RequiredMark />
+            </Label>
             <Input
               id="durationMin"
               name="durationMin"
@@ -237,7 +262,10 @@ export function MenuForm({
             <Input id="minAge" name="minAge" type="number" min={0} defaultValue={initial.minAge ?? ''} />
           </div>
           <div className="space-y-1">
-            <Label htmlFor="maxPartySize">1 予約の最大人数</Label>
+            <Label htmlFor="maxPartySize">
+              1 予約の最大人数
+              <RequiredMark />
+            </Label>
             <Input
               id="maxPartySize"
               name="maxPartySize"
@@ -248,9 +276,12 @@ export function MenuForm({
             />
           </div>
           {/* 最少人数は人数で数えるプランだけ（貸切は 1 回 1 艇） */}
-          {unit === '名' ? (
+          {isPerPerson(unit) ? (
             <div className="space-y-1">
-              <Label htmlFor="minPartySize">1 予約の最少人数</Label>
+              <Label htmlFor="minPartySize">
+                1 予約の最少人数
+                <RequiredMark />
+              </Label>
               <Input
                 id="minPartySize"
                 name="minPartySize"
@@ -265,7 +296,10 @@ export function MenuForm({
             <input type="hidden" name="minPartySize" value={1} />
           )}
           <div className="space-y-1">
-            <Label htmlFor="bookingCutoffMin">Web 予約の締切（開始何分前）</Label>
+            <Label htmlFor="bookingCutoffMin">
+              Web 予約の締切（開始何分前）
+              <RequiredMark />
+            </Label>
             <Input
               id="bookingCutoffMin"
               name="bookingCutoffMin"
@@ -304,7 +338,7 @@ export function MenuForm({
                   ))}
                 </select>
                 <p className="text-xs text-slate-600">
-                  事業者画面からこのプランを直せる事業者で、申込を受けたときに実施事業者として入ります（照会の回答や組合の選択で変わります）。
+                  事業者画面からこのプランを直せる事業者で、申込を受けたときに実施事業者として入ります（受入確認の回答や組合の選択で変わります）。
                 </p>
               </div>
               <div className="space-y-1">
@@ -328,7 +362,7 @@ export function MenuForm({
                         {o.status === 'suspended' && (
                           <span className="ml-1 text-xs text-slate-600">
                             {initial.candidateIds.includes(o.id)
-                              ? '（停止中のため照会には出ません。外すと、停止を解除するまで選び直せません）'
+                              ? '（停止中のため受入確認の候補に出ません。外すと、停止を解除するまで選び直せません）'
                               : '（停止中は選べません）'}
                           </span>
                         )}
@@ -365,7 +399,7 @@ export function MenuForm({
             )}
           </div>
         </div>
-        {unit !== '名' && (
+        {!isPerPerson(unit) && (
           <div className="grid gap-3 rounded-lg bg-slate-50 p-3 sm:grid-cols-2">
             <p className="text-sm font-medium sm:col-span-2">貸切の乗船人数と追加料金</p>
             <div className="space-y-1">
@@ -477,7 +511,9 @@ export function MenuForm({
             defaultValue={initial.cancellationPolicy}
           />
           <p className="text-xs text-slate-500">
-            すべてのプランに共通の規定は「設定」で入力します。ここにはこのプランだけの規定を書きます。
+            {admin
+              ? 'キャンセル料の率と共通の規定は「設定」から自動で表示します。ここには率を書かず、このプランだけの決まり（遅刻のときの扱いなど）を書いてください。'
+              : 'キャンセル料の率と共通の規定は組合が決め、自動で表示します。ここには率を書かず、このプランだけの決まり（遅刻のときの扱いなど）を書いてください。'}
           </p>
         </div>
         <div id="images" className="space-y-1">
@@ -501,7 +537,10 @@ export function MenuForm({
             className="grid grid-cols-[minmax(0,1fr)_7rem_auto] items-end gap-2 border-b border-slate-100 pb-3 last:border-0 sm:flex sm:flex-wrap sm:border-0 sm:pb-0"
           >
             <div className="col-span-3 space-y-1 sm:flex-1">
-              <Label htmlFor={`price-label-${row.key}`}>区分名</Label>
+              <Label htmlFor={`price-label-${row.key}`}>
+                区分名
+                <RequiredMark />
+              </Label>
               <Input
                 id={`price-label-${row.key}`}
                 value={row.label}
@@ -510,14 +549,19 @@ export function MenuForm({
               />
             </div>
             <div className="space-y-1 sm:w-32">
-              <Label htmlFor={`price-amount-${row.key}`}>料金（円・税込）</Label>
+              <Label htmlFor={`price-amount-${row.key}`}>
+                料金（円・税込）
+                <RequiredMark />
+              </Label>
               <Input
                 id={`price-amount-${row.key}`}
                 type="number"
                 inputMode="numeric"
                 min={0}
+                placeholder="例：8000"
                 value={row.price}
                 onChange={(e) => update(row.key, { price: e.target.value })}
+                aria-describedby={row.price === '0' ? `price-free-${row.key}` : undefined}
                 required
               />
             </div>
@@ -530,8 +574,11 @@ export function MenuForm({
                 className={cn(SELECT_CLASS, 'w-full')}
               >
                 <option value="">通年</option>
-                <option value="on">オン期</option>
-                <option value="off">オフ期</option>
+                {(Object.keys(SEASON_LABELS) as Season[]).map((s) => (
+                  <option key={s} value={s}>
+                    {SEASON_LABELS[s]}
+                  </option>
+                ))}
               </select>
             </div>
             <Button
@@ -543,7 +590,7 @@ export function MenuForm({
             >
               削除
             </Button>
-            {unit !== '名' && (
+            {!isPerPerson(unit) && (
               <div className="col-span-3 space-y-1 sm:w-full sm:basis-full">
                 <Label htmlFor={`price-meeting-${row.key}`}>集合場所（このコースだけ違う場合）</Label>
                 <Input
@@ -556,11 +603,21 @@ export function MenuForm({
             )}
           </div>
         ))}
+        {freeRows.length > 0 && (
+          <p
+            id={`price-free-${freeRows[0].key}`}
+            role="status"
+            className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900"
+          >
+            料金が 0 円の区分があります（{freeRows.map((r) => r.label || '名前なし').join('・')}
+            ）。無料で受け付ける区分（幼児など）のときだけ 0 にしてください。
+          </p>
+        )}
         <Button
           type="button"
           variant="outline"
           onClick={() =>
-            changePrices((rows) => [...rows, { key: newKey(), label: '', price: '0', season: '', meetingPoint: '' }])
+            changePrices((rows) => [...rows, { key: newKey(), label: '', price: '', season: '', meetingPoint: '' }])
           }
         >
           料金区分を追加

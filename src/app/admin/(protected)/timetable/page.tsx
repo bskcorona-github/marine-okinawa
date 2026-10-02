@@ -1,8 +1,8 @@
 import { CalendarDays, ChevronDown, ChevronLeft, ChevronRight, Users } from 'lucide-react';
 import Link from 'next/link';
-import { SELECT_CLASS } from '@/components/admin/field-styles';
-import { PageHeader } from '@/components/admin/page-header';
-import { SubmitOnChange } from '@/components/admin/submit-on-change';
+import { SELECT_CLASS } from '@/components/backoffice/field-styles';
+import { Notice, PageHeader } from '@/components/backoffice/page-header';
+import { SubmitOnChange } from '@/components/backoffice/submit-on-change';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { db } from '@/db';
 import { addDays, formatDateLabel, localDate, zonedToUtc } from '@/lib/dates';
@@ -14,7 +14,7 @@ import { splitPlanTitle } from '@/modules/catalog/display-title';
 import { listOperators } from '@/modules/catalog/menus';
 import { getTimetable, type TimetableRow } from '@/modules/inventory/queries';
 import { getShopById } from '@/modules/shop/shops';
-import { occupancyText, occupancyTone, TONE_STYLE, type LowStockThresholds } from '../occupancy';
+import { occupancyText, occupancyTone, TONE_STYLE, type LowStockThresholds } from '@/components/backoffice/occupancy';
 
 export const metadata = { title: 'タイムテーブル' };
 
@@ -142,6 +142,11 @@ export default async function TimetablePage({ searchParams }: PageProps<'/admin/
           </Link>
         }
       />
+      {sp.gone && (
+        <Notice tone="warning">
+          その回は見つかりませんでした（ほかの画面で開催時間を変え、回がなくなった可能性があります）。操作はしていません。
+        </Notice>
+      )}
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
         {summaries.map(({ title, date: d, summary }) => (

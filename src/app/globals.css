@@ -154,6 +154,12 @@
     outline: 3px solid var(--color-lagoon);
     outline-offset: 2px;
   }
+  /* 紺の背景の上では lagoon の枠が見えにくい（コントラスト 3:1 未満）ので白にする */
+  .bg-ocean :focus-visible,
+  .bg-ocean-deep :focus-visible,
+  .on-dark :focus-visible {
+    outline-color: #fff;
+  }
 }
 
 @layer utilities {
@@ -191,4 +197,13 @@
 /* クライアントで出す短い案内文の折り返し。対応ブラウザでは文節で折り返す（BudouX を送らずに済む） */
 .jp-auto {
   word-break: auto-phrase;
+}
+
+/* 印刷（領収書など）では、サイトのヘッダー・フッター・スマホの固定バーを出さない */
+@media print {
+  header,
+  footer,
+  [data-mobile-cta] {
+    display: none !important;
+  }
 }

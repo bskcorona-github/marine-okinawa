@@ -1,6 +1,8 @@
 import { eq } from 'drizzle-orm';
 import type { DbOrTx } from '@/db/client';
 import { planImages } from '@/db/schema';
+import { logError, logWarn } from '@/lib/log';
+import { writeAuditLog } from '@/modules/audit/log';
 import { checkFile, type FileCheck } from '@/modules/storage/files';
 import { newFileKey, type FileStore } from '@/modules/storage/store';
 
@@ -17,7 +19,7 @@ export const PLAN_IMAGE_ERROR_LABELS: Record<PlanImageError, string> = {
 };
 
 /** 公開ページで使う写真の URL */
-export const planImageUrl = (id: string) => `/media/plan-images/${id}`;
+const planImageUrl = (id: string) => `/media/plan-images/${id}`;
 
 /**
  * プランの写真を保存する（中身で形式を確かめる）。保存した写真の URL を返し、プランの写真の欄に入れて使う。
@@ -33,18 +35,35 @@ export async function savePlanImage(
   if (!IMAGE_TYPES.has(check.mimeType)) return { ok: false, error: 'NOT_IMAGE' };
   const key = newFileKey('plan-images');
   await store.put(key, params.bytes);
-  const [row] = await db
-    .insert(planImages)
-    .values({
-      shopId: params.shopId,
-      operatorId: params.operatorId,
-      storageKey: key,
-      mimeType: check.mimeType,
-      size: check.size,
-      uploadedBy: params.actorId,
-    })
-    .returning({ id: planImages.id });
-  return { ok: true, url: planImageUrl(row.id) };
+  try {
+    const id = await db.transaction(async (tx) => {
+      const [row] = await tx
+        .insert(planImages)
+        .values({
+          shopId: params.shopId,
+          operatorId: params.operatorId,
+          storageKey: key,
+          mimeType: check.mimeType,
+          size: check.size,
+          uploadedBy: params.actorId,
+        })
+        .returning({ id: planImages.id });
+      await writeAuditLog(tx, {
+        shopId: params.shopId,
+        actorId: params.actorId,
+        action: 'plan_image.upload',
+        targetType: 'plan_image',
+        targetId: row.id,
+        after: { operatorId: params.operatorId, mimeType: check.mimeType, size: check.size },
+      });
+      return row.id;
+    });
+    return { ok: true, url: planImageUrl(id) };
+  } catch (error) {
+    // 記録できなかった：置いたファイルを消す（どこからも使われないファイルを残さない）
+    await store.remove(key).catch((removeError) => logWarn('storage.orphan_remove_failed', { code: key }, removeError));
+    throw error;
+  }
 }
 
 /** 写真を取り出す（公開ページ用。id は推測できない値） */
@@ -55,5 +74,7 @@ export async function readPlanImage(db: DbOrTx, store: FileStore, id: string) {
     .where(eq(planImages.id, id));
   if (!row) return null;
   const bytes = await store.get(row.storageKey);
+  // 記録はあるのにファイルがない（保存先の不具合）。公開ページの写真が欠けるので、気づけるようにログに出す
+  if (!bytes) logError('storage.plan_image_missing', { code: id });
   return bytes ? { bytes, mimeType: row.mimeType } : null;
 }

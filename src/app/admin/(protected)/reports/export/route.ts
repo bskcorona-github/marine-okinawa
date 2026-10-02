@@ -1,10 +1,11 @@
 import { db } from '@/db';
+import { csvResponse } from '@/lib/csv';
 import { localDate } from '@/lib/dates';
 import { isUuid } from '@/lib/validation';
 import { requireAdmin } from '@/modules/auth/guard';
 import { writeAuditLog } from '@/modules/audit/log';
 import { dailyReportToCsv } from '@/modules/booking/export-csv';
-import { getDailyReport } from '@/modules/booking/queries';
+import { getDailyReport } from '@/modules/booking/reports';
 import { getShopById } from '@/modules/shop/shops';
 import { reportRange } from '../range';
 
@@ -26,11 +27,5 @@ export async function GET(request: Request) {
     targetId: admin.shopId,
     after: { from, to, operatorId },
   });
-  return new Response(dailyReportToCsv(rows), {
-    headers: {
-      'Content-Type': 'text/csv; charset=utf-8',
-      'Content-Disposition': `attachment; filename="daily-${from}_${to}.csv"`,
-      'Cache-Control': 'private, no-store',
-    },
-  });
+  return csvResponse(dailyReportToCsv(rows), `daily-${from}_${to}.csv`);
 }

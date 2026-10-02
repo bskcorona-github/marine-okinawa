@@ -97,7 +97,7 @@ describe('schedule admin', () => {
         startTime: '09:00',
         capacity: 6,
       }),
-    ).rejects.toThrow('menu not found');
+    ).rejects.toMatchObject({ code: 'MENU_NOT_FOUND' });
   });
 
   it('予約のない回を休止しても削除されず closed になる', async () => {
@@ -195,7 +195,7 @@ describe('schedule admin', () => {
     const other = await seedShop(db, { name: '別' });
     await expect(
       previewExceptionAddition(db, { shopId: other.id, menuId: menu.id, now: NOW, input: closeDay }),
-    ).rejects.toThrow('menu not found');
+    ).rejects.toMatchObject({ code: 'MENU_NOT_FOUND' });
     await addScheduleException(db, ctx, menu.id, closeDay);
     // 同じ日の終日休止をもう一度登録しても 1 件のまま（置き換え）
     await addScheduleException(db, ctx, menu.id, closeDay);

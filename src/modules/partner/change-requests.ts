@@ -3,6 +3,8 @@ import { z } from 'zod';
 import { invoiceNumberSchema } from '@/lib/invoice';
 import type { Db, DbOrTx } from '@/db/client';
 import { operatorChangeRequests, operators } from '@/db/schema';
+import { logWarn } from '@/lib/log';
+import { changedFields } from '@/modules/audit/diff';
 import { writeAuditLog } from '@/modules/audit/log';
 
 /** 事業者が更新を申請できる項目（画面の表示名つき）。組合の内部メモ（operators.about）は含めない */
@@ -80,6 +82,16 @@ export async function submitChangeRequest(
         requestedBy: input.actorId,
       })
       .returning({ id: operatorChangeRequests.id });
+    await writeAuditLog(tx, {
+      shopId: input.shopId,
+      actorId: input.actorId,
+      action: 'operator.change_request',
+      targetType: 'operator',
+      targetId: input.operatorId,
+      ...changedFields(Object.fromEntries(Object.keys(payload).map((k) => [k, current[k as ProfileField]])), payload, {
+        masked: ['bankAccount'],
+      }),
+    });
     return { ok: true, requestId: row.id } as const;
   });
 }
@@ -113,11 +125,14 @@ export async function listChangeRequests(
     .limit(50);
 }
 
-/** 更新申請を承認して事業者の情報に反映する、または見送る（確認待ちの申請だけ） */
+/**
+ * 更新申請を承認して事業者の情報に反映する、または見送る（確認待ちの申請だけ）。反映したときは、変わった項目の前後を
+ * 履歴に残す（口座は値を残さない）。done：反映・見送り済み、invalid：申請の内容が今の入力の決まりに合わない
+ */
 export async function reviewChangeRequest(
   db: Db,
   input: { shopId: string; requestId: string; approve: boolean; note: string; actorId: string | null; now: Date },
-): Promise<boolean> {
+): Promise<'ok' | 'done' | 'invalid'> {
   return db.transaction(async (tx) => {
     const [request] = await tx
       .select()
@@ -130,16 +145,19 @@ export async function reviewChangeRequest(
         ),
       )
       .for('update');
-    if (!request) return false;
+    if (!request) return 'done';
+    let diff: ReturnType<typeof changedFields> = { before: null, after: {} };
     if (input.approve) {
       // 申請の内容をもう一度検証してから反映する（申請の後で入力の条件を変えても、壊れた値を入れない）
-      const [current] = await tx.select().from(operators).where(eq(operators.id, request.operatorId));
-      const merged = profileSchema.safeParse({
-        ...Object.fromEntries((Object.keys(PROFILE_FIELDS) as ProfileField[]).map((k) => [k, current[k]])),
-        ...request.payload,
-      });
-      if (!merged.success) return false;
+      const [current] = await tx.select().from(operators).where(eq(operators.id, request.operatorId)).for('update');
+      const before = Object.fromEntries((Object.keys(PROFILE_FIELDS) as ProfileField[]).map((k) => [k, current[k]]));
+      const merged = profileSchema.safeParse({ ...before, ...request.payload });
+      if (!merged.success) {
+        logWarn('operator.change_request.invalid', { requestId: request.id, operatorId: request.operatorId });
+        return 'invalid';
+      }
       await tx.update(operators).set(merged.data).where(eq(operators.id, request.operatorId));
+      diff = changedFields(before, merged.data, { masked: ['bankAccount'] });
     }
     await tx
       .update(operatorChangeRequests)
@@ -156,8 +174,12 @@ export async function reviewChangeRequest(
       action: input.approve ? 'operator.change_approve' : 'operator.change_reject',
       targetType: 'operator',
       targetId: request.operatorId,
-      after: { requestId: request.id, payload: request.payload },
+      before: diff.before,
+      // 見送りは、申請された項目の名前だけ（口座などの値は残さない）
+      after: input.approve
+        ? { requestId: request.id, ...diff.after }
+        : { requestId: request.id, fields: Object.keys(request.payload as Record<string, unknown>) },
     });
-    return true;
+    return 'ok';
   });
 }

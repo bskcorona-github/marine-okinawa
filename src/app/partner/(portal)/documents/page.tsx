@@ -1,9 +1,9 @@
 import { Download } from 'lucide-react';
-import { ExpiryBadge } from '@/components/admin/expiry-badge';
-import { FileInput } from '@/components/admin/file-input';
-import { SELECT_CLASS } from '@/components/admin/field-styles';
-import { Notice, PageHeader, Panel } from '@/components/admin/page-header';
-import { SubmitButton } from '@/components/admin/submit-button';
+import { ExpiryBadge } from '@/components/backoffice/expiry-badge';
+import { FileInput } from '@/components/backoffice/file-input';
+import { SELECT_CLASS } from '@/components/backoffice/field-styles';
+import { Notice, PageHeader, Panel } from '@/components/backoffice/page-header';
+import { SubmitButton } from '@/components/backoffice/submit-button';
 import { Input } from '@/components/ui/input';
 import { db } from '@/db';
 import { formatDateLabel, localDate, zonedToUtc } from '@/lib/dates';
@@ -27,6 +27,7 @@ const ERRORS: Record<string, string> = {
   OWNER_NOT_FOUND: '事業者が見つかりません。画面を開き直してください',
   FILE_REQUIRED: 'ファイルを選んでください。',
   input: '資料の種類・名前・有効期限を確認してください。',
+  RATE_LIMITED: '今日提出できる資料の数を超えました。明日もう一度お試しいただくか、組合へご連絡ください。',
 };
 
 export default async function PartnerDocumentsPage({ searchParams }: PageProps<'/partner/documents'>) {
@@ -65,7 +66,7 @@ export default async function PartnerDocumentsPage({ searchParams }: PageProps<'
                 {d.hasFile && (
                   <a
                     href={`/partner/documents/${d.id}/file`}
-                    className="inline-flex min-h-9 items-center gap-1 text-xs font-semibold text-sky-800 hover:underline"
+                    className="inline-flex min-h-9 items-center gap-1 text-xs font-semibold text-sky-800 hover:underline pointer-coarse:min-h-11"
                   >
                     <Download aria-hidden className="size-3.5" />
                     ダウンロード

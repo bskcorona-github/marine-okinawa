@@ -1,7 +1,7 @@
 import { ChevronLeft, ChevronRight, Download } from 'lucide-react';
 import Link from 'next/link';
-import { SELECT_CLASS } from '@/components/admin/field-styles';
-import { PageHeader } from '@/components/admin/page-header';
+import { SELECT_CLASS } from '@/components/backoffice/field-styles';
+import { PageHeader } from '@/components/backoffice/page-header';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { db } from '@/db';
 import { formatDateLabel, localDate, zonedToUtc } from '@/lib/dates';
@@ -10,7 +10,7 @@ import { cn } from '@/lib/utils';
 import { requireAdmin } from '@/modules/auth/guard';
 import { isUuid } from '@/lib/validation';
 import { listOperators } from '@/modules/catalog/menus';
-import { getDailyReport, getOperatorSummary } from '@/modules/booking/queries';
+import { getDailyReport, getOperatorSummary } from '@/modules/booking/reports';
 import { getShopById } from '@/modules/shop/shops';
 import { MAX_REPORT_DAYS, monthEnd, reportRange, shiftMonth } from './range';
 

@@ -1,9 +1,9 @@
 'use client';
 
 import { startTransition, useActionState, useState, type FormEvent } from 'react';
-import { SELECT_CLASS } from '@/components/admin/field-styles';
-import { StickySaveBar, useUnsavedChanges } from '@/components/admin/form-kit';
-import { Panel } from '@/components/admin/page-header';
+import { SELECT_CLASS } from '@/components/backoffice/field-styles';
+import { StickySaveBar, useUnsavedChanges } from '@/components/backoffice/form-kit';
+import { Panel } from '@/components/backoffice/page-header';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
@@ -68,7 +68,7 @@ export function OperatorForm({ action, initial, workload }: Props) {
           <Field
             id="status"
             label="登録状態"
-            hint="停止中の事業者は、照会・割り当ての候補に出ません（アカウントも使えなくなります）。"
+            hint="停止中の事業者は、受入確認・割り当ての候補に出ません（アカウントも使えなくなります）。"
           >
             <select
               id="status"
@@ -82,7 +82,7 @@ export function OperatorForm({ action, initial, workload }: Props) {
             </select>
             {suspending && workload && (workload.upcoming > 0 || workload.openRequests > 0) && (
               <p role="status" className="rounded-lg border border-amber-300 bg-amber-50 p-2 text-xs text-amber-950">
-                この事業者には、これからの予約（支払待ち・予約確定）が {workload.upcoming} 件、回答待ちの照会が{' '}
+                この事業者には、これからの予約（支払待ち・予約確定）が {workload.upcoming} 件、回答待ちの受入確認が{' '}
                 {workload.openRequests}{' '}
                 件あります。停止すると事業者画面に入れなくなるため、予約ごとに担当を変えるか、お電話で連絡してください。
               </p>
@@ -171,7 +171,7 @@ export function OperatorForm({ action, initial, workload }: Props) {
         {/* 期間が多いとページの大半を占めるため、畳んでおく（閉じていても保存の対象） */}
         <details>
           <summary className="cursor-pointer font-semibold text-slate-900">
-            オン期の期間（{initial.periods.length} 期間）
+            繁忙期の期間（{initial.periods.length} 期間）
             <span className="ml-2 text-xs font-normal text-slate-600">開いて編集</span>
           </summary>
           <div className="mt-4">

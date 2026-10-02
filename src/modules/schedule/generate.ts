@@ -29,7 +29,7 @@ export type GeneratedSlot = { date: string; time: string; startsAt: Date; capaci
 // 休止を最後に適用し、どの例外よりも優先させる
 const EXCEPTION_ORDER: Record<ExceptionType, number> = { extra_slot: 0, capacity_override: 1, closed: 2 };
 
-export function compareRules(a: RuleInput, b: RuleInput): number {
+function compareRules(a: RuleInput, b: RuleInput): number {
   return (
     a.validFrom.localeCompare(b.validFrom) ||
     (a.createdAt?.getTime() ?? 0) - (b.createdAt?.getTime() ?? 0) ||
@@ -41,7 +41,7 @@ export function compareRules(a: RuleInput, b: RuleInput): number {
  * 例外を適用する順番：種類（臨時の回 → 定員変更 → 休止）、同じ種類では終日 → 時刻指定（時刻を指定した方が優先）、
  * さらに作成日時・id の順（あとから追加したものが優先）。読み込む順番で結果が変わらないようにする
  */
-export function compareExceptions(a: ExceptionInput, b: ExceptionInput): number {
+function compareExceptions(a: ExceptionInput, b: ExceptionInput): number {
   return (
     EXCEPTION_ORDER[a.type] - EXCEPTION_ORDER[b.type] ||
     Number(a.startTime !== null) - Number(b.startTime !== null) ||

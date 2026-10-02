@@ -15,15 +15,13 @@ import {
 } from '@/db/schema';
 import { writeAuditLog } from '@/modules/audit/log';
 import { BookingError } from '@/modules/booking/errors';
-import { isOpenRequest, type BookingStatus } from '@/modules/booking/status';
+import { isBeforePaymentRequest, isOpenRequest, OPEN_REQUEST_STATUSES } from '@/modules/booking/status';
+import { bookingStatusIn } from '@/modules/booking/status-sql';
 import { resolveSettings } from '@/modules/shop/settings';
+import { DEFAULT_LOCALE } from '@/lib/locale';
 
 export type RequestStatus = (typeof bookingOperatorRequests.$inferSelect)['status'];
 
-/** 事業者が回答し直せる予約の状態（組合が支払案内へ進める前） */
-export function canReanswer(status: BookingStatus): boolean {
-  return status === 'requested' || status === 'reviewing' || status === 'operator_checking';
-}
 export type OperatorResponse = 'accepted' | 'declined' | 'conditional';
 
 export const REQUEST_STATUS_LABELS: Record<RequestStatus, string> = {
@@ -307,7 +305,9 @@ export async function respondToRequest(
       throw new BookingError('INVALID_TRANSITION');
     }
     // 回答し直せるのは、組合が支払案内へ進める前だけ（支払待ちでは、まだ回答していない照会だけ回答できる）
-    if (request.status !== 'pending' && !canReanswer(booking.status)) throw new BookingError('INVALID_TRANSITION');
+    if (request.status !== 'pending' && !isBeforePaymentRequest(booking.status)) {
+      throw new BookingError('INVALID_TRANSITION');
+    }
     const note = input.note.trim();
     await tx
       .update(bookingOperatorRequests)
@@ -317,7 +317,7 @@ export async function respondToRequest(
     // 組合が選んだ事業者は置き換えない。ほかに受入可の事業者がいて、その事業者に決まっているときも置き換えない
     let assigned = false;
     // 支払案内のあと（支払待ち）は、回答で実施事業者を動かさない（組合が回答を見て、確定か担当の変更かを決める）
-    const assignable = canReanswer(booking.status);
+    const assignable = isBeforePaymentRequest(booking.status);
     if (
       assignable &&
       input.response === 'accepted' &&
@@ -447,7 +447,10 @@ function selectOperatorRequests(db: DbOrTx, where: SQL | undefined) {
     .innerJoin(bookings, eq(bookings.id, bookingOperatorRequests.bookingId))
     .innerJoin(slots, eq(slots.id, bookings.slotId))
     .innerJoin(menus, eq(menus.id, slots.menuId))
-    .innerJoin(menuTranslations, and(eq(menuTranslations.menuId, menus.id), eq(menuTranslations.locale, 'ja')))
+    .innerJoin(
+      menuTranslations,
+      and(eq(menuTranslations.menuId, menus.id), eq(menuTranslations.locale, DEFAULT_LOCALE)),
+    )
     .where(where);
 }
 
@@ -465,8 +468,6 @@ export async function listOperatorRequests(
   ).orderBy(sql`(${bookingOperatorRequests.status} = 'pending') desc`, desc(bookingOperatorRequests.requestedAt));
   return params.limit ? query.limit(params.limit) : query;
 }
-
-export type OperatorRequest = Awaited<ReturnType<typeof listOperatorRequests>>[number];
 
 /** 事業者の照会 1 件と人数の内訳（自社への照会だけ。他社の照会・存在しない照会は null） */
 export async function getOperatorRequest(db: DbOrTx, params: { operatorId: string; requestId: string }) {
@@ -493,7 +494,7 @@ export async function countPendingRequests(db: DbOrTx, operatorId: string): Prom
       and(
         eq(bookingOperatorRequests.operatorId, operatorId),
         eq(bookingOperatorRequests.status, 'pending'),
-        inArray(bookings.status, ['requested', 'reviewing', 'operator_checking', 'awaiting_payment']),
+        bookingStatusIn(OPEN_REQUEST_STATUSES),
       ),
     );
   return row?.n ?? 0;

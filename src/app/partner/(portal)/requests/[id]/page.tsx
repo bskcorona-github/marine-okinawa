@@ -1,16 +1,18 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { Notice, PageHeader, Panel } from '@/components/admin/page-header';
+import { DetailList } from '@/components/backoffice/detail-list';
+import { Notice, PageHeader, Panel } from '@/components/backoffice/page-header';
 import { db } from '@/db';
 import { formatDateLabel, localTime } from '@/lib/dates';
 import { isUuid } from '@/lib/validation';
 import { requireOperator } from '@/modules/auth/guard';
-import { isConfirmedOrLater, isOpenRequest } from '@/modules/booking/status';
+import { isBeforePaymentRequest, isConfirmedOrLater, isOpenRequest } from '@/modules/booking/status';
 import { splitPlanTitle } from '@/modules/catalog/display-title';
-import { REQUEST_STATUS_LABELS, canReanswer, getOperatorRequest } from '@/modules/partner/requests';
+import { REQUEST_STATUS_LABELS, getOperatorRequest } from '@/modules/partner/requests';
 import { getShopById } from '@/modules/shop/shops';
 import { respondAction } from './actions';
 import { RespondForm } from './respond-form';
+import { formatPartyItems } from '@/modules/booking/party';
 
 export const metadata = { title: '受入確認の回答' };
 
@@ -41,10 +43,9 @@ export default async function PartnerRequestPage({ params, searchParams }: PageP
       : '組合が別の事業者で手配しました。';
   const canAnswer = open && request.status === 'pending';
   // 回答し直せるのは、組合が支払案内へ進める前だけ
-  const canChange = open && request.status !== 'pending' && canReanswer(request.bookingStatus);
+  const canChange = open && request.status !== 'pending' && isBeforePaymentRequest(request.bookingStatus);
   const unit = request.capacityUnit;
-  const peopleLabel =
-    request.items.map((i) => `${i.label} ${i.quantity}${unit}`).join('、') || `${request.partySize}${unit}`;
+  const peopleLabel = formatPartyItems(request.items, unit, { separator: '、', partySize: request.partySize });
   const rows: [string, string][] = [
     ['予約番号', request.bookingNo],
     ['日時', at(request.startsAt)],
@@ -95,14 +96,7 @@ export default async function PartnerRequestPage({ params, searchParams }: PageP
                 : 'お客様の氏名・連絡先は、予約が確定したあとに表示します。'
           }
         >
-          <dl className="divide-y divide-slate-100 text-sm">
-            {rows.map(([label, value]) => (
-              <div key={label} className="grid gap-1 py-2.5 sm:grid-cols-[10rem_1fr] sm:gap-3">
-                <dt className="text-slate-600">{label}</dt>
-                <dd className="font-medium whitespace-pre-line text-slate-900">{value}</dd>
-              </div>
-            ))}
-          </dl>
+          <DetailList rows={rows} />
           {request.requestNote && (
             <p className="mt-3 rounded-lg bg-sky-50 p-3 text-sm whitespace-pre-line text-sky-950">
               組合からのメモ：{request.requestNote}

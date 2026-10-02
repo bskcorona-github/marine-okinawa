@@ -30,9 +30,10 @@ export const NEW_PLAN_VALUES: MenuFormValues = {
   conditions: '',
   notes: '',
   images: [],
+  // 料金は空欄から入れてもらう（0 円のまま保存・申請しないように。無料の区分は 0 と入れる）
   prices: [
-    { label: '大人', price: 0, season: null, meetingPoint: null },
-    { label: '子供', price: 0, season: null, meetingPoint: null },
+    { label: '大人', price: null, season: null, meetingPoint: null },
+    { label: '子供', price: null, season: null, meetingPoint: null },
   ],
   includedGuests: null,
   extraGuestPrice: null,

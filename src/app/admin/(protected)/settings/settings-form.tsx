@@ -1,10 +1,12 @@
 'use client';
 
 import { startTransition, useActionState, useState, type FormEvent, type ReactNode } from 'react';
-import { StickySaveBar, useUnsavedChanges } from '@/components/admin/form-kit';
-import { Panel } from '@/components/admin/page-header';
+import { SELECT_CLASS } from '@/components/backoffice/field-styles';
+import { StickySaveBar, useUnsavedChanges } from '@/components/backoffice/form-kit';
+import { Panel } from '@/components/backoffice/page-header';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
+import { cn } from '@/lib/utils';
 import type { AdminFormState } from '@/lib/zod-ja';
 import type { ShopSettings } from '@/modules/shop/settings';
 
@@ -140,7 +142,7 @@ export function SettingsForm({ action, initial }: Props) {
             <span>
               <span className="block font-medium">申込を受けたら、プランの事業者へ自動で受入確認を送る</span>
               <span className="block text-xs text-slate-600">
-                事業者が登録したプランへの申込は、その事業者へすぐに受入確認（空き・受入の可否の照会）を送ります。外すと、組合が予約の画面から依頼します。
+                事業者が登録したプランへの申込は、その事業者へすぐに受入確認（空き・受入の可否の確認）を依頼します。外すと、組合が予約の画面から依頼します。
               </span>
             </span>
           </label>
@@ -183,6 +185,177 @@ export function SettingsForm({ action, initial }: Props) {
                 '例：\n天候・海況により中止する場合は、前日 18 時までに組合からメールまたはお電話でご連絡します。\nお支払い済みの料金は全額返金します。'
               }
             />
+          </Field>
+        </div>
+      </Panel>
+
+      <Panel
+        title="手数料・取消・精算"
+        description="月次精算と、取消・天候中止のときの返金予定額の初期値に使います。正式な値が決まったら、ここで変えてください。"
+      >
+        <div className="grid gap-4 sm:grid-cols-3">
+          <Field label="組合の手数料率（%）" hint="事業者の受け取り分から差し引きます（税込）。">
+            <Input
+              id="commissionRate"
+              name="commissionRate"
+              type="number"
+              inputMode="decimal"
+              min={0}
+              max={50}
+              step={0.1}
+              defaultValue={s.commissionRate}
+              className="w-28"
+            />
+          </Field>
+          <Field label="天候中止の返金率（%）" hint="100 なら全額返金。一括の天候中止にも使います。">
+            <Input
+              id="weatherRefundPercent"
+              name="weatherRefundPercent"
+              type="number"
+              inputMode="numeric"
+              min={0}
+              max={100}
+              defaultValue={s.weatherRefundPercent}
+              className="w-28"
+            />
+          </Field>
+          <Field label="事業者への支払日" hint="月末で締めて、翌月のこの日に払います。">
+            <select id="payoutDay" name="payoutDay" defaultValue={s.payoutDay} className={cn(SELECT_CLASS, 'w-40')}>
+              <option value={0}>翌月末</option>
+              {Array.from({ length: 28 }, (_, i) => i + 1).map((d) => (
+                <option key={d} value={d}>
+                  翌月 {d} 日
+                </option>
+              ))}
+            </select>
+          </Field>
+          <Field
+            label="精算を始める月（任意）"
+            hint="この月より前に参加した予約は、月次精算に入れません（それまでの分を別に精算していたとき）。空欄ならすべて入れます。"
+          >
+            <Input
+              id="settlementStartMonth"
+              name="settlementStartMonth"
+              type="month"
+              defaultValue={s.settlementStartMonth}
+              className="w-44"
+            />
+          </Field>
+        </div>
+        <fieldset className="mt-4 space-y-2">
+          <legend className="font-medium">お客様の都合の取消のキャンセル料</legend>
+          <div className="flex flex-wrap items-end gap-4 text-sm">
+            <label className="space-y-1">
+              <span className="block text-xs text-slate-600">無料になる日数</span>
+              <span className="flex items-center gap-1">
+                参加日の
+                <Input
+                  id="cancelFreeDays"
+                  name="cancelFreeDays"
+                  type="number"
+                  inputMode="numeric"
+                  min={1}
+                  max={60}
+                  defaultValue={s.cancelFreeDays}
+                  className="w-20"
+                />
+                日前まで無料
+              </span>
+            </label>
+            <label className="space-y-1">
+              <span className="block text-xs text-slate-600">それを過ぎて前日まで</span>
+              <span className="flex items-center gap-1">
+                <Input
+                  id="cancelMidPercent"
+                  name="cancelMidPercent"
+                  type="number"
+                  inputMode="numeric"
+                  min={0}
+                  max={100}
+                  defaultValue={s.cancelMidPercent}
+                  className="w-20"
+                />
+                %
+              </span>
+            </label>
+            <label className="space-y-1">
+              <span className="block text-xs text-slate-600">当日・無断キャンセル</span>
+              <span className="flex items-center gap-1">
+                <Input
+                  id="cancelSameDayPercent"
+                  name="cancelSameDayPercent"
+                  type="number"
+                  inputMode="numeric"
+                  min={0}
+                  max={100}
+                  defaultValue={s.cancelSameDayPercent}
+                  className="w-20"
+                />
+                %
+              </span>
+            </label>
+          </div>
+          <p className="text-xs text-slate-500">
+            この率から作ったキャンセル料の規定を、プラン詳細・申込フォーム・予約確認ページに出します（取消のときの返金予定額の初期値にも使い、予約ごとに直せます）。率は申込のときの値で予約に残すので、変えても申込済みの予約には効きません。
+          </p>
+        </fieldset>
+        <label className="mt-4 flex items-start gap-2 text-sm">
+          <input
+            type="checkbox"
+            name="cancellationFeeToOperator"
+            defaultChecked={s.cancellationFeeToOperator}
+            className="mt-0.5 size-4"
+          />
+          <span>
+            <span className="block font-medium">キャンセル料（返金しない額）を事業者の取り分にする</span>
+            <span className="block text-xs text-slate-600">
+              手数料率を引いて、月次精算で事業者に払います。外すと組合が受け取ります。
+            </span>
+          </span>
+        </label>
+        <div className="mt-4 grid gap-4 sm:grid-cols-2">
+          <Field label="組合のインボイスの登録番号" hint="精算明細の手数料に載せます（T と 13 桁の数字）。">
+            <Input
+              id="invoiceNumber"
+              name="invoiceNumber"
+              defaultValue={s.invoiceNumber}
+              maxLength={20}
+              placeholder="T1234567890123"
+              className="w-56"
+            />
+          </Field>
+          <Field
+            label="領収書の型"
+            hint="お客様への領収書の書き方です。どちらにするかは、組合の税理士に確認してから決めてください。"
+          >
+            <span id="receiptModel" className="block space-y-2">
+              <label className="flex items-start gap-2 text-sm">
+                <input
+                  type="radio"
+                  name="receiptModel"
+                  value="agent"
+                  defaultChecked={s.receiptModel === 'agent'}
+                  className="mt-0.5 size-4"
+                />
+                <span>
+                  <span className="block font-medium">事業者の代理として組合が受け取る</span>
+                  <span className="block text-xs text-slate-600">領収書に実施事業者の名前と登録番号を載せます。</span>
+                </span>
+              </label>
+              <label className="flex items-start gap-2 text-sm">
+                <input
+                  type="radio"
+                  name="receiptModel"
+                  value="seller"
+                  defaultChecked={s.receiptModel === 'seller'}
+                  className="mt-0.5 size-4"
+                />
+                <span>
+                  <span className="block font-medium">組合が売り手になる</span>
+                  <span className="block text-xs text-slate-600">領収書は組合の名前と登録番号です。</span>
+                </span>
+              </label>
+            </span>
           </Field>
         </div>
       </Panel>

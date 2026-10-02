@@ -2,9 +2,9 @@
 
 import { headers } from 'next/headers';
 import { db } from '@/db';
-import { getEnv } from '@/lib/env';
+import { logWarn } from '@/lib/log';
+import { sendQuietly } from '@/modules/notification/send-quietly';
 import { createInquiry, inquiryInputSchema, sendInquiryMails } from '@/modules/content/inquiries';
-import { getMailer } from '@/modules/notification/mailer';
 import { clientIp, consumeRateLimit } from '@/modules/security/rate-limit';
 import { getCurrentShop } from '@/modules/shop/shops';
 
@@ -30,7 +30,7 @@ export async function submitInquiry(_prev: ContactState, formData: FormData): Pr
   if (formData.get('agree') !== 'on') return { error: 'AGREEMENT_REQUIRED' };
 
   const ip = clientIp(await headers());
-  if (!ip) console.warn('inquiry rate limit: client IP is unavailable, using the shared limit');
+  if (!ip) logWarn('rate_limit.no_client_ip', { route: 'inquiry' });
   const allowed =
     (await consumeRateLimit(
       db,
@@ -42,8 +42,8 @@ export async function submitInquiry(_prev: ContactState, formData: FormData): Pr
   const shop = await getCurrentShop(db);
   const { id } = await createInquiry(db, { shopId: shop.id, input: parsed.data, now: new Date() });
   // 保存できていれば受付済み。メールの失敗で送信し直させない（同じお問い合わせが重ならないように）
-  await sendInquiryMails(db, getMailer(), { inquiryId: id, appUrl: getEnv().APP_URL }).catch((error) =>
-    console.error('inquiry mail failed', { inquiryId: id, error }),
+  await sendQuietly('mail.inquiry.failed', { inquiryId: id }, (mailer, appUrl) =>
+    sendInquiryMails(db, mailer, { inquiryId: id, appUrl }),
   );
   return { error: null, done: true };
 }

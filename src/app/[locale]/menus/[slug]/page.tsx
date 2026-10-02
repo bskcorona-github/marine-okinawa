@@ -31,10 +31,12 @@ import { MAX_SEARCH_PEOPLE } from '@/lib/search';
 import { toListItems } from '@/lib/text-list';
 import { isDateString, isMonthString } from '@/lib/validation';
 import { basePriceOf } from '@/modules/catalog/base-price';
+import { cancellationRateLines } from '@/modules/booking/cancellation-fee';
 import { splitPlanTitle } from '@/modules/catalog/display-title';
 import { getPublishedMenuBySlug, listPublishedMenus, type PublishedMenu } from '@/modules/catalog/menus';
 import { pricesForSeason, seasonOf } from '@/modules/catalog/season';
 import { getDaySlots, getFirstBookableDate, getMonthAvailability } from '@/modules/inventory/queries';
+import { cardPaymentsEnabled } from '@/modules/payment/card-payments';
 import { getScheduleSummary } from '@/modules/schedule/rules';
 import { SLOT_HORIZON_DAYS } from '@/modules/schedule/sync-slots';
 import { shopContact } from '@/modules/shop/contact';
@@ -43,6 +45,7 @@ import { getCurrentShop } from '@/modules/shop/shops';
 import { PlanCard } from '../../plan-card';
 import { AvailabilityCalendar } from './availability-calendar';
 import { DaySlots } from './day-slots';
+import { isPerPerson } from '@/modules/catalog/capacity-unit';
 
 async function loadMenu(locale: string, slug: string) {
   const shop = await getCurrentShop(db);
@@ -273,7 +276,11 @@ export default async function MenuPage({ params, searchParams }: PageProps<'/[lo
     shopBusinessHours: shop.profile.businessHours,
     shopEmail: shop.profile.email,
   });
+  // キャンセル料は設定の率から作る（料率と文面がずれないように）。そのあとに共通・プランごとの規定
+  // お支払いはカードだけ（Stripe が設定されているとき）。申し込む前に分かるように伝える
+  const cardPayment = cardPaymentsEnabled();
   const policies = [
+    { heading: t('cancellationRates.title'), text: cancellationRateLines(shop.settings).join('\n') },
     { heading: t('menu.cancellationCommon'), text: shop.settings.commonCancellationPolicy },
     { heading: t('menu.cancellationPlan'), text: menu.cancellationPolicy },
   ].filter((p) => p.text);
@@ -290,15 +297,14 @@ export default async function MenuPage({ params, searchParams }: PageProps<'/[lo
     {
       icon: Users,
       label: t('menu.facts.party'),
-      value:
-        menu.capacityUnit === '名'
-          ? t('menu.facts.partyRange', { min: menu.minPartySize, max: menu.maxPartySize })
-          : menu.maxGuests
-            ? t('menu.facts.partyCharter', { max: menu.maxGuests })
-            : t('menu.facts.partyCharterAny'),
+      value: isPerPerson(menu.capacityUnit)
+        ? t('menu.facts.partyRange', { min: menu.minPartySize, max: menu.maxPartySize })
+        : menu.maxGuests
+          ? t('menu.facts.partyCharter', { max: menu.maxGuests })
+          : t('menu.facts.partyCharterAny'),
     },
     // 1 回の定員：申し込める人数の上限と同じなら重ねて出さない（ほかのお客様と合わせる意味がないため）
-    ...(schedule.maxCapacity && schedule.maxCapacity > (menu.capacityUnit === '名' ? menu.maxPartySize : 1)
+    ...(schedule.maxCapacity && schedule.maxCapacity > (isPerPerson(menu.capacityUnit) ? menu.maxPartySize : 1)
       ? [
           {
             icon: UsersRound,
@@ -308,7 +314,11 @@ export default async function MenuPage({ params, searchParams }: PageProps<'/[lo
         ]
       : []),
     { icon: CalendarClock, label: t('menu.facts.deadline'), value: deadline },
-    { icon: Wallet, label: t('menu.facts.payment'), value: t('menu.facts.paymentPrepaid') },
+    {
+      icon: Wallet,
+      label: t('menu.facts.payment'),
+      value: t(cardPayment ? 'menu.facts.paymentCard' : 'menu.facts.paymentPrepaid'),
+    },
   ];
   if (schedule.times.length > 0) {
     facts.push({
@@ -492,8 +502,8 @@ export default async function MenuPage({ params, searchParams }: PageProps<'/[lo
               dateLabel={formatDateLabel(zonedToUtc(selectedDate, '12:00', shop.timezone), shop.timezone)}
               slots={daySlots}
               people={people}
-              perPerson={menu.capacityUnit === '名'}
-              maxPeople={menu.capacityUnit === '名' ? menu.maxPartySize : menu.maxGuests}
+              perPerson={isPerPerson(menu.capacityUnit)}
+              maxPeople={isPerPerson(menu.capacityUnit) ? menu.maxPartySize : menu.maxGuests}
               minPeople={menu.minPartySize}
               prices={dayPrices}
               seasonLabel={seasonal && daySeason ? t(daySeason === 'on' ? 'menu.seasonOn' : 'menu.seasonOff') : null}
@@ -508,7 +518,7 @@ export default async function MenuPage({ params, searchParams }: PageProps<'/[lo
             <li className="flex gap-2.5">
               <Wallet aria-hidden className="mt-0.5 size-4 shrink-0 text-lagoon-ink" />
               <span className="jp-wrap">
-                <Phrase>{t('menu.reassurePrepaid')}</Phrase>
+                <Phrase>{t(cardPayment ? 'menu.reassureCard' : 'menu.reassurePrepaid')}</Phrase>
               </span>
             </li>
             {menu.included && (

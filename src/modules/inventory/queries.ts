@@ -11,6 +11,8 @@ import {
   type AvailabilityLevel,
   type DeadlineRule,
 } from './availability';
+import { DEFAULT_LOCALE } from '@/lib/locale';
+import { isPerPerson } from '@/modules/catalog/capacity-unit';
 
 type ShopLike = { timezone: string; lowStockThresholdPercent: number; lowStockThresholdCount: number };
 /**
@@ -25,19 +27,6 @@ type MenuLike = {
   maxGuests?: number | null;
 } & DeadlineRule;
 
-/** 1 回の予約で申し込める人数の範囲（人数で数えるプランは最少〜最大、貸切は乗船人数の上限まで）か */
-export function withinPartyRange(menu: MenuLike, people: number): boolean {
-  const perPerson = !menu.capacityUnit || menu.capacityUnit === '名';
-  if (perPerson) return people >= (menu.minPartySize ?? 1) && people <= (menu.maxPartySize ?? Infinity);
-  return people <= (menu.maxGuests ?? Infinity);
-}
-
-/** 検索の人数で、この回を予約できるか（人数の範囲内で、人数で数えるプランは残り枠が足りる） */
-function fitsParty(menu: MenuLike, people: number, remaining: number): boolean {
-  const perPerson = !menu.capacityUnit || menu.capacityUnit === '名';
-  return withinPartyRange(menu, people) && (!perPerson || remaining >= people);
-}
-
 /**
  * 回の空き状況。people（検索の人数）を渡すと、人数で数えるプランはその人数分（上限は 1 回の最大人数）の空きが
  * ない回を満席と同じに扱う（カレンダーの ○ と時間の一覧の「空きなし」を食い違わせない）
@@ -49,7 +38,7 @@ function levelOf(
   now: Date,
   people?: number | null,
 ): AvailabilityLevel {
-  const perPerson = !menu.capacityUnit || menu.capacityUnit === '名';
+  const perPerson = !menu.capacityUnit || isPerPerson(menu.capacityUnit);
   const needed = people ? Math.min(people, menu.maxPartySize ?? people) : 1;
   return slotLevel({
     status: slot.status,
@@ -114,48 +103,6 @@ export async function getDaySlots(
 }
 
 /**
- * トップページの「日付から探す」用：複数メニューの、その日の回をまとめて取得する。
- * people を指定すると、残りがその人数に満たない回は満席扱い（予約できない）にする。
- */
-export async function getDateAvailabilityForMenus(
-  db: DbOrTx,
-  params: { menus: MenuLike[]; shop: ShopLike; date: string; now: Date; people?: number },
-): Promise<Map<string, DaySlot[]>> {
-  const { menus: targets, shop, date, now, people } = params;
-  const result = new Map<string, DaySlot[]>(targets.map((m) => [m.id, []]));
-  if (targets.length === 0) return result;
-  const byId = new Map(targets.map((m) => [m.id, m]));
-  const rows = await db
-    .select()
-    .from(slots)
-    .where(
-      and(
-        inArray(
-          slots.menuId,
-          targets.map((m) => m.id),
-        ),
-        gte(slots.startsAt, zonedToUtc(date, '00:00', shop.timezone)),
-        lt(slots.startsAt, zonedToUtc(addDays(date, 1), '00:00', shop.timezone)),
-      ),
-    )
-    .orderBy(asc(slots.startsAt));
-  for (const slot of rows) {
-    const menu = byId.get(slot.menuId)!;
-    const remaining = remainingSeats(slot.capacity, slot.reservedCount);
-    let level = levelOf(slot, menu, shop, now);
-    if (people && (level === 'available' || level === 'low') && !fitsParty(menu, people, remaining)) level = 'full';
-    result.get(slot.menuId)!.push({
-      id: slot.id,
-      startsAt: slot.startsAt,
-      time: localTime(slot.startsAt, shop.timezone),
-      remaining,
-      level,
-    });
-  }
-  return result;
-}
-
-/**
  * 予約できる最初の日（ショップのタイムゾーンの YYYY-MM-DD）。カレンダーを空きのある月から開くために使う。
  * 締切・満席・休止を考慮し、見つからなければ null。
  */
@@ -203,7 +150,10 @@ export async function getSlotForAdmin(db: DbOrTx, params: { shopId: string; slot
     })
     .from(slots)
     .innerJoin(menus, eq(menus.id, slots.menuId))
-    .innerJoin(menuTranslations, and(eq(menuTranslations.menuId, menus.id), eq(menuTranslations.locale, 'ja')))
+    .innerJoin(
+      menuTranslations,
+      and(eq(menuTranslations.menuId, menus.id), eq(menuTranslations.locale, DEFAULT_LOCALE)),
+    )
     .where(and(eq(slots.id, params.slotId), eq(slots.shopId, params.shopId)));
   return row
     ? {
@@ -270,7 +220,10 @@ export async function getTimetable(
       status: menus.status,
     })
     .from(menus)
-    .innerJoin(menuTranslations, and(eq(menuTranslations.menuId, menus.id), eq(menuTranslations.locale, 'ja')))
+    .innerJoin(
+      menuTranslations,
+      and(eq(menuTranslations.menuId, menus.id), eq(menuTranslations.locale, DEFAULT_LOCALE)),
+    )
     .where(and(eq(menus.shopId, shopId), ...(params.operatorId ? [eq(menus.operatorId, params.operatorId)] : [])))
     .orderBy(asc(menus.createdAt));
 

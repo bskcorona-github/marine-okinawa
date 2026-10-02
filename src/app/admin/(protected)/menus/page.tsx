@@ -1,6 +1,7 @@
 import { ExternalLink } from 'lucide-react';
 import Link from 'next/link';
-import { PageHeader } from '@/components/admin/page-header';
+import { PageHeader } from '@/components/backoffice/page-header';
+import { TabLinks } from '@/components/backoffice/tab-links';
 import { buttonVariants } from '@/components/ui/button';
 import { db } from '@/db';
 import { cn } from '@/lib/utils';
@@ -40,28 +41,14 @@ export default async function MenusPage({ searchParams }: PageProps<'/admin/menu
           </Link>
         }
       />
-      <div className="flex flex-wrap gap-2 text-sm">
-        <Link
-          href="/admin/menus"
-          aria-current={!reviewOnly ? 'true' : undefined}
-          className={cn(
-            'inline-flex min-h-9 items-center rounded-full px-3 ring-1 pointer-coarse:min-h-11',
-            !reviewOnly ? 'bg-slate-900 font-semibold text-white ring-slate-900' : 'text-slate-700 ring-slate-200',
-          )}
-        >
-          すべて
-        </Link>
-        <Link
-          href="/admin/menus?review=1"
-          aria-current={reviewOnly ? 'true' : undefined}
-          className={cn(
-            'inline-flex min-h-9 items-center rounded-full px-3 ring-1 pointer-coarse:min-h-11',
-            reviewOnly ? 'bg-sky-800 font-semibold text-white ring-sky-800' : 'text-sky-900 ring-sky-200',
-          )}
-        >
-          審査待ち（{reviewCount} 件）
-        </Link>
-      </div>
+      <TabLinks
+        label="表示するプラン"
+        current={reviewOnly ? 'review' : 'all'}
+        tabs={[
+          { value: 'all', label: 'すべて', href: '/admin/menus' },
+          { value: 'review', label: `審査待ち（${reviewCount} 件）`, href: '/admin/menus?review=1' },
+        ]}
+      />
       <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
         <div
           aria-hidden

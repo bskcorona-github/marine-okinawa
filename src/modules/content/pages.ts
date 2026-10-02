@@ -1,7 +1,9 @@
 import { and, eq } from 'drizzle-orm';
 import { z } from 'zod';
-import type { DbOrTx } from '@/db/client';
+import type { Db, DbOrTx } from '@/db/client';
 import { sitePages } from '@/db/schema';
+import { changedFields } from '@/modules/audit/diff';
+import { writeAuditLog } from '@/modules/audit/log';
 import { isOwnKey } from '@/lib/own';
 
 /** 固定ページの URL（slug）とページ名。本文は管理画面で編集し、保存がなければ初期文を出す */
@@ -23,7 +25,7 @@ export function isSitePageSlug(value: unknown): value is SitePageSlug {
  * 初期文（組合の正式な文面が届くまでの下書き）。「## 見出し」「- 箇条書き」の書式。
  * 事実関係（所在地・連絡先・規定の数字）は書かず、組合に差し替えてもらう前提の一般的な案内だけにする
  */
-export const DEFAULT_PAGE_BODIES: Record<SitePageSlug, string> = {
+const DEFAULT_PAGE_BODIES: Record<SitePageSlug, string> = {
   guide: `沖縄の海が初めての方、マリンアクティビティが初めての方も安心してご参加いただけるよう、よくあるご質問をまとめました。
 
 ## 泳げなくても参加できますか
@@ -115,13 +117,31 @@ export const sitePageSchema = z.object({
   body: z.string().trim().min(1).max(20000),
 });
 
+/**
+ * 固定ページを保存する。前と後の題名・本文を履歴に残す（前の版に戻したいときに、履歴から文面を取り出せる）
+ */
 export async function saveSitePage(
-  db: DbOrTx,
+  db: Db,
   params: { shopId: string; slug: SitePageSlug; input: z.infer<typeof sitePageSchema>; actorId: string | null },
 ): Promise<void> {
   const values = { title: params.input.title, body: params.input.body, updatedBy: params.actorId };
-  await db
-    .insert(sitePages)
-    .values({ shopId: params.shopId, slug: params.slug, ...values })
-    .onConflictDoUpdate({ target: [sitePages.shopId, sitePages.slug], set: values });
+  await db.transaction(async (tx) => {
+    const [current] = await tx
+      .select({ title: sitePages.title, body: sitePages.body })
+      .from(sitePages)
+      .where(and(eq(sitePages.shopId, params.shopId), eq(sitePages.slug, params.slug)))
+      .for('update');
+    await tx
+      .insert(sitePages)
+      .values({ shopId: params.shopId, slug: params.slug, ...values })
+      .onConflictDoUpdate({ target: [sitePages.shopId, sitePages.slug], set: values });
+    await writeAuditLog(tx, {
+      shopId: params.shopId,
+      actorId: params.actorId,
+      action: 'site_page.update',
+      targetType: 'site_page',
+      targetId: params.slug,
+      ...changedFields(current ?? null, { title: params.input.title, body: params.input.body }),
+    });
+  });
 }

@@ -1,5 +1,5 @@
 import { notFound } from 'next/navigation';
-import { Notice, PageHeader } from '@/components/admin/page-header';
+import { Notice, PageHeader } from '@/components/backoffice/page-header';
 import { buttonVariants } from '@/components/ui/button';
 import { db } from '@/db';
 import { requireAdmin } from '@/modules/auth/guard';

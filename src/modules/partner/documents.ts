@@ -3,6 +3,7 @@ import { z } from 'zod';
 import type { DbOrTx } from '@/db/client';
 import { documentKind, operatorApplications, operatorDocuments, operators } from '@/db/schema';
 import { addDays } from '@/lib/dates';
+import { logError, logWarn } from '@/lib/log';
 import { isDateString } from '@/lib/validation';
 import { writeAuditLog } from '@/modules/audit/log';
 import { checkFile, safeFileName, type FileCheck } from '@/modules/storage/files';
@@ -22,7 +23,7 @@ export const DOCUMENT_KIND_LABELS: Record<DocumentKind, string> = {
 export const RECEIVED_VIA_LABELS = { upload: 'Web で提出', mail: '郵送', hand: '持参' } as const;
 
 /** 期限が近いとみなす日数 */
-export const EXPIRY_WARNING_DAYS = 30;
+const EXPIRY_WARNING_DAYS = 30;
 
 export const documentInputSchema = z.object({
   kind: z.enum(documentKind.enumValues),
@@ -92,35 +93,50 @@ export async function addDocument(
       size: check.size,
     };
   }
-  const [row] = await db
-    .insert(operatorDocuments)
-    .values({
-      shopId: input.shopId,
-      operatorId: 'operatorId' in input.owner ? input.owner.operatorId : null,
-      applicationId: 'applicationId' in input.owner ? input.owner.applicationId : null,
-      kind: input.document.kind,
-      title: input.document.title,
-      expiresOn: input.document.expiresOn,
-      receivedVia: input.document.receivedVia,
-      note: input.document.note,
-      uploadedBy: input.actorId,
-      ...stored,
-    })
-    .returning({ id: operatorDocuments.id });
-  await writeAuditLog(db, {
-    shopId: input.shopId,
-    actorId: input.actorId,
-    action: 'operator.document_add',
-    targetType: 'operator_document',
-    targetId: row.id,
-    after: {
-      ...input.owner,
-      kind: input.document.kind,
-      title: input.document.title,
-      receivedVia: input.document.receivedVia,
-    },
-  });
-  return { ok: true, documentId: row.id };
+  // 記録と履歴は一緒に残す。記録できなかったら、置いたファイルを消す（どこからも使われないファイルを残さない）
+  let documentId: string;
+  try {
+    documentId = await db.transaction(async (tx) => {
+      const [row] = await tx
+        .insert(operatorDocuments)
+        .values({
+          shopId: input.shopId,
+          operatorId: 'operatorId' in input.owner ? input.owner.operatorId : null,
+          applicationId: 'applicationId' in input.owner ? input.owner.applicationId : null,
+          kind: input.document.kind,
+          title: input.document.title,
+          expiresOn: input.document.expiresOn,
+          receivedVia: input.document.receivedVia,
+          note: input.document.note,
+          uploadedBy: input.actorId,
+          ...stored,
+        })
+        .returning({ id: operatorDocuments.id });
+      await writeAuditLog(tx, {
+        shopId: input.shopId,
+        actorId: input.actorId,
+        action: 'operator.document_add',
+        targetType: 'operator_document',
+        targetId: row.id,
+        after: {
+          ...input.owner,
+          kind: input.document.kind,
+          title: input.document.title,
+          receivedVia: input.document.receivedVia,
+        },
+      });
+      return row.id;
+    });
+  } catch (error) {
+    if (stored) {
+      const key = stored.fileKey;
+      await store
+        .remove(key)
+        .catch((removeError) => logWarn('storage.orphan_remove_failed', { code: key }, removeError));
+    }
+    throw error;
+  }
+  return { ok: true, documentId };
 }
 
 const documentColumns = {
@@ -199,6 +215,8 @@ export async function readDocumentFile(
     );
   if (!row?.fileKey || !row.fileName || !row.mimeType) return null;
   const bytes = await store.get(row.fileKey);
+  // 記録はあるのにファイルがない（保存先の不具合・手作業での削除）。気づけるようにログに出す
+  if (!bytes) logError('storage.document_missing', { documentId: params.documentId });
   return bytes ? { bytes, fileName: row.fileName, mimeType: row.mimeType } : null;
 }
 
@@ -208,23 +226,33 @@ export async function deleteDocument(
   store: FileStore,
   params: { shopId: string; documentId: string; actorId: string | null },
 ): Promise<boolean> {
-  const [row] = await db
-    .delete(operatorDocuments)
-    .where(and(eq(operatorDocuments.id, params.documentId), eq(operatorDocuments.shopId, params.shopId)))
-    .returning({
-      fileKey: operatorDocuments.fileKey,
-      title: operatorDocuments.title,
-      operatorId: operatorDocuments.operatorId,
+  // 記録の削除と履歴を先に確定し、そのあとでファイルを消す（ファイルだけ消えて記録が残る、を防ぐ）
+  const row = await db.transaction(async (tx) => {
+    const [deleted] = await tx
+      .delete(operatorDocuments)
+      .where(and(eq(operatorDocuments.id, params.documentId), eq(operatorDocuments.shopId, params.shopId)))
+      .returning({
+        fileKey: operatorDocuments.fileKey,
+        title: operatorDocuments.title,
+        operatorId: operatorDocuments.operatorId,
+      });
+    if (!deleted) return null;
+    await writeAuditLog(tx, {
+      shopId: params.shopId,
+      actorId: params.actorId,
+      action: 'operator.document_delete',
+      targetType: 'operator_document',
+      targetId: params.documentId,
+      before: { title: deleted.title, operatorId: deleted.operatorId },
     });
-  if (!row) return false;
-  if (row.fileKey) await store.remove(row.fileKey);
-  await writeAuditLog(db, {
-    shopId: params.shopId,
-    actorId: params.actorId,
-    action: 'operator.document_delete',
-    targetType: 'operator_document',
-    targetId: params.documentId,
-    before: { title: row.title, operatorId: row.operatorId },
+    return deleted;
   });
+  if (!row) return false;
+  if (row.fileKey) {
+    const key = row.fileKey;
+    await store
+      .remove(key)
+      .catch((error) => logWarn('storage.orphan_remove_failed', { documentId: params.documentId, code: key }, error));
+  }
   return true;
 }

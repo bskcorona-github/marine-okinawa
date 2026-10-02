@@ -8,6 +8,7 @@ import { autoRequestPlanOperator, listOperatorRequests } from '../partner/reques
 import type { FileStore } from '../storage/store';
 import type { MenuInput } from './menu-admin';
 import { getMenuForAdmin } from './menus';
+import { updateMenu } from './menu-admin';
 import { readPlanImage, savePlanImage } from './plan-images';
 import {
   approvePlanPublish,
@@ -16,6 +17,7 @@ import {
   createOperatorPlan,
   diffPlanInput,
   getOperatorPlan,
+  getPendingRevision,
   listOperatorPlans,
   menuToInput,
   rejectPlanPublish,
@@ -23,10 +25,29 @@ import {
   requestPlanPublish,
   saveOperatorPlan,
   setOperatorPlanPaused,
+  withdrawPlanPublish,
   withdrawPlanRevision,
 } from './operator-plans';
 
 const db = getTestDb();
+
+/** 組合が審査の画面を開いて、そのまま公開を承認する（画面を開いたときの更新日時を送る） */
+async function approvePublish(shopId: string, menuId: string) {
+  const [m] = await db.select({ updatedAt: menus.updatedAt }).from(menus).where(eq(menus.id, menuId));
+  return approvePlanPublish(db, { shopId, menuId, actorId: null, seenUpdatedAt: m.updatedAt });
+}
+
+/** 組合が審査の画面を開いて、そのまま変更を承認する（画面で見た申請の id と更新日時を送る） */
+async function approveRevision(shopId: string, menuId: string) {
+  const revision = (await getPendingRevision(db, menuId))!;
+  return approvePlanRevision(db, {
+    shopId,
+    menuId,
+    actorId: null,
+    seenRevisionId: revision.id,
+    seenUpdatedAt: revision.updatedAt,
+  });
+}
 
 const input: MenuInput = {
   slug: 'ignored',
@@ -133,7 +154,7 @@ describe('事業者のプランの登録', () => {
     });
 
     await requestPlanPublish(db, ctx);
-    await expect(approvePlanPublish(db, { shopId: shop.id, menuId: id, actorId: null })).resolves.toEqual({
+    await expect(approvePublish(shop.id, id)).resolves.toEqual({
       operatorId: a.id,
     });
     const published = await menu(id);
@@ -148,7 +169,7 @@ describe('事業者のプランの登録', () => {
     await addRule(id);
     const ctx = { shopId: shop.id, operatorId: a.id, menuId: id, actorId: null };
     await requestPlanPublish(db, ctx);
-    await approvePlanPublish(db, { shopId: shop.id, menuId: id, actorId: null });
+    await approvePublish(shop.id, id);
 
     const current = menuToInput((await getMenuForAdmin(db, shop.id, id))!);
     const changed = { ...current, title: 'パラセーリング（新）', prices: [{ ...current.prices[0], price: 9800 }] };
@@ -172,7 +193,7 @@ describe('事業者のプランの登録', () => {
     await expect(withdrawPlanRevision(db, ctx)).rejects.toMatchObject({ code: 'NO_PENDING' });
 
     await saveOperatorPlan(db, { ...ctx, input: changed });
-    await expect(approvePlanRevision(db, { shopId: shop.id, menuId: id, actorId: null })).resolves.toEqual({
+    await expect(approveRevision(shop.id, id)).resolves.toEqual({
       operatorId: a.id,
     });
     live = (await getMenuForAdmin(db, shop.id, id))!;
@@ -182,6 +203,63 @@ describe('事業者のプランの登録', () => {
     expect((await getOperatorPlan(db, ctx))!.pendingRevision).toBeNull();
   });
 
+  it('組合が画面で見た内容のときだけ承認する。取り下げたあとの公開の承認はできない', async () => {
+    const { shop, a, create, addRule } = await setup();
+    const id = await create();
+    await addRule(id);
+    const ctx = { shopId: shop.id, operatorId: a.id, menuId: id, actorId: null };
+    await requestPlanPublish(db, ctx);
+    const [seen] = await db.select({ updatedAt: menus.updatedAt }).from(menus).where(eq(menus.id, id));
+    // 組合が画面を開いたあとに、事業者が下書きを直した
+    const draft = menuToInput((await getMenuForAdmin(db, shop.id, id))!);
+    await saveOperatorPlan(db, { ...ctx, input: { ...draft, title: '直したプラン名' } });
+    await expect(
+      approvePlanPublish(db, { shopId: shop.id, menuId: id, actorId: null, seenUpdatedAt: seen.updatedAt }),
+    ).rejects.toMatchObject({ code: 'CHANGED_SINCE_VIEW' });
+    await withdrawPlanPublish(db, ctx);
+    await expect(approvePublish(shop.id, id)).rejects.toMatchObject({ code: 'NO_PENDING' });
+
+    await requestPlanPublish(db, ctx);
+    await approvePublish(shop.id, id);
+    const current = menuToInput((await getMenuForAdmin(db, shop.id, id))!);
+    await saveOperatorPlan(db, { ...ctx, input: { ...current, title: '申請 1' } });
+    const first = (await getPendingRevision(db, id))!;
+    // 審査の画面を開いたあとに、事業者が申請を置き換えた
+    await saveOperatorPlan(db, { ...ctx, input: { ...current, title: '申請 2' } });
+    await expect(
+      approvePlanRevision(db, {
+        shopId: shop.id,
+        menuId: id,
+        actorId: null,
+        seenRevisionId: first.id,
+        seenUpdatedAt: first.updatedAt,
+      }),
+    ).rejects.toMatchObject({ code: 'CHANGED_SINCE_VIEW' });
+  });
+
+  it('変更の承認では、事業者が変えた項目だけを反映し、申請のあとに組合が直した項目は残す。同じ項目なら止める', async () => {
+    const { shop, a, create, addRule } = await setup();
+    const id = await create();
+    await addRule(id);
+    const ctx = { shopId: shop.id, operatorId: a.id, menuId: id, actorId: null };
+    await requestPlanPublish(db, ctx);
+    await approvePublish(shop.id, id);
+    const base = menuToInput((await getMenuForAdmin(db, shop.id, id))!);
+    await saveOperatorPlan(db, { ...ctx, input: { ...base, title: '事業者が直した名前' } });
+    // 申請のあとに、組合が注意事項を直した
+    await updateMenu(db, shop.id, id, { ...base, notes: '組合が直した注意事項' });
+    await approveRevision(shop.id, id);
+    const live = (await getMenuForAdmin(db, shop.id, id))!;
+    expect(live.translation.title).toBe('事業者が直した名前');
+    expect(live.translation.notes).toBe('組合が直した注意事項');
+
+    // 同じ項目（名前）を組合も直していたら、どちらを残すか決められないので止める
+    const now = menuToInput(live);
+    await saveOperatorPlan(db, { ...ctx, input: { ...now, title: '事業者の案' } });
+    await updateMenu(db, shop.id, id, { ...now, title: '組合の案' });
+    await expect(approveRevision(shop.id, id)).rejects.toMatchObject({ code: 'REVISION_CONFLICT' });
+  });
+
   it('受付の一時停止・再開は公開中のプランだけ、すぐ反映する', async () => {
     const { shop, a, create, addRule, menu } = await setup();
     const id = await create();
@@ -189,7 +267,7 @@ describe('事業者のプランの登録', () => {
     await expect(setOperatorPlanPaused(db, { ...ctx, paused: true })).rejects.toMatchObject({ code: 'NOT_PUBLISHED' });
     await addRule(id);
     await requestPlanPublish(db, ctx);
-    await approvePlanPublish(db, { shopId: shop.id, menuId: id, actorId: null });
+    await approvePublish(shop.id, id);
     await setOperatorPlanPaused(db, { ...ctx, paused: true });
     expect((await menu(id)).status).toBe('paused');
     await setOperatorPlanPaused(db, { ...ctx, paused: false });
@@ -211,7 +289,7 @@ describe('申込のときの自動の受入確認', () => {
     const id = await create();
     await addRule(id);
     await requestPlanPublish(db, { shopId: shop.id, operatorId: a.id, menuId: id, actorId: null });
-    await approvePlanPublish(db, { shopId: shop.id, menuId: id, actorId: null });
+    await approvePublish(shop.id, id);
     const slot = await seedSlot(db, { shopId: shop.id, menuId: id, startsAt: new Date('2026-10-05T00:00:00Z') });
     const [price] = (await getMenuForAdmin(db, shop.id, id))!.prices;
     const book = async (email: string) =>

@@ -1,6 +1,6 @@
-import { NEW_PLAN_VALUES } from '@/app/admin/(protected)/menus/form-values';
-import { MenuForm } from '@/app/admin/(protected)/menus/menu-form';
-import { PageHeader } from '@/components/admin/page-header';
+import { NEW_PLAN_VALUES } from '@/components/backoffice/menu-form-values';
+import { MenuForm } from '@/components/backoffice/menu-form';
+import { PageHeader } from '@/components/backoffice/page-header';
 import { db } from '@/db';
 import { requireOperator } from '@/modules/auth/guard';
 import { listActivitiesForAdmin } from '@/modules/catalog/activities';

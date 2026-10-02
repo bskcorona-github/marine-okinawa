@@ -1,11 +1,11 @@
-import { PageHeader } from '@/components/admin/page-header';
+import { PageHeader } from '@/components/backoffice/page-header';
 import { db } from '@/db';
 import { requireAdmin } from '@/modules/auth/guard';
 import { listActivitiesForAdmin } from '@/modules/catalog/activities';
 import { listOperators } from '@/modules/catalog/menus';
 import { createMenuAction, uploadMenuImageAction } from '../actions';
-import { NEW_PLAN_VALUES } from '../form-values';
-import { MenuForm } from '../menu-form';
+import { NEW_PLAN_VALUES } from '@/components/backoffice/menu-form-values';
+import { MenuForm } from '@/components/backoffice/menu-form';
 
 export const metadata = { title: 'プランを追加' };
 

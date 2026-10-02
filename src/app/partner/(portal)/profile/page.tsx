@@ -1,6 +1,6 @@
 import { notFound } from 'next/navigation';
-import { Notice, PageHeader, Panel } from '@/components/admin/page-header';
-import { SubmitButton } from '@/components/admin/submit-button';
+import { Notice, PageHeader, Panel } from '@/components/backoffice/page-header';
+import { SubmitButton } from '@/components/backoffice/submit-button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { db } from '@/db';

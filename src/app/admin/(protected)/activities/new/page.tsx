@@ -1,4 +1,4 @@
-import { PageHeader } from '@/components/admin/page-header';
+import { PageHeader } from '@/components/backoffice/page-header';
 import { requireAdmin } from '@/modules/auth/guard';
 import { saveActivityAction } from '../actions';
 import { ActivityForm } from '../activity-form';

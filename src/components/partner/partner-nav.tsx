@@ -1,6 +1,7 @@
 'use client';
 
 import {
+  Banknote,
   Building2,
   ClipboardList,
   FileText,
@@ -19,6 +20,7 @@ const NAV: { href: string; label: string; icon: LucideIcon; exact?: boolean }[] 
   { href: '/partner/requests', label: '受入確認', icon: MessageSquareReply },
   { href: '/partner/bookings', label: '予約・催行報告', icon: ClipboardList },
   { href: '/partner/plans', label: 'プラン', icon: LayoutList },
+  { href: '/partner/settlements', label: '精算', icon: Banknote },
   { href: '/partner/profile', label: '登録情報', icon: Building2 },
   { href: '/partner/documents', label: '資料', icon: FileText },
 ];
@@ -47,7 +49,7 @@ export function PartnerNav({ pendingRequests, awaitingReport }: { pendingRequest
               href={href}
               aria-current={active ? 'page' : undefined}
               className={cn(
-                'flex min-h-10 items-center gap-2.5 rounded-lg px-3 text-sm font-medium whitespace-nowrap transition',
+                'flex min-h-10 items-center gap-2.5 rounded-lg px-3 text-sm font-medium whitespace-nowrap transition pointer-coarse:min-h-11',
                 active ? 'bg-white/15 text-white' : 'text-white/75 hover:bg-white/10 hover:text-white',
               )}
             >

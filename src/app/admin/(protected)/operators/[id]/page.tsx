@@ -1,12 +1,12 @@
 import { Download } from 'lucide-react';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { ConfirmDialog } from '@/components/admin/confirm-dialog';
-import { ExpiryBadge } from '@/components/admin/expiry-badge';
-import { FileInput } from '@/components/admin/file-input';
-import { SELECT_CLASS } from '@/components/admin/field-styles';
-import { Notice, PageHeader, Panel } from '@/components/admin/page-header';
-import { SubmitButton } from '@/components/admin/submit-button';
+import { ConfirmDialog } from '@/components/backoffice/confirm-dialog';
+import { ExpiryBadge } from '@/components/backoffice/expiry-badge';
+import { FileInput } from '@/components/backoffice/file-input';
+import { SELECT_CLASS } from '@/components/backoffice/field-styles';
+import { Notice, PageHeader, Panel } from '@/components/backoffice/page-header';
+import { SubmitButton } from '@/components/backoffice/submit-button';
 import { buttonVariants } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -31,13 +31,14 @@ import { SLOT_HORIZON_DAYS } from '@/modules/schedule/sync-slots';
 import { getShopById } from '@/modules/shop/shops';
 import { FILE_ERROR_LABELS } from '@/modules/storage/files';
 import { updateOperatorAction } from '../actions';
-import { AccountIssueForm } from './account-issue-form';
+import { AccountIssueForm, AccountResetForm } from './account-issue-form';
 import { OperatorForm } from './operator-form';
 import {
   addDocumentAction,
   deleteDocumentAction,
   issueAccountAction,
   reviewChangeAction,
+  resetAccountAction,
   setAccountDisabledAction,
 } from './partner-actions';
 
@@ -57,7 +58,9 @@ const ERRORS: Record<string, string> = {
   OWNER_NOT_FOUND: '事業者が見つかりません。画面を開き直してください',
   FILE_REQUIRED: 'Web で受け取った資料は、ファイルを選んでください（郵送・持参ならファイルなしで登録できます）',
   document_input: '資料の種類・名前・有効期限を確認してください',
-  change_done: 'この更新申請は反映できませんでした（すでに反映・見送り済み、または内容が今の入力の決まりに合いません）',
+  change_done: 'この更新申請は、すでに反映・見送り済みです。画面を開き直してください',
+  change_invalid:
+    'この更新申請は、内容が今の入力の決まりに合わないため反映できませんでした（電話番号・登録番号の形式など）。事業者に申請し直してもらうか、見送ってください',
   input: '入力内容を確認してください',
 };
 
@@ -121,8 +124,8 @@ export default async function OperatorPage({ params, searchParams }: PageProps<'
         )}
         {lastPeriodEnd && lastPeriodEnd < horizonEnd && (
           <Notice tone="warning">
-            オン期は {dateLabel(lastPeriodEnd)} まで登録されています。予約は {dateLabel(horizonEnd)}{' '}
-            まで受け付けているため、それ以降のオン期があれば追加してください（未登録の日はオフ期料金になります）。
+            繁忙期は {dateLabel(lastPeriodEnd)} まで登録されています。予約は {dateLabel(horizonEnd)}{' '}
+            まで受け付けているため、それ以降の繁忙期があれば追加してください（未登録の日は通常期料金になります）。
           </Notice>
         )}
         {pending.length > 0 && (
@@ -174,7 +177,7 @@ export default async function OperatorPage({ params, searchParams }: PageProps<'
         <section id="accounts" className="scroll-mt-6">
           <Panel
             title="事業者画面のアカウント"
-            description="事業者は、自社に照会・割り当てられた予約だけを見られます。ログインには 2 要素認証が必要です。"
+            description="事業者は、自社に受入確認を依頼された予約・割り当てられた予約だけを見られます。ログインには 2 要素認証が必要です。"
           >
             {accounts.length > 0 && (
               <ul className="mb-4 divide-y divide-slate-100 text-sm">
@@ -185,6 +188,7 @@ export default async function OperatorPage({ params, searchParams }: PageProps<'
                       <span className="text-xs text-slate-600">
                         {a.name} ・ 発行 {at(a.createdAt)} ・{' '}
                         {a.twoFactorEnabled ? '2 要素認証 設定済み' : '2 要素認証 未設定'}
+                        {a.passwordChangeRequired && ' ・ 仮パスワードのまま'}
                       </span>
                     </span>
                     <span className="flex items-center gap-2">
@@ -192,6 +196,14 @@ export default async function OperatorPage({ params, searchParams }: PageProps<'
                         <span className="rounded-full bg-slate-200 px-2.5 py-0.5 text-xs font-semibold text-slate-700">
                           停止中
                         </span>
+                      )}
+                      {!a.disabledAt && (
+                        <AccountResetForm
+                          action={resetAccountAction.bind(null, op.id)}
+                          userId={a.userId}
+                          email={a.email}
+                          loginUrl={`${getEnv().APP_URL.replace(/\/$/, '')}/admin/login`}
+                        />
                       )}
                       <form action={setAccountDisabledAction.bind(null, op.id)}>
                         <input type="hidden" name="userId" value={a.userId} />
@@ -279,7 +291,7 @@ export default async function OperatorPage({ params, searchParams }: PageProps<'
             )}
             <details
               className="rounded-lg border border-slate-200 p-3 text-sm"
-              open={Boolean(error && sp.error !== 'change_done')}
+              open={Boolean(error && sp.error !== 'change_done' && sp.error !== 'change_invalid')}
             >
               <summary className="cursor-pointer font-semibold text-sky-800">資料を登録する</summary>
               <form action={addDocumentAction.bind(null, op.id)} className="mt-3 grid gap-3 sm:grid-cols-2">

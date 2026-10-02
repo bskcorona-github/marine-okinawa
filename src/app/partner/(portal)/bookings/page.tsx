@@ -1,6 +1,6 @@
-import Link from 'next/link';
-import { PageHeader } from '@/components/admin/page-header';
-import { BookingStatusBadge } from '@/components/admin/status-badge';
+import { PageHeader } from '@/components/backoffice/page-header';
+import { BookingStatusBadge } from '@/components/backoffice/status-badge';
+import { TabLinks } from '@/components/backoffice/tab-links';
 import { OperatorBookingRow } from '@/components/partner/booking-row';
 import { db } from '@/db';
 import { formatDateLabel, localDate, localTime, zonedToUtc } from '@/lib/dates';
@@ -35,8 +35,8 @@ export default async function PartnerBookingsPage({ searchParams }: PageProps<'/
   const todayStart = zonedToUtc(today, '00:00', shop.timezone);
   const [listed, awaiting] = await Promise.all([
     tab === 'upcoming'
-      ? listOperatorBookings(db, { operatorId: operator.operatorId, from: todayStart, limit: 200 })
-      : listOperatorBookings(db, { operatorId: operator.operatorId, to: todayStart, order: 'desc', limit: 200 }),
+      ? listOperatorBookings(db, { operatorId: operator.operatorId, now, from: todayStart, limit: 200 })
+      : listOperatorBookings(db, { operatorId: operator.operatorId, now, to: todayStart, order: 'desc', limit: 200 }),
     // 催行報告待ち（開始済みで未報告の確定予約）は、日付に関係なく先頭にまとめる（件数で切らない）
     listAwaitingReport(db, { operatorId: operator.operatorId, now }),
   ]);
@@ -87,23 +87,14 @@ export default async function PartnerBookingsPage({ searchParams }: PageProps<'/
         </section>
       )}
 
-      <nav aria-label="表示する予約" className="flex gap-2 text-sm">
-        {TABS.map((t) => (
-          <Link
-            key={t.value}
-            href={t.value === 'upcoming' ? '/partner/bookings' : '/partner/bookings?tab=past'}
-            aria-current={tab === t.value ? 'page' : undefined}
-            className={cn(
-              'inline-flex min-h-11 items-center rounded-full px-4 ring-1',
-              tab === t.value
-                ? 'bg-slate-900 font-semibold text-white ring-slate-900'
-                : 'text-slate-700 ring-slate-200 hover:bg-white',
-            )}
-          >
-            {t.label}
-          </Link>
-        ))}
-      </nav>
+      <TabLinks
+        label="表示する予約"
+        current={tab}
+        tabs={TABS.map((t) => ({
+          ...t,
+          href: t.value === 'upcoming' ? '/partner/bookings' : '/partner/bookings?tab=past',
+        }))}
+      />
       {groups.length === 0 ? (
         <p className="rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-600">
           {tab === 'upcoming' ? 'これからの予約はありません。' : '終わった予約はありません。'}

@@ -1,9 +1,9 @@
 import { Mail, Phone } from 'lucide-react';
 import { notFound, redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
-import { SELECT_CLASS } from '@/components/admin/field-styles';
-import { Notice, PageHeader, Panel } from '@/components/admin/page-header';
-import { SubmitButton } from '@/components/admin/submit-button';
+import { SELECT_CLASS } from '@/components/backoffice/field-styles';
+import { Notice, PageHeader, Panel } from '@/components/backoffice/page-header';
+import { SubmitButton } from '@/components/backoffice/submit-button';
 import { Textarea } from '@/components/ui/textarea';
 import { db } from '@/db';
 import { formatDateLabel, localTime } from '@/lib/dates';

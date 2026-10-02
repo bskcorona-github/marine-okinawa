@@ -1,8 +1,8 @@
 'use client';
 
 import { startTransition, useActionState, type FormEvent } from 'react';
-import { StickySaveBar, useUnsavedChanges } from '@/components/admin/form-kit';
-import { Panel } from '@/components/admin/page-header';
+import { StickySaveBar, useUnsavedChanges } from '@/components/backoffice/form-kit';
+import { Panel } from '@/components/backoffice/page-header';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import type { AdminFormState } from '@/lib/zod-ja';

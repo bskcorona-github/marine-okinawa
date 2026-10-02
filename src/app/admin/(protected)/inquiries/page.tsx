@@ -1,5 +1,6 @@
 import Link from 'next/link';
-import { PageHeader } from '@/components/admin/page-header';
+import { PageHeader } from '@/components/backoffice/page-header';
+import { TabLinks } from '@/components/backoffice/tab-links';
 import { db } from '@/db';
 import { formatDateLabel, localTime } from '@/lib/dates';
 import { isOwnKey } from '@/lib/own';
@@ -42,23 +43,15 @@ export default async function InquiriesPage({ searchParams }: PageProps<'/admin/
   return (
     <div className="max-w-4xl space-y-4">
       <PageHeader title="お問い合わせ" description="サイトのお問い合わせフォームから届いた内容です（新しい順）。" />
-      <nav className="flex flex-wrap gap-2 text-sm" aria-label="対応状況">
-        {tabs.map((tab) => (
-          <Link
-            key={tab.label}
-            href={tab.value ? `/admin/inquiries?status=${tab.value}` : '/admin/inquiries'}
-            aria-current={status === tab.value ? 'true' : undefined}
-            className={cn(
-              'inline-flex min-h-9 items-center rounded-full px-3 ring-1 pointer-coarse:min-h-11',
-              status === tab.value
-                ? 'bg-slate-900 font-semibold text-white ring-slate-900'
-                : 'text-slate-700 ring-slate-200 hover:bg-slate-50',
-            )}
-          >
-            {tab.label}
-          </Link>
-        ))}
-      </nav>
+      <TabLinks
+        label="対応状況"
+        current={status ?? 'all'}
+        tabs={tabs.map((tab) => ({
+          value: tab.value ?? 'all',
+          label: tab.label,
+          href: tab.value ? `/admin/inquiries?status=${tab.value}` : '/admin/inquiries',
+        }))}
+      />
       <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
         {rows.length === 0 ? (
           <p className="p-8 text-center text-sm text-slate-500">お問い合わせはありません</p>

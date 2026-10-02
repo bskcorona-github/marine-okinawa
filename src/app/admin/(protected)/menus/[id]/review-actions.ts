@@ -3,7 +3,6 @@
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { db } from '@/db';
-import { getEnv } from '@/lib/env';
 import { isUuid } from '@/lib/validation';
 import { requireAdmin } from '@/modules/auth/guard';
 import {
@@ -13,8 +12,8 @@ import {
   rejectPlanPublish,
   rejectPlanRevision,
 } from '@/modules/catalog/operator-plans';
-import { getMailer } from '@/modules/notification/mailer';
 import { sendPlanReviewResultMail } from '@/modules/notification/send-plan-review-mail';
+import { sendQuietly } from '@/modules/notification/send-quietly';
 
 type Kind = 'publish' | 'revision';
 
@@ -24,23 +23,25 @@ async function review(menuId: string, kind: Kind, approved: boolean, formData: F
   if (!isUuid(menuId)) redirect('/admin/menus');
   const note = String(formData.get('note') ?? '');
   const ctx = { shopId: admin.shopId, menuId, actorId: admin.userId };
+  // 承認は、組合が画面で見た内容のときだけ（画面を開いたときの更新日時と、変更の申請の id を送ってもらう）
+  const seenUpdatedAt = new Date(String(formData.get('seenUpdatedAt') ?? ''));
+  const seenRevisionId = String(formData.get('seenRevisionId') ?? '');
   try {
+    if (approved && Number.isNaN(seenUpdatedAt.getTime())) throw new PlanError('CHANGED_SINCE_VIEW');
     if (kind === 'publish') {
-      await (approved ? approvePlanPublish(db, ctx) : rejectPlanPublish(db, { ...ctx, note }));
+      await (approved ? approvePlanPublish(db, { ...ctx, seenUpdatedAt }) : rejectPlanPublish(db, { ...ctx, note }));
     } else {
-      await (approved ? approvePlanRevision(db, ctx) : rejectPlanRevision(db, { ...ctx, note }));
+      await (approved
+        ? approvePlanRevision(db, { ...ctx, seenRevisionId, seenUpdatedAt })
+        : rejectPlanRevision(db, { ...ctx, note }));
     }
   } catch (error) {
     if (error instanceof PlanError) redirect(`/admin/menus/${menuId}?reviewError=${error.code}#review`);
     throw error;
   }
-  await sendPlanReviewResultMail(db, getMailer(), {
-    menuId,
-    kind,
-    approved,
-    note: approved ? undefined : note,
-    appUrl: getEnv().APP_URL,
-  }).catch((error) => console.error('plan review result mail failed', { menuId, error }));
+  await sendQuietly('mail.plan_review_result.failed', { menuId, kind }, (mailer, appUrl) =>
+    sendPlanReviewResultMail(db, mailer, { menuId, kind, approved, note: approved ? undefined : note, appUrl }),
+  );
   revalidatePath('/', 'layout');
   redirect(`/admin/menus/${menuId}?reviewed=${kind}-${approved ? 'approved' : 'rejected'}&saved=${Date.now()}`);
 }

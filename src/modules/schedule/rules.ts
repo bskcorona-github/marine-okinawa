@@ -1,8 +1,9 @@
 import { and, asc, eq, gt, gte, isNull, lt } from 'drizzle-orm';
 import { z } from 'zod';
-import type { Db, DbOrTx } from '@/db/client';
+import type { Db, DbOrTx, Tx } from '@/db/client';
 import { menus, scheduleExceptions, scheduleRules, shops, slots } from '@/db/schema';
 import { addDays, localDate, toHhmm, zonedToUtc } from '@/lib/dates';
+import { logError } from '@/lib/log';
 import { writeAuditLog } from '@/modules/audit/log';
 import { generateSlots, type ExceptionInput as SlotException, type RuleInput as SlotRule } from './generate';
 import { resyncMenu, SLOT_HORIZON_DAYS, type SyncResult } from './sync-slots';
@@ -52,14 +53,46 @@ export type ExceptionInput = z.infer<typeof exceptionInputSchema>;
 
 type Ctx = { shopId: string; actorId: string | null; now: Date };
 
-async function findMenu(db: Db, shopId: string, menuId: string) {
+/** 回の設定の操作の失敗（画面にメッセージを出す） */
+export class ScheduleError extends Error {
+  constructor(readonly code: 'MENU_NOT_FOUND' | 'RULE_NOT_FOUND' | 'RESYNC_FAILED') {
+    super(code);
+    this.name = 'ScheduleError';
+  }
+}
+
+async function findMenu(db: DbOrTx, shopId: string, menuId: string) {
   const [menu] = await db
     .select({ id: menus.id, timezone: shops.timezone })
     .from(menus)
     .innerJoin(shops, eq(shops.id, menus.shopId))
     .where(and(eq(menus.id, menuId), eq(menus.shopId, shopId)));
-  if (!menu) throw new Error('menu not found');
+  if (!menu) throw new ScheduleError('MENU_NOT_FOUND');
   return menu;
+}
+
+/**
+ * 回の設定を変える：設定の変更と履歴を 1 つのトランザクションで保存してから、回を作り直す
+ * （作り直しに失敗しても、設定は保存済み。毎日の定期処理でも作り直す）
+ */
+async function changeSchedule(
+  db: Db,
+  ctx: Ctx,
+  menuId: string,
+  change: (tx: Tx) => Promise<void>,
+): Promise<SyncResult> {
+  const menu = await db.transaction(async (tx) => {
+    const found = await findMenu(tx, ctx.shopId, menuId);
+    await change(tx);
+    return found;
+  });
+  try {
+    return await resyncMenu(db, { menuId, timezone: menu.timezone, now: ctx.now });
+  } catch (error) {
+    // 設定は保存済み。回の作り直しだけ失敗した（エラーの画面にせず、押し直しで二重に登録させない）
+    logError('schedule.resync.failed', { menuId }, error);
+    throw new ScheduleError('RESYNC_FAILED');
+  }
 }
 
 export async function listScheduleRules(db: Db, menuId: string) {
@@ -80,30 +113,30 @@ export async function listUpcomingExceptions(db: Db, params: { menuId: string; t
 }
 
 export async function addScheduleRule(db: Db, ctx: Ctx, menuId: string, input: RuleInput): Promise<SyncResult> {
-  const menu = await findMenu(db, ctx.shopId, menuId);
-  const [rule] = await db
-    .insert(scheduleRules)
-    .values({ menuId, ...input, weekdays: [...new Set(input.weekdays)].sort() })
-    .returning();
-  await writeAuditLog(db, {
-    shopId: ctx.shopId,
-    actorId: ctx.actorId,
-    action: 'schedule_rule.create',
-    targetType: 'schedule_rule',
-    targetId: rule.id,
-    after: rule,
+  return changeSchedule(db, ctx, menuId, async (tx) => {
+    const [rule] = await tx
+      .insert(scheduleRules)
+      .values({ menuId, ...input, weekdays: [...new Set(input.weekdays)].sort() })
+      .returning();
+    await writeAuditLog(tx, {
+      shopId: ctx.shopId,
+      actorId: ctx.actorId,
+      action: 'schedule_rule.create',
+      targetType: 'schedule_rule',
+      targetId: rule.id,
+      after: rule,
+    });
   });
-  return resyncMenu(db, { menuId, timezone: menu.timezone, now: ctx.now });
 }
 
 export async function deleteScheduleRule(db: Db, ctx: Ctx, menuId: string, ruleId: string): Promise<SyncResult> {
-  const menu = await findMenu(db, ctx.shopId, menuId);
-  const [rule] = await db
-    .delete(scheduleRules)
-    .where(and(eq(scheduleRules.id, ruleId), eq(scheduleRules.menuId, menuId)))
-    .returning();
-  if (rule) {
-    await writeAuditLog(db, {
+  return changeSchedule(db, ctx, menuId, async (tx) => {
+    const [rule] = await tx
+      .delete(scheduleRules)
+      .where(and(eq(scheduleRules.id, ruleId), eq(scheduleRules.menuId, menuId)))
+      .returning();
+    if (!rule) return;
+    await writeAuditLog(tx, {
       shopId: ctx.shopId,
       actorId: ctx.actorId,
       action: 'schedule_rule.delete',
@@ -111,8 +144,7 @@ export async function deleteScheduleRule(db: Db, ctx: Ctx, menuId: string, ruleI
       targetId: rule.id,
       before: rule,
     });
-  }
-  return resyncMenu(db, { menuId, timezone: menu.timezone, now: ctx.now });
+  });
 }
 
 /** ルールの定員だけを変える（予約の入っている回を休止にせずに定員を変えられる） */
@@ -123,23 +155,24 @@ export async function updateScheduleRuleCapacity(
   ruleId: string,
   capacity: number,
 ): Promise<SyncResult> {
-  const menu = await findMenu(db, ctx.shopId, menuId);
-  const [before] = await db
-    .select()
-    .from(scheduleRules)
-    .where(and(eq(scheduleRules.id, ruleId), eq(scheduleRules.menuId, menuId)));
-  if (!before) throw new Error('rule not found');
-  await db.update(scheduleRules).set({ capacity }).where(eq(scheduleRules.id, ruleId));
-  await writeAuditLog(db, {
-    shopId: ctx.shopId,
-    actorId: ctx.actorId,
-    action: 'schedule_rule.update',
-    targetType: 'schedule_rule',
-    targetId: ruleId,
-    before: { capacity: before.capacity },
-    after: { capacity },
+  return changeSchedule(db, ctx, menuId, async (tx) => {
+    const [before] = await tx
+      .select()
+      .from(scheduleRules)
+      .where(and(eq(scheduleRules.id, ruleId), eq(scheduleRules.menuId, menuId)))
+      .for('update');
+    if (!before) throw new ScheduleError('RULE_NOT_FOUND');
+    await tx.update(scheduleRules).set({ capacity }).where(eq(scheduleRules.id, ruleId));
+    await writeAuditLog(tx, {
+      shopId: ctx.shopId,
+      actorId: ctx.actorId,
+      action: 'schedule_rule.update',
+      targetType: 'schedule_rule',
+      targetId: ruleId,
+      before: { capacity: before.capacity },
+      after: { capacity },
+    });
   });
-  return resyncMenu(db, { menuId, timezone: menu.timezone, now: ctx.now });
 }
 
 export async function addScheduleException(
@@ -148,7 +181,6 @@ export async function addScheduleException(
   menuId: string,
   input: ExceptionInput,
 ): Promise<SyncResult> {
-  const menu = await findMenu(db, ctx.shopId, menuId);
   const capacity = input.type === 'closed' ? null : input.capacity;
   const sameKey = and(
     eq(scheduleExceptions.menuId, menuId),
@@ -156,31 +188,32 @@ export async function addScheduleException(
     input.startTime === null ? isNull(scheduleExceptions.startTime) : eq(scheduleExceptions.startTime, input.startTime),
     eq(scheduleExceptions.type, input.type),
   );
-  const [before] = await db.select().from(scheduleExceptions).where(sameKey);
-  // 同じ日・時刻・種類の例外があれば置き換える（一意制約。同時に登録しても 1 件にまとまるよう 1 文で行う）
-  const [ex] = await db
-    .insert(scheduleExceptions)
-    .values({ menuId, ...input, capacity })
-    .onConflictDoUpdate({
-      target: [
-        scheduleExceptions.menuId,
-        scheduleExceptions.date,
-        scheduleExceptions.startTime,
-        scheduleExceptions.type,
-      ],
-      set: { capacity, updatedAt: new Date() },
-    })
-    .returning();
-  await writeAuditLog(db, {
-    shopId: ctx.shopId,
-    actorId: ctx.actorId,
-    action: before ? 'schedule_exception.replace' : 'schedule_exception.create',
-    targetType: 'schedule_exception',
-    targetId: ex.id,
-    before: before ?? undefined,
-    after: ex,
+  return changeSchedule(db, ctx, menuId, async (tx) => {
+    const [before] = await tx.select().from(scheduleExceptions).where(sameKey);
+    // 同じ日・時刻・種類の例外があれば置き換える（一意制約。同時に登録しても 1 件にまとまるよう 1 文で行う）
+    const [ex] = await tx
+      .insert(scheduleExceptions)
+      .values({ menuId, ...input, capacity })
+      .onConflictDoUpdate({
+        target: [
+          scheduleExceptions.menuId,
+          scheduleExceptions.date,
+          scheduleExceptions.startTime,
+          scheduleExceptions.type,
+        ],
+        set: { capacity, updatedAt: new Date() },
+      })
+      .returning();
+    await writeAuditLog(tx, {
+      shopId: ctx.shopId,
+      actorId: ctx.actorId,
+      action: before ? 'schedule_exception.replace' : 'schedule_exception.create',
+      targetType: 'schedule_exception',
+      targetId: ex.id,
+      before: before ?? undefined,
+      after: ex,
+    });
   });
-  return resyncMenu(db, { menuId, timezone: menu.timezone, now: ctx.now });
 }
 
 export async function deleteScheduleException(
@@ -189,13 +222,13 @@ export async function deleteScheduleException(
   menuId: string,
   exceptionId: string,
 ): Promise<SyncResult> {
-  const menu = await findMenu(db, ctx.shopId, menuId);
-  const [ex] = await db
-    .delete(scheduleExceptions)
-    .where(and(eq(scheduleExceptions.id, exceptionId), eq(scheduleExceptions.menuId, menuId)))
-    .returning();
-  if (ex) {
-    await writeAuditLog(db, {
+  return changeSchedule(db, ctx, menuId, async (tx) => {
+    const [ex] = await tx
+      .delete(scheduleExceptions)
+      .where(and(eq(scheduleExceptions.id, exceptionId), eq(scheduleExceptions.menuId, menuId)))
+      .returning();
+    if (!ex) return;
+    await writeAuditLog(tx, {
       shopId: ctx.shopId,
       actorId: ctx.actorId,
       action: 'schedule_exception.delete',
@@ -203,8 +236,7 @@ export async function deleteScheduleException(
       targetId: ex.id,
       before: ex,
     });
-  }
-  return resyncMenu(db, { menuId, timezone: menu.timezone, now: ctx.now });
+  });
 }
 
 /** bookedSlots / people：休止になる予約のある回と人数、overBooked：定員が予約済みの人数を下回る回 */

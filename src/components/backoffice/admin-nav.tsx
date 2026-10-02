@@ -1,20 +1,22 @@
 'use client';
 
 import {
+  Banknote,
   BarChart3,
   Building2,
   CalendarDays,
   ClipboardList,
   FileText,
+  History,
   Home,
   Inbox,
   LayoutGrid,
+  type LucideIcon,
   Menu,
   PhoneCall,
   Settings,
   Tags,
   X,
-  type LucideIcon,
 } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
@@ -28,10 +30,12 @@ const NAV: { href: string; label: string; icon: LucideIcon; exact?: boolean }[] 
   { href: '/admin/bookings/new', label: '手動予約', icon: PhoneCall },
   { href: '/admin/inquiries', label: 'お問い合わせ', icon: Inbox },
   { href: '/admin/reports', label: '日報・集計', icon: BarChart3 },
+  { href: '/admin/settlements', label: '精算', icon: Banknote },
   { href: '/admin/menus', label: 'プラン', icon: LayoutGrid },
   { href: '/admin/activities', label: 'アクティビティ', icon: Tags },
   { href: '/admin/operators', label: '事業者', icon: Building2 },
   { href: '/admin/pages', label: '固定ページ', icon: FileText },
+  { href: '/admin/logs', label: '操作の記録', icon: History },
   { href: '/admin/settings', label: '設定', icon: Settings },
 ];
 

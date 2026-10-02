@@ -1,5 +1,7 @@
 import { z } from 'zod';
 import type { ShopSettings } from '@/db/schema';
+import { invoiceNumberSchema } from '@/lib/invoice';
+import { checkboxSchema } from '@/lib/validation';
 import { addDays, localDate, zonedToUtc } from '@/lib/dates';
 
 export type { ShopSettings };
@@ -17,6 +19,16 @@ export const DEFAULT_SETTINGS: ShopSettings = {
   adminNotifyEmail: '',
   replyGuide: '',
   autoRequestOwner: true,
+  commissionRate: 10,
+  cancelFreeDays: 7,
+  cancelMidPercent: 50,
+  cancelSameDayPercent: 100,
+  weatherRefundPercent: 100,
+  cancellationFeeToOperator: true,
+  payoutDay: 0,
+  invoiceNumber: '',
+  receiptModel: 'agent',
+  settlementStartMonth: '',
 };
 
 /** 管理画面から保存する値の検証（空欄にできる項目と、必ず値が要る項目を分ける） */
@@ -27,10 +39,7 @@ export const settingsSchema = z.object({
   paymentDueDays: z.coerce.number().int().min(1).max(30),
   commonCancellationPolicy: z.string().trim().max(3000),
   commonWeatherPolicy: z.string().trim().max(2000),
-  bookingPaused: z
-    .union([z.literal('on'), z.literal('true'), z.literal(''), z.boolean()])
-    .optional()
-    .transform((v) => v === true || v === 'on' || v === 'true'),
+  bookingPaused: checkboxSchema,
   bookingPausedMessage: z.string().trim().max(300),
   adminNotifyEmail: z
     .string()
@@ -38,10 +47,24 @@ export const settingsSchema = z.object({
     .max(200)
     .pipe(z.union([z.literal(''), z.email()])),
   replyGuide: z.string().trim().max(200),
-  autoRequestOwner: z
-    .union([z.literal('on'), z.literal('true'), z.literal(''), z.boolean()])
-    .optional()
-    .transform((v) => v === true || v === 'on' || v === 'true'),
+  autoRequestOwner: checkboxSchema,
+  commissionRate: z.coerce
+    .number()
+    .min(0)
+    .max(50)
+    .transform((v) => Math.round(v * 10) / 10),
+  cancelFreeDays: z.coerce.number().int().min(1).max(60),
+  cancelMidPercent: z.coerce.number().int().min(0).max(100),
+  cancelSameDayPercent: z.coerce.number().int().min(0).max(100),
+  weatherRefundPercent: z.coerce.number().int().min(0).max(100),
+  cancellationFeeToOperator: checkboxSchema,
+  payoutDay: z.coerce.number().int().min(0).max(28),
+  invoiceNumber: invoiceNumberSchema,
+  receiptModel: z.enum(['agent', 'seller']),
+  settlementStartMonth: z
+    .string()
+    .trim()
+    .refine((v) => v === '' || /^\d{4}-(0[1-9]|1[0-2])$/.test(v)),
 });
 
 /** 天候・海況による中止の扱い：組合共通の文面のあとに、プランごとの文面を続ける（どちらも空なら空） */

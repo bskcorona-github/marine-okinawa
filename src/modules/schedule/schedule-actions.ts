@@ -12,6 +12,7 @@ import {
   previewRuleAddition,
   previewRuleCapacityChange,
   ruleInputSchema,
+  ScheduleError,
   updateScheduleRuleCapacity,
 } from './rules';
 
@@ -23,8 +24,24 @@ export type ScheduleActionContext = { shopId: string; actorId: string; now: Date
 
 const at = (ctx: ScheduleActionContext, query: string) => `${ctx.page}?${query}`;
 
-/** 予約のある回が休止・定員超過になった場合は、件数を渡して画面で警告する */
-function saved(ctx: ScheduleActionContext, kind: string, result: { closedBooked: number; overBooked: number }) {
+/**
+ * 保存して、戻り先を返す。予約のある回が休止・定員超過になった場合は、件数を渡して画面で警告する。
+ * プラン・ルールが見つからない（ほかの画面で消した）ときは、エラーとして画面に戻す
+ */
+async function saved(
+  ctx: ScheduleActionContext,
+  kind: string,
+  run: () => Promise<{ closedBooked: number; overBooked: number }>,
+): Promise<string> {
+  let result: { closedBooked: number; overBooked: number };
+  try {
+    result = await run();
+  } catch (error) {
+    if (error instanceof ScheduleError) {
+      return at(ctx, error.code === 'RESYNC_FAILED' ? `saved=${kind}&resync=failed` : 'error=notFound');
+    }
+    throw error;
+  }
   const params = new URLSearchParams({ saved: kind });
   if (result.closedBooked > 0) params.set('closedBooked', String(result.closedBooked));
   if (result.overBooked > 0) params.set('overBooked', String(result.overBooked));
@@ -66,7 +83,7 @@ export async function runAddRule(ctx: ScheduleActionContext, menuId: string, for
       return at(ctx, params.toString());
     }
   }
-  return saved(ctx, 'rule', await addScheduleRule(db, ctx, menuId, parsed.data));
+  return saved(ctx, 'rule', () => addScheduleRule(db, ctx, menuId, parsed.data));
 }
 
 /**
@@ -87,11 +104,11 @@ export async function runUpdateRuleCapacity(
       return at(ctx, new URLSearchParams({ confirm: 'ruleCapacity', ruleId, capacity: String(capacity) }).toString());
     }
   }
-  return saved(ctx, 'rule', await updateScheduleRuleCapacity(db, ctx, menuId, ruleId, capacity));
+  return saved(ctx, 'rule', () => updateScheduleRuleCapacity(db, ctx, menuId, ruleId, capacity));
 }
 
 export async function runDeleteRule(ctx: ScheduleActionContext, menuId: string, ruleId: string): Promise<string> {
-  return saved(ctx, 'rule', await deleteScheduleRule(db, ctx, menuId, ruleId));
+  return saved(ctx, 'rule', () => deleteScheduleRule(db, ctx, menuId, ruleId));
 }
 
 /**
@@ -124,7 +141,7 @@ export async function runAddException(ctx: ScheduleActionContext, menuId: string
       return at(ctx, params.toString());
     }
   }
-  return saved(ctx, 'exception', await addScheduleException(db, ctx, menuId, parsed.data));
+  return saved(ctx, 'exception', () => addScheduleException(db, ctx, menuId, parsed.data));
 }
 
 export async function runDeleteException(
@@ -132,5 +149,5 @@ export async function runDeleteException(
   menuId: string,
   exceptionId: string,
 ): Promise<string> {
-  return saved(ctx, 'exception', await deleteScheduleException(db, ctx, menuId, exceptionId));
+  return saved(ctx, 'exception', () => deleteScheduleException(db, ctx, menuId, exceptionId));
 }

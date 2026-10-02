@@ -1,7 +1,7 @@
 import { ChevronRight } from 'lucide-react';
 import Link from 'next/link';
-import { ExpiryBadge } from '@/components/admin/expiry-badge';
-import { Notice, PageHeader, Panel } from '@/components/admin/page-header';
+import { ExpiryBadge } from '@/components/backoffice/expiry-badge';
+import { Notice, PageHeader, Panel } from '@/components/backoffice/page-header';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { db } from '@/db';

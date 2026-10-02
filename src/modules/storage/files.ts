@@ -1,5 +1,5 @@
 /** 受け付けるファイルの形式（資料・写真）。中身の先頭バイトで判定し、拡張子や申告された形式は信用しない */
-export const ALLOWED_FILE_TYPES = {
+const ALLOWED_FILE_TYPES = {
   'application/pdf': { ext: 'pdf', label: 'PDF' },
   'image/jpeg': { ext: 'jpg', label: 'JPEG' },
   'image/png': { ext: 'png', label: 'PNG' },

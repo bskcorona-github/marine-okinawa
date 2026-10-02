@@ -2,10 +2,10 @@ import { Phone } from 'lucide-react';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import type { ReactNode } from 'react';
-import { ConfirmDialog } from '@/components/admin/confirm-dialog';
-import { Notice, PageHeader, Panel } from '@/components/admin/page-header';
-import { SubmitButton } from '@/components/admin/submit-button';
-import { BookingStatusBadge } from '@/components/admin/status-badge';
+import { ConfirmDialog } from '@/components/backoffice/confirm-dialog';
+import { Notice, PageHeader, Panel } from '@/components/backoffice/page-header';
+import { SubmitButton } from '@/components/backoffice/submit-button';
+import { BookingStatusBadge } from '@/components/backoffice/status-badge';
 import { buttonVariants } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -16,6 +16,7 @@ import { ownValue } from '@/lib/own';
 import { cn } from '@/lib/utils';
 import { isUuid } from '@/lib/validation';
 import { requireAdmin } from '@/modules/auth/guard';
+import { isRefundable } from '@/modules/booking/payment-status';
 import {
   BOOKING_SOURCE_LABELS,
   BOOKING_STATUS_LABELS,
@@ -29,11 +30,14 @@ import { formatPhoneForDisplay } from '@/modules/customer/normalize';
 import { remainingSeats } from '@/modules/inventory/availability';
 import { getSlotForAdmin } from '@/modules/inventory/queries';
 import { getShopById } from '@/modules/shop/shops';
-import { occupancyTone, TONE_STYLE } from '../../occupancy';
-import { WEATHER_TARGET_STATUSES } from '@/modules/booking/weather-cancel-slot';
+import { occupancyTone, TONE_STYLE } from '@/components/backoffice/occupancy';
+import { WEATHER_TARGET_STATUSES, weatherRefundDue } from '@/modules/booking/weather-cancel-slot';
 import { changeCapacityAction, closeSlotAction, reopenSlotAction, weatherCancelSlotAction } from './actions';
 
 export const metadata = { title: '回の詳細' };
+
+/** 一括の天候中止では、予約ごとにメールを送るので、時間がかかることがある（このページの操作の時間の上限） */
+export const maxDuration = 120;
 
 /** 枠を押さえている予約（未確定の申込も含む。取消・天候中止は薄く出す） */
 const ACTIVE = new Set<string>(SEAT_HOLDING_STATUSES);
@@ -71,10 +75,14 @@ export default async function SlotPage({ params, searchParams }: PageProps<'/adm
   // 一括の天候中止で止める予約と、全額返金で記録する入金済みの予約
   const weatherTargets = bookings.filter((b) => WEATHER_TARGETS.has(b.status));
   const weatherConfirmed = weatherTargets.filter((b) => b.status === 'confirmed');
-  const weatherPaid = weatherTargets.filter(
-    (b) => b.paymentStatus === 'paid' || b.paymentStatus === 'partially_refunded',
-  );
-  const refundTotal = weatherPaid.reduce((sum, b) => sum + (b.paymentAmount ?? 0) - (b.refundedAmount ?? 0), 0);
+  const weatherPaid = weatherTargets.filter((b) => isRefundable(b.paymentStatus));
+  const now = new Date();
+  // これから返す額の合計（実際の処理と同じく、申込のときの天候中止の返金率で計算。返金済みの分は引く）
+  const refundTotal = weatherPaid.reduce((sum, b) => {
+    const due = weatherRefundDue(b, { settings: shop.settings, startsAt: slot.startsAt, now, timezone: shop.timezone });
+    return sum + (due ?? 0) - (b.refundedAmount ?? 0);
+  }, 0);
+  const weatherPercent = shop.settings.weatherRefundPercent;
   const slotLabel = `${formatDateLabel(slot.startsAt, shop.timezone)} ${localTime(slot.startsAt, shop.timezone)}`;
   // 天候中止のあと、メールで知らせられなかった（メールアドレスがない）予約は、電話で伝える
   const needPhone =
@@ -82,7 +90,7 @@ export default async function SlotPage({ params, searchParams }: PageProps<'/adm
       ? bookings.filter((b) => (b.status === 'cancelled' || b.status === 'weather_cancelled') && !b.hasEmail)
       : [];
   const paymentNote = (b: (typeof bookings)[number]) =>
-    b.paymentStatus === 'paid' || b.paymentStatus === 'partially_refunded'
+    isRefundable(b.paymentStatus)
       ? `入金済み ${formatYen(b.paymentAmount ?? 0)}`
       : b.paymentMethod === 'onsite'
         ? '現地払い'
@@ -154,7 +162,7 @@ export default async function SlotPage({ params, searchParams }: PageProps<'/adm
             {saved}
             {sp.saved === 'weather' &&
               (weatherCount > 0
-                ? `${weatherCount} 件の予約を天候中止・取消にしました。入金済みの予約は全額を返金予定にしています。返金したら予約ごとに記録してください。`
+                ? `${weatherCount} 件の予約を天候中止・取消にしました。入金済みの予約は返金予定額を記録しました（申込のときの天候中止の返金率。まだ返金していません）。カードで払われた予約は、予約ごとの「カードへ返金する」で返金してください（ダッシュボードの「返金待ち」から開けます）。振込などで返金した予約は、予約ごとに記録してください。`
                 : '止める予約はありませんでした。')}
           </Notice>
         )}
@@ -390,8 +398,9 @@ export default async function SlotPage({ params, searchParams }: PageProps<'/adm
                         )}
                         {weatherPaid.length > 0 && (
                           <li>
-                            入金済みの {weatherPaid.length} 件は、全額（合計 {formatYen(refundTotal)}
-                            ）を返金予定として記録します。キャンセル料を取る場合は、先に予約ごとに取り消してください。
+                            入金済みの {weatherPaid.length} 件は、入金額の {weatherPercent}%（これから返す額の合計{' '}
+                            {formatYen(refundTotal)}
+                            ）を返金予定として記録します（設定の天候中止の返金率）。違う扱いにする予約は、先に予約ごとに取り消してください。
                           </li>
                         )}
                       </>
@@ -417,7 +426,7 @@ export default async function SlotPage({ params, searchParams }: PageProps<'/adm
                         defaultChecked
                         className="mt-0.5 size-4"
                       />
-                      <span>実施事業者にもメールで知らせる（確定済み・照会していた予約）</span>
+                      <span>実施事業者にもメールで知らせる（確定済み・受入確認を依頼していた予約）</span>
                     </label>
                   </>
                 )}

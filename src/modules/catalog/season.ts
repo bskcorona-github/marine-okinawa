@@ -11,7 +11,7 @@ export function pricesForSeason<T extends { season: string | null }>(prices: T[]
   return prices.filter((p) => p.season === null || p.season === season);
 }
 
-export const SEASON_LABELS: Record<Season, string> = { on: 'オン期', off: 'オフ期' };
+export const SEASON_LABELS: Record<Season, string> = { on: '繁忙期', off: '通常期' };
 
 /**
  * 「4/25~30・5/1~10・6/6,7,13」形式のオン期の表記を期間の配列にする。

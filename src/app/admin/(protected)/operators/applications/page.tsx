@@ -1,6 +1,7 @@
 import { ChevronRight } from 'lucide-react';
 import Link from 'next/link';
-import { PageHeader } from '@/components/admin/page-header';
+import { PageHeader } from '@/components/backoffice/page-header';
+import { TabLinks } from '@/components/backoffice/tab-links';
 import { db } from '@/db';
 import { formatDateLabel, localTime } from '@/lib/dates';
 import { isOwnKey } from '@/lib/own';
@@ -36,23 +37,15 @@ export default async function ApplicationsPage({ searchParams }: PageProps<'/adm
         title="事業者の登録申請"
         description="公開の登録申請フォームから届いた申請です。内容と資料を確認し、承認すると事業者として登録します。"
       />
-      <nav aria-label="状態で絞り込む" className="flex flex-wrap gap-2 text-sm">
-        {tabs.map((tab) => (
-          <Link
-            key={tab.label}
-            href={tab.value ? `/admin/operators/applications?status=${tab.value}` : '/admin/operators/applications'}
-            aria-current={status === tab.value ? 'true' : undefined}
-            className={cn(
-              'inline-flex min-h-9 items-center rounded-full px-3 ring-1 pointer-coarse:min-h-11',
-              status === tab.value
-                ? 'bg-slate-900 font-semibold text-white ring-slate-900'
-                : 'text-slate-700 ring-slate-200 hover:bg-white',
-            )}
-          >
-            {tab.label}
-          </Link>
-        ))}
-      </nav>
+      <TabLinks
+        label="状態で絞り込む"
+        current={status ?? 'all'}
+        tabs={tabs.map((tab) => ({
+          value: tab.value ?? 'all',
+          label: tab.label,
+          href: tab.value ? `/admin/operators/applications?status=${tab.value}` : '/admin/operators/applications',
+        }))}
+      />
       <ul className="divide-y divide-slate-100 rounded-xl border border-slate-200 bg-white shadow-sm">
         {applications.map((a) => (
           <li key={a.id}>

@@ -1,10 +1,10 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { toFormValues } from '@/app/admin/(protected)/menus/form-values';
-import { MenuForm } from '@/app/admin/(protected)/menus/menu-form';
-import { ConfirmDialog } from '@/components/admin/confirm-dialog';
-import { Notice, PageHeader, Panel } from '@/components/admin/page-header';
-import { SubmitButton } from '@/components/admin/submit-button';
+import { toFormValues } from '@/components/backoffice/menu-form-values';
+import { MenuForm } from '@/components/backoffice/menu-form';
+import { ConfirmDialog } from '@/components/backoffice/confirm-dialog';
+import { Notice, PageHeader, Panel } from '@/components/backoffice/page-header';
+import { SubmitButton } from '@/components/backoffice/submit-button';
 import { buttonVariants } from '@/components/ui/button';
 import { db } from '@/db';
 import { formatDateLabel, localTime } from '@/lib/dates';
@@ -27,7 +27,7 @@ import {
   withdrawPublishAction,
   withdrawRevisionAction,
 } from '../actions';
-import { PLAN_STATE_LABELS, PLAN_STATE_TONE, planState } from '../plan-status';
+import { PLAN_STATE_LABELS, PLAN_STATE_TONE, planState } from '@/components/backoffice/plan-state';
 
 export const metadata = { title: 'プランの編集' };
 
@@ -173,10 +173,14 @@ export default async function PartnerPlanPage({ params, searchParams }: PageProp
                     </p>
                   </ConfirmDialog>
                 </form>
-              ) : (
+              ) : menu.pausedBy === 'operator' ? (
                 <form action={resumePlanAction.bind(null, menu.id)}>
                   <SubmitButton pendingLabel="再開中…">受付を再開する</SubmitButton>
                 </form>
+              ) : (
+                <p className="rounded-lg bg-amber-50 p-3 text-amber-900">
+                  組合が受付を止めています。再開するときは、組合へご連絡ください。
+                </p>
               )}
             </div>
           )}
@@ -228,6 +232,8 @@ export default async function PartnerPlanPage({ params, searchParams }: PageProp
               : undefined
           }
           initial={initial}
+          // 公開中の変更の申請：開いたあとに組合がプランを直していたら、申請せずに開き直してもらう
+          hiddenFields={{ seenUpdatedAt: menu.updatedAt.toISOString() }}
         />
       )}
     </div>

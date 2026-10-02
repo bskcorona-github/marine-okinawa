@@ -130,6 +130,6 @@ describe('syncSlots', () => {
     expect(rows).toHaveLength(180);
     expect(rows[0].startsAt.toISOString()).toBe('2026-10-01T01:00:00.000Z');
 
-    expect(await syncAllShops(db, now)).toEqual({ menus: 1, failed: 0 });
+    expect(await syncAllShops(db, now)).toEqual({ menus: 1, failed: 0, closedBooked: 0, overBooked: 0 });
   });
 });

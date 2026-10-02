@@ -4,12 +4,11 @@ import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { z } from 'zod';
 import { db } from '@/db';
-import { getEnv } from '@/lib/env';
 import { isUuid } from '@/lib/validation';
 import { requireOperator } from '@/modules/auth/guard';
 import { BookingError } from '@/modules/booking/errors';
-import { getMailer } from '@/modules/notification/mailer';
 import { sendOperatorResponseMail } from '@/modules/notification/send-operator-mail';
+import { sendQuietly } from '@/modules/notification/send-quietly';
 import { respondToRequest, type OperatorResponse } from '@/modules/partner/requests';
 
 export type RespondState = {
@@ -50,8 +49,8 @@ export async function respondAction(requestId: string, _prev: RespondState, form
     throw error;
   }
   // 回答は保存済みなので、メールの失敗で画面をエラーにしない（組合のダッシュボードにも出る）
-  await sendOperatorResponseMail(db, getMailer(), { requestId, appUrl: getEnv().APP_URL }).catch((error) =>
-    console.error('operator response mail failed', { requestId, error }),
+  await sendQuietly('mail.operator_response.failed', { requestId }, (mailer, appUrl) =>
+    sendOperatorResponseMail(db, mailer, { requestId, appUrl }),
   );
   revalidatePath('/partner', 'layout');
   redirect(`/partner/requests/${requestId}?answered=1`);

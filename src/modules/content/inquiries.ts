@@ -4,6 +4,7 @@ import { z } from 'zod';
 import type { DbOrTx } from '@/db/client';
 import { inquiries, inquiryKind, inquiryStatus, shops } from '@/db/schema';
 import { formatDateLabel, localTime } from '@/lib/dates';
+import { changedFields } from '@/modules/audit/diff';
 import { writeAuditLog } from '@/modules/audit/log';
 import { normalizeEmail } from '@/modules/customer/normalize';
 import { BookingEmail } from '@/modules/notification/booking-email';
@@ -11,6 +12,7 @@ import { deliverEmail, type SendResult } from '@/modules/notification/booking-em
 import type { Mailer } from '@/modules/notification/mailer';
 import { resolveSettings } from '@/modules/shop/settings';
 import { adminNotifyEmailOf } from '@/modules/shop/shops';
+import { recipientName } from '@/modules/notification/recipient-name';
 
 export type InquiryKind = (typeof inquiryKind.enumValues)[number];
 export type InquiryStatus = (typeof inquiryStatus.enumValues)[number];
@@ -98,7 +100,7 @@ export async function sendInquiryMails(
     subject: ackSubject,
     react: createElement(BookingEmail, {
       preview: ackSubject,
-      greeting: `${inquiry.name} 様`,
+      greeting: recipientName(inquiry.name),
       intro:
         'お問い合わせありがとうございます。受け付けました。組合の担当者から、メールまたはお電話でご連絡します。お心当たりのない場合は、このメールを破棄してください。',
       rows: ackRows,
@@ -164,24 +166,30 @@ export const inquiryUpdateSchema = z.object({
   note: z.string().trim().max(3000),
 });
 
-/** 対応状況と対応メモを保存する */
+/** 対応状況と対応メモを保存する（変わった項目の前後を、同じトランザクションで履歴に残す） */
 export async function updateInquiry(
   db: DbOrTx,
   params: { shopId: string; inquiryId: string; input: z.infer<typeof inquiryUpdateSchema>; actorId: string | null },
 ): Promise<boolean> {
-  const [row] = await db
-    .update(inquiries)
-    .set({ ...params.input, handledBy: params.actorId })
-    .where(and(eq(inquiries.shopId, params.shopId), eq(inquiries.id, params.inquiryId)))
-    .returning({ id: inquiries.id });
-  if (!row) return false;
-  await writeAuditLog(db, {
-    shopId: params.shopId,
-    actorId: params.actorId,
-    action: 'inquiry.update',
-    targetType: 'inquiry',
-    targetId: params.inquiryId,
-    after: params.input,
+  return db.transaction(async (tx) => {
+    const [current] = await tx
+      .select({ status: inquiries.status, note: inquiries.note })
+      .from(inquiries)
+      .where(and(eq(inquiries.shopId, params.shopId), eq(inquiries.id, params.inquiryId)))
+      .for('update');
+    if (!current) return false;
+    await tx
+      .update(inquiries)
+      .set({ ...params.input, handledBy: params.actorId })
+      .where(eq(inquiries.id, params.inquiryId));
+    await writeAuditLog(tx, {
+      shopId: params.shopId,
+      actorId: params.actorId,
+      action: 'inquiry.update',
+      targetType: 'inquiry',
+      targetId: params.inquiryId,
+      ...changedFields(current, params.input),
+    });
+    return true;
   });
-  return true;
 }

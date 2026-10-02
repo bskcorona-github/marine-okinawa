@@ -5,6 +5,8 @@ import type { Db } from '@/db/client';
 import { isUniqueViolation } from '@/db/errors';
 import { operators, seasonPeriods } from '@/db/schema';
 import { isDateString } from '@/lib/validation';
+import { changedFields } from '@/modules/audit/diff';
+import { writeAuditLog } from '@/modules/audit/log';
 import type { SeasonPeriod } from './season';
 
 /**
@@ -24,10 +26,6 @@ export function parsePeriodLines(text: string): { ok: true; periods: SeasonPerio
   }
   periods.sort((a, b) => a.startDate.localeCompare(b.startDate));
   return { ok: true, periods };
-}
-
-export function formatPeriodLines(periods: SeasonPeriod[]): string {
-  return periods.map((p) => (p.startDate === p.endDate ? p.startDate : `${p.startDate}〜${p.endDate}`)).join('\n');
 }
 
 /**
@@ -83,36 +81,69 @@ export async function createOperator(
   db: Db,
   shopId: string,
   input: z.infer<typeof newOperatorSchema>,
+  actorId: string | null = null,
 ): Promise<{ ok: true; operatorId: string } | { ok: false; error: 'SLUG_TAKEN' }> {
   try {
-    const [row] = await db
-      .insert(operators)
-      .values({ shopId, ...input })
-      .returning({ id: operators.id });
-    return { ok: true, operatorId: row.id };
+    const operatorId = await db.transaction(async (tx) => {
+      const [row] = await tx
+        .insert(operators)
+        .values({ shopId, ...input })
+        .returning({ id: operators.id });
+      await writeAuditLog(tx, {
+        shopId,
+        actorId,
+        action: 'operator.create',
+        targetType: 'operator',
+        targetId: row.id,
+        after: input,
+      });
+      return row.id;
+    });
+    return { ok: true, operatorId };
   } catch (error) {
+    // URL 名の重複（トランザクションの外で受ける。中で受けると、壊れたトランザクションを確定しようとする）
     if (isUniqueViolation(error)) return { ok: false, error: 'SLUG_TAKEN' };
     throw error;
   }
 }
 
-/** 事業者の情報とオン期の期間をまとめて置き換える */
+/** 事業者の情報とオン期の期間をまとめて置き換え、変わった項目を履歴に残す（口座は値を残さない） */
 export async function updateOperator(
   db: Db,
   shopId: string,
   operatorId: string,
   input: OperatorInput,
   periods: SeasonPeriod[],
+  actorId: string | null = null,
 ): Promise<boolean> {
   return db.transaction(async (tx) => {
-    const updated = await tx
-      .update(operators)
-      .set(input)
+    const [current] = await tx
+      .select()
+      .from(operators)
       .where(and(eq(operators.id, operatorId), eq(operators.shopId, shopId)))
-      .returning({ id: operators.id });
-    if (updated.length === 0) return false;
+      .for('update');
+    if (!current) return false;
+    const currentPeriods = await tx
+      .select({ startDate: seasonPeriods.startDate, endDate: seasonPeriods.endDate })
+      .from(seasonPeriods)
+      .where(eq(seasonPeriods.operatorId, operatorId))
+      .orderBy(asc(seasonPeriods.startDate));
+    await tx.update(operators).set(input).where(eq(operators.id, operatorId));
     await tx.delete(seasonPeriods).where(eq(seasonPeriods.operatorId, operatorId));
     if (periods.length > 0) await tx.insert(seasonPeriods).values(periods.map((p) => ({ operatorId, ...p })));
+    const before = Object.fromEntries(Object.keys(input).map((k) => [k, current[k as keyof typeof current]]));
+    await writeAuditLog(tx, {
+      shopId,
+      actorId,
+      action: 'operator.update',
+      targetType: 'operator',
+      targetId: operatorId,
+      ...changedFields(
+        { ...before, periods: currentPeriods },
+        { ...input, periods: periods.map((p) => ({ startDate: p.startDate, endDate: p.endDate })) },
+        { masked: ['bankAccount'] },
+      ),
+    });
     return true;
   });
 }

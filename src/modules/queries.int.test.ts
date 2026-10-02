@@ -12,13 +12,7 @@ import {
   searchBookings,
 } from './booking/queries';
 import { getPublishedMenuBySlug, listPublishedMenus } from './catalog/menus';
-import {
-  getDateAvailabilityForMenus,
-  getDaySlots,
-  getFirstBookableDate,
-  getMonthAvailability,
-  getTimetable,
-} from './inventory/queries';
+import { getDaySlots, getFirstBookableDate, getMonthAvailability, getTimetable } from './inventory/queries';
 
 const db = getTestDb();
 const NOW = new Date('2026-09-28T00:00:00Z');
@@ -105,63 +99,6 @@ describe('queries', () => {
       ['10:00', 1, 'low'],
       ['13:00', 5, 'closed'],
     ]);
-  });
-
-  it('日付から探す：複数メニューのその日の回と、人数で絞った空き', async () => {
-    const ctx = await setup();
-    const other = await seedMenu(db, ctx.shop.id);
-    await seedSlot(db, { shopId: ctx.shop.id, menuId: other.menu.id, startsAt: T.oct1_1000, capacity: 3 });
-    await book(ctx, ctx.slots.b.id, 4); // blue-cave 10:00 残り 1
-
-    const menus = [ctx.menu, other.menu];
-    const all = await getDateAvailabilityForMenus(db, { menus, shop: ctx.shop, date: '2026-10-01', now: NOW });
-    expect(all.get(ctx.menu.id)?.map((s) => [s.time, s.remaining, s.level])).toEqual([
-      ['08:00', 10, 'available'],
-      ['10:00', 1, 'low'],
-      ['13:00', 5, 'closed'],
-    ]);
-    expect(all.get(other.menu.id)?.map((s) => s.time)).toEqual(['10:00']);
-
-    const forTwo = await getDateAvailabilityForMenus(db, {
-      menus,
-      shop: ctx.shop,
-      date: '2026-10-01',
-      now: NOW,
-      people: 2,
-    });
-    expect(forTwo.get(ctx.menu.id)?.map((s) => s.level)).toEqual(['available', 'full', 'closed']);
-    // 貸切（艇で数える）プランは人数で絞り込まない：2 名で探しても、残り 1 艇の回は予約できる
-    const byBoat = menus.map((m) => (m.id === ctx.menu.id ? { ...m, capacityUnit: '艇' } : m));
-    const boatForTwo = await getDateAvailabilityForMenus(db, {
-      menus: byBoat,
-      shop: ctx.shop,
-      date: '2026-10-01',
-      now: NOW,
-      people: 2,
-    });
-    expect(boatForTwo.get(ctx.menu.id)?.map((s) => s.level)).toEqual(['available', 'low', 'closed']);
-
-    // 1 回の予約で申し込める人数（最大 10 名）を超えると、空きがあっても予約できない回として扱う
-    const forTwelve = await getDateAvailabilityForMenus(db, {
-      menus,
-      shop: ctx.shop,
-      date: '2026-10-01',
-      now: NOW,
-      people: 12,
-    });
-    expect(forTwelve.get(ctx.menu.id)?.map((s) => s.level)).toEqual(['full', 'full', 'closed']);
-    // 貸切は乗船人数の上限（maxGuests）で判定する
-    const boatForForty = await getDateAvailabilityForMenus(db, {
-      menus: byBoat.map((m) => (m.id === ctx.menu.id ? { ...m, maxGuests: 35 } : m)),
-      shop: ctx.shop,
-      date: '2026-10-01',
-      now: NOW,
-      people: 40,
-    });
-    expect(boatForForty.get(ctx.menu.id)?.map((s) => s.level)).toEqual(['full', 'full', 'closed']);
-    expect(
-      (await getDateAvailabilityForMenus(db, { menus: [], shop: ctx.shop, date: '2026-10-01', now: NOW })).size,
-    ).toBe(0);
   });
 
   it('予約できる最初の日（満席・休止・締切後を飛ばす）', async () => {

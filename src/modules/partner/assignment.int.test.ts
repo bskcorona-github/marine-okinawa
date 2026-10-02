@@ -127,14 +127,16 @@ describe('照会の終了と事業者への連絡', () => {
     const first = await setup();
     await db.update(bookings).set({ operatorId: first.a.id }).where(eq(bookings.id, first.bookingId));
     await first.change('cancelled', { cancel: { category: 'customer' } });
-    expect(await getOperatorBooking(db, { operatorId: first.a.id, bookingId: first.bookingId })).toBeNull();
+    expect(await getOperatorBooking(db, { operatorId: first.a.id, bookingId: first.bookingId, now: NOW })).toBeNull();
 
     const second = await setup();
     await db.update(bookings).set({ operatorId: second.a.id }).where(eq(bookings.id, second.bookingId));
     await second.change('awaiting_payment');
     await second.change('confirmed', { payment: { amount: 10000, receivedAt: NOW } });
     await second.change('cancelled', { cancel: { category: 'customer' }, refundDueAmount: 10000 });
-    expect(await getOperatorBooking(db, { operatorId: second.a.id, bookingId: second.bookingId })).toMatchObject({
+    expect(
+      await getOperatorBooking(db, { operatorId: second.a.id, bookingId: second.bookingId, now: NOW }),
+    ).toMatchObject({
       status: 'cancelled',
       contactPhone: null,
     });

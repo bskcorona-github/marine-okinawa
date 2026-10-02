@@ -1,20 +1,24 @@
 import { AlertTriangle, CalendarDays, ChevronRight, MessageSquareReply, PhoneCall } from 'lucide-react';
 import Link from 'next/link';
-import { Notice, PageHeader, Panel } from '@/components/admin/page-header';
-import { BookingStatusBadge } from '@/components/admin/status-badge';
+import { Notice, PageHeader, Panel } from '@/components/backoffice/page-header';
+import { REQUEST_STATUS_TONE } from '@/components/backoffice/request-status-tone';
+import { BookingStatusBadge } from '@/components/backoffice/status-badge';
 import { buttonVariants } from '@/components/ui/button';
 import { db } from '@/db';
 import { addDays, formatDateLabel, localDate, localTime, zonedToUtc } from '@/lib/dates';
 import { formatYen } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { requireAdmin } from '@/modules/auth/guard';
+import { countUnlinkedMailProblems } from '@/modules/audit/queries';
 import { countReceivedSince, getActionCounts, getPeriodSummary, listOpenRequests } from '@/modules/booking/queries';
 import { splitPlanTitle } from '@/modules/catalog/display-title';
 import { countPendingPlanReviews } from '@/modules/catalog/operator-plans';
 import { countNewInquiries } from '@/modules/content/inquiries';
 import { listApplications } from '@/modules/partner/applications';
 import { listChangeRequests } from '@/modules/partner/change-requests';
+import { REQUEST_STATUS_LABELS } from '@/modules/partner/requests';
 import { expiryState, listExpiringDocuments } from '@/modules/partner/documents';
+import { cardPaymentsEnabled } from '@/modules/payment/card-payments';
 import { getShopById } from '@/modules/shop/shops';
 
 export const metadata = { title: 'ダッシュボード' };
@@ -22,13 +26,6 @@ export const metadata = { title: 'ダッシュボード' };
 type Tile = { label: string; count: number; href: string; hint: string; urgent?: boolean };
 
 /** 件数のあるタイルをカードで出し、0 件のものは 1 行にまとめる（要対応のものが上に来るように） */
-const RESPONSE_LABELS = { accepted: '受入可', conditional: '条件付き', declined: '受入不可' } as const;
-const RESPONSE_TONE = {
-  accepted: 'bg-emerald-100 text-emerald-900',
-  conditional: 'bg-sky-100 text-sky-900',
-  declined: 'bg-red-100 text-red-800',
-} as const;
-
 function TileList({ tiles }: { tiles: Tile[] }) {
   const active = tiles.filter((t) => t.count > 0);
   const empty = tiles.filter((t) => t.count === 0);
@@ -75,7 +72,7 @@ function TileList({ tiles }: { tiles: Tile[] }) {
             <Link
               key={t.label}
               href={t.href}
-              className="inline-flex min-h-8 items-center hover:text-slate-900 hover:underline"
+              className="inline-flex min-h-8 items-center hover:text-slate-900 hover:underline pointer-coarse:min-h-11"
             >
               {t.label}
             </Link>
@@ -89,6 +86,7 @@ function TileList({ tiles }: { tiles: Tile[] }) {
 export default async function DashboardPage() {
   const admin = await requireAdmin();
   const shop = await getShopById(db, admin.shopId);
+  const cardPayment = cardPaymentsEnabled();
   const now = new Date();
   const today = localDate(now, shop.timezone);
   const tomorrow = addDays(today, 1);
@@ -119,6 +117,8 @@ export default async function DashboardPage() {
     listExpiringDocuments(db, { shopId: shop.id, today }),
     countPendingPlanReviews(db, shop.id),
   ]);
+  // 予約以外のメール（お問い合わせ・登録申請・プランの審査など）で、最近送れなかったもの
+  const mailProblems = await countUnlinkedMailProblems(db, { shopId: shop.id, now });
   const label = (d: string) =>
     formatDateLabel(zonedToUtc(d, '12:00', shop.timezone), shop.timezone).replace(/^\d+年/, '');
   const md = (d: Date) => `${formatDateLabel(d, shop.timezone).replace(/^\d+年/, '')} ${localTime(d, shop.timezone)}`;
@@ -142,7 +142,7 @@ export default async function DashboardPage() {
       urgent: true,
     },
     {
-      label: '内容確認中・事業者確認中',
+      label: '内容確認中・受入確認中',
       count: counts.reviewing + counts.operatorChecking,
       href: bookingsHref({ status: 'in_review', sort: 'date' }),
       hint: '組合の確認中・事業者の回答待ちの申込です（回答ありの申込も含みます）',
@@ -154,8 +154,17 @@ export default async function DashboardPage() {
       hint:
         counts.paymentOverdue > 0
           ? `うち ${counts.paymentOverdue} 件は支払期限を過ぎています`
-          : '入金を確認したら確定します',
+          : cardPayment
+            ? 'お客様のカードでのお支払いを待っています（払われると自動で確定します）'
+            : '入金を確認したら確定します',
       urgent: counts.paymentOverdue > 0,
+    },
+    {
+      label: '入金済み・確定待ち',
+      count: counts.paymentHeld,
+      href: bookingsHref({ payment: 'held' }),
+      hint: 'カードで払われましたが、実施事業者の受入・金額の確認のため、確定を保留している予約です',
+      urgent: true,
     },
     {
       label: '事業者からの中止などの報告',
@@ -181,6 +190,34 @@ export default async function DashboardPage() {
       count: counts.refundPending,
       href: bookingsHref({ payment: 'refund_due' }),
       hint: '返金予定額のうち、まだ返金を記録していない予約です',
+      urgent: true,
+    },
+    {
+      label: 'カード返金の結果待ち',
+      count: counts.refundSending,
+      href: bookingsHref({ payment: 'refund_sending' }),
+      hint: 'Stripe へ送った返金の結果がまだ分かりません。予約の詳細の「Stripe に確かめる」で確かめます',
+      urgent: true,
+    },
+    {
+      label: '料金より多い入金',
+      count: counts.overpaid,
+      href: bookingsHref({ payment: 'overpaid' }),
+      hint: '二重のお支払い・人数が減ったなどで、料金より多く受け取っている予約です。返金するか確かめます',
+      urgent: true,
+    },
+    {
+      label: 'チャージバック対応中',
+      count: counts.dispute,
+      href: bookingsHref({ payment: 'dispute' }),
+      hint: 'カード会社への異議が申し立てられています。Stripe の管理画面で期限までに証拠を出します',
+      urgent: true,
+    },
+    {
+      label: '送れなかったメール（予約以外）',
+      count: mailProblems,
+      href: '/admin/logs?tab=mail&problem=1',
+      hint: 'お問い合わせの受付・登録申請・プランの審査などのメールです。内容を確かめて、直接ご連絡ください',
       urgent: true,
     },
     {
@@ -263,7 +300,7 @@ export default async function DashboardPage() {
           で再開できます。
         </Notice>
       )}
-      {!shop.settings.paymentInstructions && (
+      {!shop.settings.paymentInstructions && !cardPayment && (
         <Notice tone="warning">
           支払方法の案内（振込先など）が未設定のため、事前払いの支払案内を送れません。
           <Link href="/admin/settings" className="ml-1 font-semibold underline">
@@ -314,18 +351,24 @@ export default async function DashboardPage() {
                                 : 'bg-slate-100 text-slate-700',
                           )}
                         >
-                          {daysLeft <= 0 ? '今日' : daysLeft === 1 ? '明日' : `${daysLeft} 日後`}
+                          {daysLeft < 0
+                            ? '参加日を過ぎています'
+                            : daysLeft === 0
+                              ? '今日'
+                              : daysLeft === 1
+                                ? '明日'
+                                : `${daysLeft} 日後`}
                         </span>
                         <BookingStatusBadge status={r.status} />
                         {r.operatorResponded && (
                           <span
                             className={cn(
                               'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold',
-                              RESPONSE_TONE[r.latestResponse ?? 'accepted'],
+                              REQUEST_STATUS_TONE[r.latestResponse ?? 'accepted'],
                             )}
                           >
                             <MessageSquareReply aria-hidden className="size-3" />
-                            事業者の回答：{RESPONSE_LABELS[r.latestResponse ?? 'accepted']}
+                            事業者の回答：{REQUEST_STATUS_LABELS[r.latestResponse ?? 'accepted']}
                           </span>
                         )}
                         {overdue && (

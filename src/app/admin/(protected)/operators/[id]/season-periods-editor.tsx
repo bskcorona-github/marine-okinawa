@@ -2,7 +2,7 @@
 
 import { CopyPlus, Plus, Trash2 } from 'lucide-react';
 import { useState } from 'react';
-import { SELECT_CLASS } from '@/components/admin/field-styles';
+import { SELECT_CLASS } from '@/components/backoffice/field-styles';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 
@@ -19,7 +19,7 @@ function nextYear(date: string): string {
   return `${y + 1}-${String(m).padStart(2, '0')}-${String(Math.min(d, lastDay)).padStart(2, '0')}`;
 }
 
-/** 364 日後（同じ曜日）の日付。土日だけのオン期などを、翌年の同じ曜日に合わせるときに使う */
+/** 364 日後（同じ曜日）の日付。土日だけの繁忙期などを、翌年の同じ曜日に合わせるときに使う */
 function sameWeekdayNextYear(date: string): string {
   return new Date(Date.parse(`${date}T00:00:00Z`) + 364 * DAY_MS).toISOString().slice(0, 10);
 }
@@ -32,7 +32,7 @@ function days(start: string, end: string): number {
 }
 
 /**
- * オン期の期間を 1 行ずつ入力する。送信時は「開始〜終了」を 1 行 1 期間にした文字列（name="periods"）で渡す。
+ * 繁忙期の期間を 1 行ずつ入力する。送信時は「開始〜終了」を 1 行 1 期間にした文字列（name="periods"）で渡す。
  * 終了日が空なら開始日の 1 日だけとみなす
  */
 export function SeasonPeriodsEditor({
@@ -82,14 +82,14 @@ export function SeasonPeriodsEditor({
 
   return (
     <fieldset className="space-y-3">
-      <legend className="font-medium">オン期の期間</legend>
+      <legend className="font-medium">繁忙期の期間</legend>
       <p className="text-xs text-slate-500">
-        料金区分で「オン期」「オフ期」を分けたプランは、この期間の日はオン期料金、それ以外の日はオフ期料金になります。
+        料金区分で「繁忙期」「通常期」を分けたプランは、この期間の日は繁忙期料金、それ以外の日は通常期料金になります。
       </p>
       <input type="hidden" name="periods" value={serialized} />
       {rows.length === 0 ? (
         <p className="rounded-lg border border-dashed border-slate-300 p-3 text-sm text-slate-500">
-          期間が登録されていません（すべての日がオフ期料金になります）。
+          期間が登録されていません（すべての日が通常期料金になります）。
         </p>
       ) : (
         <ul className="space-y-2" id="periods">
@@ -184,7 +184,7 @@ export function SeasonPeriodsEditor({
         )}
         {invalid.length > 0 && <p className="font-medium text-red-700">終了日が開始日より前の期間があります。</p>}
         {overlaps && (
-          <p className="font-medium text-amber-800">期間が重なっています（重なった日はオン期として扱います）。</p>
+          <p className="font-medium text-amber-800">期間が重なっています（重なった日は繁忙期として扱います）。</p>
         )}
       </div>
     </fieldset>
