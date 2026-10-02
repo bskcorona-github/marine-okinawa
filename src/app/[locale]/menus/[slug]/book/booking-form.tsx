@@ -20,6 +20,7 @@ import { useHydrated } from '@/lib/use-hydrated';
 import { cn } from '@/lib/utils';
 import { submitBooking, type SubmitBookingState } from './actions';
 import { EMPTY_SELECTION, setBookingSelection } from './booking-total';
+import { isPerPerson } from '@/modules/catalog/capacity-unit';
 
 type Props = {
   locale: string;
@@ -56,6 +57,10 @@ type Props = {
   priceLabel: string;
   /** 申し込む回の日時（送信ボタンの前の合計に添える） */
   slotLabel: string;
+  /** 日時を選び直す（プラン詳細のカレンダー） */
+  changeHref: string;
+  /** お支払いはカードだけ（Stripe が設定されているとき） */
+  cardPayment: boolean;
 };
 
 type FieldName = 'people' | 'guestCount' | 'name' | 'email' | 'emailConfirm' | 'phone' | 'participantAges' | 'agree';
@@ -119,6 +124,9 @@ function Field({
   );
 }
 
+/** 選んだ回で申し込めないエラー（日時を選び直してもらう） */
+const SLOT_ERRORS = new Set<string>(['SLOT_FULL', 'SLOT_CLOSED', 'PAST_CUTOFF', 'SLOT_NOT_FOUND']);
+
 export function BookingForm({
   locale,
   slotId,
@@ -140,6 +148,8 @@ export function BookingForm({
   requireAges,
   priceLabel,
   slotLabel,
+  changeHref,
+  cardPayment,
 }: Props) {
   const t = useTranslations('booking');
   const [state, formAction, pending] = useActionState<SubmitBookingState, FormData>(submitBooking, { error: null });
@@ -163,7 +173,7 @@ export function BookingForm({
     };
   }, []);
   // 定員を艇で数える貸切プランは、料金区分（コース・出発港）を 1 つ選び、乗船人数を別に入力する
-  const charter = unit !== '名';
+  const charter = !isPerPerson(unit);
   // 検索で人数を指定してきた場合は、最初の料金区分にその人数を入れておく
   // （最少人数・最大人数の範囲に合わせる）
   const [quantities, setQuantities] = useState<Record<string, number>>(() =>
@@ -665,13 +675,24 @@ export function BookingForm({
           </p>
         )}
         <p className="jp-wrap rounded-2xl bg-foam px-4 py-3 text-sm leading-relaxed text-ocean">
-          <Phrase>{t('paymentNote')}</Phrase>
+          <Phrase>{t(cardPayment ? 'paymentNoteCard' : 'paymentNote')}</Phrase>
         </p>
 
         {state.error && !hasErrors && (
-          <p role="alert" className="jp-wrap rounded-2xl bg-red-50 p-4 text-sm font-medium text-red-700">
-            <Phrase>{t(`errors.${state.error}`, { min: minPartySize })}</Phrase>
-          </p>
+          <div role="alert" className="jp-wrap space-y-3 rounded-2xl bg-red-50 p-4 text-sm font-medium text-red-700">
+            <p>
+              <Phrase>{t(`errors.${state.error}`, { min: minPartySize })}</Phrase>
+            </p>
+            {/* 満席・受付終了などは入力を直しても申し込めないので、その場で日時を選び直せるようにする */}
+            {SLOT_ERRORS.has(state.error) && (
+              <Link
+                href={changeHref}
+                className="inline-flex min-h-11 items-center rounded-xl bg-ocean px-4 font-bold text-white hover:bg-ocean-deep"
+              >
+                {t('chooseAnother')}
+              </Link>
+            )}
+          </div>
         )}
         {/* 入力の誤りは、項目名の一覧からその欄へ移動できるようにする（色だけで伝えない） */}
         {hasErrors && (

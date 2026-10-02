@@ -5,11 +5,11 @@ import { headers } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { z } from 'zod';
 import { db } from '@/db';
+import { logError, logWarn } from '@/lib/log';
+import { sendQuietly } from '@/modules/notification/send-quietly';
 import { routing } from '@/i18n/routing';
-import { getEnv } from '@/lib/env';
 import { BookingError, type BookingErrorCode } from '@/modules/booking/errors';
 import { createBooking } from '@/modules/booking/create-booking';
-import { getMailer } from '@/modules/notification/mailer';
 import { sendAdminNewRequest } from '@/modules/notification/send-admin-new-request';
 import { sendBookingMail } from '@/modules/notification/send-booking-mail';
 import { sendOperatorRequestMail } from '@/modules/notification/send-operator-mail';
@@ -19,6 +19,8 @@ import { getCurrentShop } from '@/modules/shop/shops';
 
 /** 同じ IP からの Web 申込は 10 分間に 5 件まで（スクリプトによる枠の買い占め対策） */
 const BOOKING_RATE_LIMIT = { limit: 5, windowSec: 600 };
+/** 同じメールアドレスからの Web 申込は 1 日に 5 件まで（IP を替えての連投・第三者のアドレスへの送りつけの対策） */
+const BOOKING_EMAIL_LIMIT = { limit: 5, windowSec: 24 * 60 * 60 };
 
 export type SubmitBookingState = {
   error: BookingErrorCode | 'INVALID_INPUT' | 'EMAIL_MISMATCH' | null;
@@ -54,8 +56,11 @@ export async function submitBooking(_prev: SubmitBookingState, formData: FormDat
   const ip = clientIp(await headers());
   if (!ip) {
     // IP が取れない環境で全員を 1 つのキーにまとめると、サイト全体の申込が止まってしまうため制限しない
-    console.warn('rate limit skipped: client IP is unavailable');
+    logWarn('rate_limit.no_client_ip', { route: 'booking' });
   } else if (!(await consumeRateLimit(db, { key: `booking:${ip}`, ...BOOKING_RATE_LIMIT }))) {
+    return { error: 'RATE_LIMITED' };
+  }
+  if (!(await consumeRateLimit(db, { key: `booking-email:${input.email.toLowerCase()}`, ...BOOKING_EMAIL_LIMIT }))) {
     return { error: 'RATE_LIMITED' };
   }
 
@@ -84,22 +89,24 @@ export async function submitBooking(_prev: SubmitBookingState, formData: FormDat
   }
 
   // 申込は登録済み。メール送信で何が起きても予約確認ページへ進める（再送信による二重申込を防ぐ）
-  const appUrl = getEnv().APP_URL;
-  const mailer = getMailer();
+  const { bookingId, accessToken } = result;
   await Promise.all([
-    sendBookingMail(db, mailer, {
-      bookingId: result.bookingId,
-      kind: 'requested',
-      accessToken: result.accessToken,
-      appUrl,
-    }).catch((error) => console.error('booking request mail failed', { bookingId: result.bookingId, error })),
-    sendAdminNewRequest(db, mailer, { bookingId: result.bookingId, appUrl }).catch((error) =>
-      console.error('admin new request mail failed', { bookingId: result.bookingId, error }),
+    sendQuietly('mail.booking.failed', { bookingId, kind: 'requested' }, (mailer, appUrl) =>
+      sendBookingMail(db, mailer, { bookingId, kind: 'requested', accessToken, appUrl }),
+    ),
+    sendQuietly('mail.admin_new_request.failed', { bookingId }, (mailer, appUrl) =>
+      sendAdminNewRequest(db, mailer, { bookingId, appUrl }),
     ),
     // プランの事業者へ自動で受入確認を送る（設定で切り替え）。失敗しても申込は受け付けたまま（組合が手で依頼できる）
-    autoRequestPlanOperator(db, { bookingId: result.bookingId, now: new Date() })
-      .then((requestId) => (requestId ? sendOperatorRequestMail(db, mailer, { requestId, appUrl }) : null))
-      .catch((error) => console.error('auto operator request failed', { bookingId: result.bookingId, error })),
+    autoRequestPlanOperator(db, { bookingId, now: new Date() })
+      .then((requestId) =>
+        requestId
+          ? sendQuietly('mail.operator_request.failed', { bookingId, requestId }, (mailer, appUrl) =>
+              sendOperatorRequestMail(db, mailer, { requestId, appUrl }),
+            )
+          : null,
+      )
+      .catch((error) => logError('booking.auto_operator_request.failed', { bookingId }, error)),
   ]);
   redirect(`/${input.locale}/bookings/${result.accessToken}`);
 }

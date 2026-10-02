@@ -1,8 +1,8 @@
 import { CalendarDays, Users } from 'lucide-react';
 import Link from 'next/link';
-import { SELECT_CLASS } from '@/components/admin/field-styles';
-import { Notice, PageHeader } from '@/components/admin/page-header';
-import { SubmitOnChange } from '@/components/admin/submit-on-change';
+import { SELECT_CLASS } from '@/components/backoffice/field-styles';
+import { Notice, PageHeader } from '@/components/backoffice/page-header';
+import { SubmitOnChange } from '@/components/backoffice/submit-on-change';
 import { Button } from '@/components/ui/button';
 import { db } from '@/db';
 import { addDays, formatDateLabel, localDate, localTime, zonedToUtc } from '@/lib/dates';
@@ -18,7 +18,8 @@ import { SEASON_LABELS } from '@/modules/catalog/season';
 import { remainingSeats } from '@/modules/inventory/availability';
 import { getSlotForAdmin, listSlotsForDate } from '@/modules/inventory/queries';
 import { getShopById } from '@/modules/shop/shops';
-import { occupancyText, occupancyTone, TONE_STYLE } from '../../occupancy';
+import { cardPaymentsEnabled } from '@/modules/payment/card-payments';
+import { occupancyText, occupancyTone, TONE_STYLE } from '@/components/backoffice/occupancy';
 import { ManualBookingForm } from './manual-booking-form';
 
 export const metadata = { title: '手動予約' };
@@ -95,7 +96,7 @@ export default async function ManualBookingPage({ searchParams }: PageProps<'/ad
             defaultOperatorId={
               operators.some((o) => o.id === slot.operatorId && o.status !== 'suspended') ? slot.operatorId : null
             }
-            hasPaymentInstructions={Boolean(shop.settings.paymentInstructions)}
+            hasPaymentInstructions={Boolean(shop.settings.paymentInstructions) || cardPaymentsEnabled()}
           />
         </div>
       );

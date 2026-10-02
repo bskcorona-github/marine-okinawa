@@ -1,4 +1,4 @@
-import { CalendarPlus, CheckCircle2, ChevronRight, Clock, MapPin, Wallet, XCircle } from 'lucide-react';
+import { CalendarPlus, CheckCircle2, ChevronRight, Clock, MapPin, Receipt, Wallet, XCircle } from 'lucide-react';
 import { getTranslations, setRequestLocale } from 'next-intl/server';
 import { notFound } from 'next/navigation';
 import { connection } from 'next/server';
@@ -6,17 +6,36 @@ import { ContactLinks } from '@/components/site/contact-links';
 import { Phrase } from '@/components/site/phrase';
 import { db } from '@/db';
 import { Link } from '@/i18n/navigation';
-import { formatDateLabel, localTime } from '@/lib/dates';
+import { formatDateLabel, formatDateTimeLabel } from '@/lib/dates';
 import { formatYen } from '@/lib/format';
 import { toListItems } from '@/lib/text-list';
 import { cn } from '@/lib/utils';
+import { cancellationRateLines, feeSettingsFor } from '@/modules/booking/cancellation-fee';
+import { canIssueReceipt, isPaymentReceived } from '@/modules/booking/payment-status';
 import { getBookingByAccessToken } from '@/modules/booking/queries';
-import { isConfirmedOrLater } from '@/modules/booking/status';
+import { isBeforePaymentRequest, isConfirmedOrLater, isEnded } from '@/modules/booking/status';
 import { splitPlanTitle } from '@/modules/catalog/display-title';
 import { dayOfContact, shopContact } from '@/modules/shop/contact';
+import { cardPaymentsEnabled } from '@/modules/payment/card-payments';
 import { weatherPolicyText } from '@/modules/shop/settings';
+import { startCardCheckoutAction } from './actions';
+import { CardPayButton } from './card-pay-button';
 import { CopyButton } from './copy-button';
 import { RequestProgress } from './request-progress';
+import { formatPartyItems } from '@/modules/booking/party';
+import { isPerPerson } from '@/modules/catalog/capacity-unit';
+
+const CHECKOUT_NOTICES = new Set([
+  'paid',
+  'received',
+  'processing',
+  'cancelled',
+  'conflict',
+  'EXPIRED',
+  'NOT_PAYABLE',
+  'AMOUNT_TOO_SMALL',
+  'failed',
+]);
 
 export const metadata = {
   title: 'お申し込み内容',
@@ -24,8 +43,9 @@ export const metadata = {
   referrer: 'no-referrer' as const,
 };
 
-export default async function BookingViewPage({ params }: PageProps<'/[locale]/bookings/[token]'>) {
+export default async function BookingViewPage({ params, searchParams }: PageProps<'/[locale]/bookings/[token]'>) {
   const { locale, token } = await params;
+  const sp = await searchParams;
   setRequestLocale(locale);
   await connection();
   const booking = await getBookingByAccessToken(db, { token, now: new Date() });
@@ -33,22 +53,32 @@ export default async function BookingViewPage({ params }: PageProps<'/[locale]/b
   const t = await getTranslations('bookingView');
   const status = booking.status;
   const confirmed = isConfirmedOrLater(status);
+  const now = new Date();
   const awaitingPayment = status === 'awaiting_payment';
-  const open = status === 'requested' || status === 'reviewing' || status === 'operator_checking';
-  const ended = status === 'cancelled' || status === 'weather_cancelled' || status === 'no_show';
+  const received = isPaymentReceived(booking.paymentStatus);
+  // カード決済（Stripe）が使えるときは、振込先の案内の代わりにカードの支払いのボタンを出す
+  const cardPayment = cardPaymentsEnabled() && booking.paymentMethod === 'online';
+  // 支払期限を過ぎたら、払えないボタンを出さずに問い合わせへ案内する
+  const paymentExpired = awaitingPayment && !received && Boolean(booking.paymentDueAt && booking.paymentDueAt <= now);
+  const checkoutNotice = typeof sp.checkout === 'string' && CHECKOUT_NOTICES.has(sp.checkout) ? sp.checkout : null;
+  // 支払待ちの見出しと説明：払ってもらう／受け付けて組合の確認待ち／期限切れ
+  const paymentHeading = received ? 'paymentReceivedTitle' : paymentExpired ? 'paymentExpiredTitle' : 'paymentTitle';
+  const paymentLeadKey = received ? 'paymentReceivedLead' : paymentExpired ? 'paymentExpiredLead' : 'paymentLead';
+  // 事前払いで受け取り、全額は返していなければ領収書を出せる（取消でキャンセル料を払ったときも）
+  const receiptAvailable = canIssueReceipt(booking);
+  const open = isBeforePaymentRequest(status);
+  const ended = isEnded(status);
   // 天候・海況による中止の扱い（組合共通 → プランごと）
   const weatherPolicy = weatherPolicyText(booking.settings.commonWeatherPolicy, booking.weatherPolicy);
   // 支払案内の前は「合計（予定）」、支払案内からは設定の見出し（お支払総額）
   const priceLabel = open ? t('totalPlanned') : booking.settings.priceLabel;
-  const at = (d: Date) => `${formatDateLabel(d, booking.timezone)} ${localTime(d, booking.timezone)}`;
+  const at = (d: Date) => formatDateTimeLabel(d, booking.timezone);
   const dueLabel = booking.paymentDueAt ? at(booking.paymentDueAt) : null;
 
   const paymentValue =
     booking.paymentMethod === 'onsite'
       ? t('paymentOnsite')
-      : booking.paymentStatus === 'paid' ||
-          booking.paymentStatus === 'partially_refunded' ||
-          booking.paymentStatus === 'refunded'
+      : received
         ? t('paymentPaid')
         : awaitingPayment && dueLabel
           ? t('paymentAwaiting', { due: dueLabel })
@@ -62,8 +92,8 @@ export default async function BookingViewPage({ params }: PageProps<'/[locale]/b
     { label: t('secondChoice'), value: open ? booking.secondChoice : null },
     {
       // 貸切は料金区分がコース・出発港なので、項目名もそれに合わせる
-      label: t(booking.capacityUnit === '名' ? 'people' : 'course'),
-      value: booking.items.map((i) => `${i.label} ${i.quantity}${booking.capacityUnit}`).join(' / '),
+      label: t(isPerPerson(booking.capacityUnit) ? 'people' : 'course'),
+      value: formatPartyItems(booking.items, booking.capacityUnit),
     },
     { label: t('guestCount'), value: booking.guestCount ? t('guestCountValue', { count: booking.guestCount }) : null },
     {
@@ -95,20 +125,31 @@ export default async function BookingViewPage({ params }: PageProps<'/[locale]/b
   const contact = shopContact(booking);
   const dayOf = confirmed && !ended ? dayOfContact(booking) : null;
   const dayOfFallback = confirmed && !ended && !dayOf;
+  // キャンセル料は申込のときの率から作る（料率と文面がずれないように）。そのあとに共通・プランごとの規定
   const policies = ended
     ? []
     : [
+        { heading: t('cancellationRates'), text: cancellationRateLines(feeSettingsFor(booking)).join('\n') },
         { heading: t('cancellationCommon'), text: booking.settings.commonCancellationPolicy },
         { heading: t('cancellationPlan'), text: booking.cancellationPolicy },
       ].filter((p) => p.text);
   const bring = toListItems(booking.whatToBring);
   const showPlace = !ended && (booking.meetingPoint || booking.meetingAddress || bring.length > 0);
-  const refund =
-    booking.refundedAmount && booking.refundedAmount > 0
-      ? t('refunded', { amount: formatYen(booking.refundedAmount) })
-      : booking.refundDueAmount
-        ? t('refundDue', { amount: formatYen(booking.refundDueAmount) })
-        : null;
+  // カードで払った予約は、組合がカードへ返金する（お客様の手続きは要らない）
+  const card = booking.paymentReceiptMethod === 'card';
+  // 返金済みの額と、まだ返していない返金予定の残り（一部を返したあとも、残りを案内する）
+  const refundedAmount = booking.refundedAmount ?? 0;
+  const remainingRefund = Math.max(0, (booking.refundDueAmount ?? 0) - refundedAmount);
+  const refundLines = [
+    refundedAmount > 0 &&
+      (card
+        ? t('refundedCard', {
+            amount: formatYen(refundedAmount),
+            date: booking.refundedAt ? formatDateLabel(booking.refundedAt, booking.timezone) : '',
+          })
+        : t('refunded', { amount: formatYen(refundedAmount) })),
+    remainingRefund > 0 && t(card ? 'refundDueCard' : 'refundDue', { amount: formatYen(remainingRefund) }),
+  ].filter((line): line is string => Boolean(line));
 
   const bookingNoBox = (
     <div className="flex flex-wrap items-center gap-3 rounded-2xl bg-white/10 p-4">
@@ -123,6 +164,20 @@ export default async function BookingViewPage({ params }: PageProps<'/[locale]/b
   return (
     <div className="bg-sand pb-16">
       <div className="mx-auto max-w-3xl space-y-6 px-4 pt-6">
+        {/* 「受け付けました（確認待ち）」は、下の見出しと同じことを言うので出さない */}
+        {checkoutNotice && !(checkoutNotice === 'received' && received && awaitingPayment) && (
+          <p
+            role="status"
+            className={cn(
+              'jp-wrap rounded-2xl px-4 py-3 text-sm font-semibold',
+              checkoutNotice === 'paid' || checkoutNotice === 'received'
+                ? 'bg-lagoon/15 text-ocean'
+                : 'bg-coral-strong/10 text-coral-deep',
+            )}
+          >
+            <Phrase>{t(`checkout.${checkoutNotice}` as 'checkout.paid')}</Phrase>
+          </p>
+        )}
         {ended ? (
           // 取消・天候中止：確定の表示（チェックマーク・カレンダー追加）を出さず、取り消したことを先頭で伝える
           <section className="rounded-3xl bg-white p-6 ring-2 ring-coral-deep/30 sm:p-8" aria-labelledby="done-title">
@@ -151,7 +206,20 @@ export default async function BookingViewPage({ params }: PageProps<'/[locale]/b
                     <Phrase>{t('cancelledLead')}</Phrase>
                   </p>
                 )}
-                {refund && <p className="jp-wrap font-semibold text-ocean">{refund}</p>}
+                {refundLines.map((line) => (
+                  <p key={line} className="jp-wrap font-semibold text-ocean">
+                    {line}
+                  </p>
+                ))}
+                {receiptAvailable && (
+                  <a
+                    href={`/${locale}/bookings/${token}/receipt`}
+                    className="inline-flex min-h-11 items-center gap-2 text-sm font-semibold text-lagoon-ink hover:underline"
+                  >
+                    <Receipt aria-hidden className="size-4" />
+                    {t('receipt')}
+                  </a>
+                )}
               </div>
             </div>
             <div className="mt-5 flex flex-wrap items-center justify-between gap-x-6 gap-y-2 border-t border-ocean/10 pt-4">
@@ -191,6 +259,15 @@ export default async function BookingViewPage({ params }: PageProps<'/[locale]/b
                 <CalendarPlus aria-hidden className="size-4" />
                 {t('addToCalendar')}
               </a>
+              {receiptAvailable && (
+                <a
+                  href={`/${locale}/bookings/${token}/receipt`}
+                  className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-white px-4 text-sm font-bold text-ocean hover:bg-foam"
+                >
+                  <Receipt aria-hidden className="size-4" />
+                  {t('receipt')}
+                </a>
+              )}
             </div>
           </section>
         ) : (
@@ -204,13 +281,21 @@ export default async function BookingViewPage({ params }: PageProps<'/[locale]/b
               )}
               <div className="space-y-2">
                 <h1 id="done-title" className="jp-wrap font-heading text-2xl font-black sm:text-3xl">
-                  <Phrase>{t(awaitingPayment ? 'paymentTitle' : 'requestedTitle')}</Phrase>
+                  <Phrase>{t(awaitingPayment ? paymentHeading : 'requestedTitle')}</Phrase>
                 </h1>
                 <p className="inline-block rounded-lg bg-coral-strong px-3 py-1 text-sm font-bold text-white">
                   {t('requestedNotice')}
                 </p>
                 <p className="jp-wrap text-sm leading-relaxed text-white/85">
-                  <Phrase>{t(awaitingPayment ? 'paymentLead' : 'requestedLead')}</Phrase>
+                  <Phrase>
+                    {t(
+                      awaitingPayment
+                        ? paymentLeadKey
+                        : booking.paymentMethod === 'onsite'
+                          ? 'requestedLeadOnsite'
+                          : 'requestedLead',
+                    )}
+                  </Phrase>
                 </p>
                 {open && (booking.settings.replyGuide || booking.shopBusinessHours) && (
                   <div className="jp-wrap space-y-0.5 rounded-xl bg-white/10 px-3 py-2 text-sm text-white">
@@ -235,7 +320,8 @@ export default async function BookingViewPage({ params }: PageProps<'/[locale]/b
               {bookingNoBox}
             </div>
             <div className="border-t border-white/10 bg-white p-4 sm:px-8">
-              <RequestProgress current={awaitingPayment ? 2 : 1} />
+              {/* カードで受け付けて組合の確認待ちなら、お支払いは済み */}
+              <RequestProgress current={awaitingPayment ? (received ? 3 : 2) : 1} />
             </div>
           </section>
         )}
@@ -252,43 +338,63 @@ export default async function BookingViewPage({ params }: PageProps<'/[locale]/b
                   {formatYen(booking.paymentAmount ?? booking.totalAmount)}
                 </dd>
               </div>
-              {dueLabel && (
+              {dueLabel && !received && (
                 <div className="rounded-2xl bg-coral-strong/10 p-4">
                   <dt className="text-xs font-semibold text-coral-deep">{t('paymentDue')}</dt>
                   <dd className="font-heading text-lg font-black text-coral-deep tabular-nums">{dueLabel}</dd>
                 </div>
               )}
             </dl>
-            <div className="space-y-2 rounded-2xl bg-white p-4 ring-1 ring-ocean/10">
-              <p className="jp-wrap text-sm leading-relaxed whitespace-pre-line text-ink/85">
-                {booking.settings.paymentInstructions || t('paymentHowEmpty')}
+            {received ? (
+              // カードで受け付けたが、組合が確かめてから確定する（実施事業者の受入・金額の確認）
+              <p className="jp-wrap rounded-2xl bg-lagoon/15 p-4 text-sm leading-relaxed font-semibold text-ocean">
+                <Phrase>{t('paymentReceivedShort')}</Phrase>
               </p>
-              {booking.settings.paymentInstructions && (
-                <CopyButton
-                  value={booking.settings.paymentInstructions}
-                  label={t('copyInstructions')}
-                  copiedLabel={t('copied')}
-                  tone="light"
-                />
-              )}
-              {/* 振込名義の頭に予約番号を入れてもらう（入金の照合のため）。実際の予約番号で例を出す */}
-              <div className="rounded-xl bg-coral-strong/10 p-3 text-sm text-ink">
-                <p className="jp-wrap font-semibold">
-                  <Phrase>{t('payerName', { bookingNo: booking.bookingNo })}</Phrase>
+            ) : paymentExpired ? (
+              <p className="jp-wrap rounded-2xl bg-coral-strong/10 p-4 text-sm leading-relaxed font-semibold text-coral-deep">
+                <Phrase>{t('paymentExpired')}</Phrase>
+              </p>
+            ) : cardPayment ? (
+              <form action={startCardCheckoutAction.bind(null, token, locale)} className="space-y-3">
+                <CardPayButton label={t('payWithCard')} pendingLabel={t('payWithCardPending')} />
+                <p className="jp-wrap text-sm leading-relaxed text-ink/80">
+                  <Phrase>{t('payWithCardLead')}</Phrase>
                 </p>
-                <div className="mt-2">
+              </form>
+            ) : (
+              <div className="space-y-2 rounded-2xl bg-white p-4 ring-1 ring-ocean/10">
+                <p className="jp-wrap text-sm leading-relaxed whitespace-pre-line text-ink/85">
+                  {booking.settings.paymentInstructions || t('paymentHowEmpty')}
+                </p>
+                {booking.settings.paymentInstructions && (
                   <CopyButton
-                    value={booking.bookingNo}
-                    label={t('copyBookingNo')}
+                    value={booking.settings.paymentInstructions}
+                    label={t('copyInstructions')}
                     copiedLabel={t('copied')}
                     tone="light"
                   />
+                )}
+                {/* 振込名義の頭に予約番号を入れてもらう（入金の照合のため）。実際の予約番号で例を出す */}
+                <div className="rounded-xl bg-coral-strong/10 p-3 text-sm text-ink">
+                  <p className="jp-wrap font-semibold">
+                    <Phrase>{t('payerName', { bookingNo: booking.bookingNo })}</Phrase>
+                  </p>
+                  <div className="mt-2">
+                    <CopyButton
+                      value={booking.bookingNo}
+                      label={t('copyBookingNo')}
+                      copiedLabel={t('copied')}
+                      tone="light"
+                    />
+                  </div>
                 </div>
               </div>
-            </div>
-            <p className="jp-wrap mt-3 text-sm leading-relaxed text-ink/80">
-              <Phrase>{t('paymentNotes')}</Phrase>
-            </p>
+            )}
+            {!received && !paymentExpired && (
+              <p className="jp-wrap mt-3 text-sm leading-relaxed text-ink/80">
+                <Phrase>{t('paymentNotes')}</Phrase>
+              </p>
+            )}
           </section>
         )}
 

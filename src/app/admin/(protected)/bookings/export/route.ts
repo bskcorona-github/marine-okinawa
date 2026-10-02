@@ -1,4 +1,5 @@
 import { db } from '@/db';
+import { csvResponse } from '@/lib/csv';
 import { requireAdmin } from '@/modules/auth/guard';
 import { writeAuditLog } from '@/modules/audit/log';
 import { bookingsToCsv, csvFileName } from '@/modules/booking/export-csv';
@@ -22,14 +23,12 @@ export async function GET(request: Request) {
     action: 'booking.export_csv',
     targetType: 'shop',
     targetId: admin.shopId,
-    after: { ...filters, rows: rows.length, truncated },
+    // 検索語（氏名・電話番号など）は残さない。検索したかどうかだけ
+    after: { ...filters, query: undefined, hasQuery: Boolean(filters.query), rows: rows.length, truncated },
   });
-  return new Response(bookingsToCsv(rows, shop.timezone), {
-    headers: {
-      'Content-Type': 'text/csv; charset=utf-8',
-      'Content-Disposition': `attachment; filename="${csvFileName(now, shop.timezone)}"`,
-      'Cache-Control': 'private, no-store',
-      ...(truncated ? { 'X-Export-Truncated': '1' } : {}),
-    },
-  });
+  return csvResponse(
+    bookingsToCsv(rows, shop.timezone),
+    csvFileName(now, shop.timezone),
+    truncated ? { 'X-Export-Truncated': '1' } : {},
+  );
 }

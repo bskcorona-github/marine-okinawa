@@ -9,6 +9,7 @@ import {
   operators,
   payments,
   shops,
+  type PolicySnapshot,
 } from '@/db/schema';
 import { localDate } from '@/lib/dates';
 import { writeAuditLog } from '@/modules/audit/log';
@@ -17,12 +18,16 @@ import { normalizeEmail, normalizePhone } from '@/modules/customer/normalize';
 import { resolveCustomer } from '@/modules/customer/resolve';
 import { bookingDeadline, isPastDeadline } from '@/modules/inventory/availability';
 import { lockSlot, reserveSeats } from '@/modules/inventory/reserve';
+import { addReceipt } from '@/modules/payment/ledger';
 import { paymentDueAt, resolveSettings } from '@/modules/shop/settings';
 import { accessTokenExpiry, addBookingAccessToken } from './access-token';
+import { feeSettingsOf } from './cancellation-fee';
 import { generateBookingNo } from './booking-no';
 import { BookingError } from './errors';
 import { priceItems, type ItemRequest } from './pricing';
 import { OPEN_REQUEST_STATUSES } from './status';
+import { DEFAULT_LOCALE } from '@/lib/locale';
+import { isPerPerson } from '@/modules/catalog/capacity-unit';
 
 export type ManualBookingSource = 'phone' | 'line' | 'walk_in';
 
@@ -77,6 +82,8 @@ export type CreateBookingInput = {
    * （支払待ち・予約確定で登録するときの記録）
    */
   operator?: { id: string | null; confirmed: boolean };
+  /** カード決済（Stripe）で受け付けるとき true（支払方法の案内の文面がなくても支払待ちで登録できる） */
+  cardPayment?: boolean;
   actorId?: string | null;
   now: Date;
 };
@@ -152,7 +159,7 @@ export async function createBooking(db: Db, input: CreateBookingInput): Promise<
     const assignedVia =
       chosenOperator && assignedOperatorId && assignedOperatorId !== menu.operatorId ? 'staff' : 'default';
     // 貸切プラン（定員を艇で数える）は、実際に乗る人数を別に持つ。人数で数えるプランでは使わない
-    const byBoat = menu.capacityUnit !== '名';
+    const byBoat = !isPerPerson(menu.capacityUnit);
     const guestCount = byBoat && input.guestCount ? input.guestCount : null;
     if (guestCount !== null && (!Number.isInteger(guestCount) || guestCount < 1 || guestCount > MAX_GUEST_COUNT)) {
       throw new BookingError('GUEST_COUNT_REQUIRED');
@@ -169,7 +176,7 @@ export async function createBooking(db: Db, input: CreateBookingInput): Promise<
     // 手動予約：現地払いは支払案内を送らない。事前払いの支払待ちは、支払方法の案内がないと支払えない
     if (!isWeb && status === 'awaiting_payment') {
       if (paymentMethod === 'onsite') throw new BookingError('INVALID_TRANSITION');
-      if (!settings.paymentInstructions) throw new BookingError('PAYMENT_INSTRUCTIONS_MISSING');
+      if (!settings.paymentInstructions && !input.cardPayment) throw new BookingError('PAYMENT_INSTRUCTIONS_MISSING');
     }
     if (isWeb) {
       if (settings.bookingPaused) throw new BookingError('BOOKING_PAUSED');
@@ -212,14 +219,14 @@ export async function createBooking(db: Db, input: CreateBookingInput): Promise<
         weatherPolicy: menuTranslations.weatherPolicy,
       })
       .from(menuTranslations)
-      .where(and(eq(menuTranslations.menuId, menu.id), eq(menuTranslations.locale, 'ja')));
-    const policySnapshot = input.consented
-      ? {
-          commonCancellationPolicy: settings.commonCancellationPolicy,
-          commonWeatherPolicy: settings.commonWeatherPolicy,
-          ...translation,
-        }
-      : null;
+      .where(and(eq(menuTranslations.menuId, menu.id), eq(menuTranslations.locale, DEFAULT_LOCALE)));
+    // 申込のときの規定。電話などの申込（同意の画面を通らない）でも残す（あとで設定を変えても、この予約は申込のときの率で扱う）
+    const policySnapshot: PolicySnapshot = {
+      commonCancellationPolicy: settings.commonCancellationPolicy,
+      commonWeatherPolicy: settings.commonWeatherPolicy,
+      cancellationRates: feeSettingsOf(settings),
+      ...translation,
+    };
 
     const [created] = await tx
       .insert(bookings)
@@ -259,20 +266,32 @@ export async function createBooking(db: Db, input: CreateBookingInput): Promise<
     const paidAtCreation = status === 'confirmed' && paymentMethod === 'online';
     const paid = paidAtCreation ? (input.payment ?? { amount: totalAmount, receivedAt: input.now }) : null;
     if (paid && (!Number.isInteger(paid.amount) || paid.amount < 1)) throw new BookingError('PAYMENT_REQUIRED');
-    await tx.insert(payments).values({
-      shopId: input.shopId,
-      bookingId: created.id,
-      method: paymentMethod,
-      amount: paid?.amount ?? totalAmount,
-      status: paidAtCreation ? 'paid' : 'pending',
-      dueAt:
-        status === 'awaiting_payment'
-          ? paymentDueAt({ now: input.now, startsAt: slot.startsAt, days: settings.paymentDueDays, timezone })
-          : null,
-      receivedAt: paid?.receivedAt ?? null,
-      receivedBy: paid ? (input.actorId ?? null) : null,
-      note: paid ? paid.note?.trim() || '予約の登録時に入金済み' : '',
-    });
+    const [payment] = await tx
+      .insert(payments)
+      .values({
+        shopId: input.shopId,
+        bookingId: created.id,
+        method: paymentMethod,
+        amount: totalAmount,
+        status: 'pending',
+        dueAt:
+          status === 'awaiting_payment'
+            ? paymentDueAt({ now: input.now, startsAt: slot.startsAt, days: settings.paymentDueDays, timezone })
+            : null,
+      })
+      .returning();
+    // 入金済みで登録した予約は、入金を 1 件記録する（支払いの額・状態も入金に合わせる）
+    if (paid) {
+      await addReceipt(tx, {
+        payment,
+        amount: paid.amount,
+        receivedAt: paid.receivedAt,
+        method: 'transfer',
+        purpose: 'payment',
+        note: paid.note?.trim() || '予約の登録時に入金済み',
+        actorId: input.actorId ?? null,
+      });
+    }
     await tx.insert(bookingStatusEvents).values({
       bookingId: created.id,
       fromStatus: null,

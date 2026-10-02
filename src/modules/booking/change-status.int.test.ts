@@ -3,23 +3,12 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { auditLogs, bookings, bookingStatusEvents, operators, payments, shops, slots } from '@/db/schema';
 import { getTestDb, resetDb } from '../../../tests/helpers/db';
 import { seedMenu, seedShop, seedSlot } from '../../../tests/helpers/fixtures';
-import {
-  assignOperator,
-  changeBookingStatus,
-  recordRefund,
-  updateAdminNote,
-  type ChangeStatusInput,
-} from './change-status';
+import { assignOperator, changeBookingStatus, updateAdminNote, type ChangeStatusInput } from './change-status';
 import { localDate } from '@/lib/dates';
+import { refundPayment as recordRefund } from '@/modules/payment/refunds';
 import { createBooking } from './create-booking';
-import {
-  exportBookings,
-  getActionCounts,
-  getDailyReport,
-  getOperatorSummary,
-  listOpenRequests,
-  searchBookings,
-} from './queries';
+import { exportBookings, getActionCounts, listOpenRequests, searchBookings } from './queries';
+import { getDailyReport, getOperatorSummary } from './reports';
 
 const db = getTestDb();
 const NOW = new Date('2026-09-28T00:00:00Z');
@@ -41,7 +30,13 @@ async function setup(source: 'web' | 'phone' = 'web') {
   });
   const change = (to: ChangeStatusInput['to'], extra: Partial<ChangeStatusInput> = {}) =>
     changeBookingStatus(db, { shopId: shop.id, bookingId, to, actor: STAFF, now: NOW, ...extra });
-  return { shop, menu, slot, bookingId, change };
+  /** 実施事業者を決める（催行のあとの記録には実施事業者が要る） */
+  const withOperator = async () => {
+    const [op] = await db.insert(operators).values({ shopId: shop.id, slug: 'coco', name: 'ココマリン' }).returning();
+    await db.update(bookings).set({ operatorId: op.id }).where(eq(bookings.id, bookingId));
+    return op;
+  };
+  return { shop, menu, slot, bookingId, change, withOperator };
 }
 
 async function reservedCount(slotId: string) {
@@ -145,16 +140,21 @@ describe('changeBookingStatus', () => {
   });
 
   it('催行済み → 実績確認済み → 精算済み。開始前は催行済みにできず、催行後は取り消せない', async () => {
-    const { change } = await setup('phone');
+    const { change, withOperator } = await setup('phone');
     await change('awaiting_payment');
     await change('confirmed', { payment: { amount: 15000, receivedAt: NOW } });
+    const afterStart = new Date('2026-10-01T03:00:00Z');
+    // 催行のあとの記録（実績・精算）は、実施事業者が決まっていないとできない（精算から黙って外れないように）
+    await expect(change('completed', { now: afterStart })).rejects.toMatchObject({ code: 'OPERATOR_REQUIRED' });
+    await withOperator();
     await expect(change('completed')).rejects.toMatchObject({ code: 'NOT_STARTED' });
     await expect(change('no_show')).rejects.toMatchObject({ code: 'NOT_STARTED' });
-    const afterStart = new Date('2026-10-01T03:00:00Z');
     await change('completed', { now: afterStart });
     await expect(change('cancelled')).rejects.toMatchObject({ code: 'NOT_CANCELLABLE' });
     await change('verified');
-    await expect(change('settled')).resolves.toMatchObject({ mail: null });
+    // 精算済みへは、月次精算の振込の記録からだけ進める
+    await expect(change('settled')).rejects.toMatchObject({ code: 'INVALID_TRANSITION' });
+    await expect(change('settled', { fromSettlement: true })).resolves.toMatchObject({ mail: null });
   });
 
   it('他のショップの予約は操作できない', async () => {
@@ -348,9 +348,14 @@ describe('入金と返金の境目', () => {
     expect(await reservedCount(weather.slot.id)).toBe(0);
 
     const noShow = await setup();
+    await noShow.withOperator();
     await noShow.change('awaiting_payment');
     await noShow.change('confirmed', { payment: { amount: 15000, receivedAt: NOW } });
-    await noShow.change('no_show', { now: new Date('2026-10-01T03:00:00Z') });
+    const afterStart = new Date('2026-10-01T03:00:00Z');
+    // 入金済みの無断キャンセルも、返金予定額を決めてから（精算ではその残りがキャンセル料になる）
+    await expect(noShow.change('no_show', { now: afterStart })).rejects.toMatchObject({ code: 'REFUND_REQUIRED' });
+    await noShow.change('no_show', { now: afterStart, refundDueAmount: 0 });
     expect(await reservedCount(noShow.slot.id)).toBe(3);
+    expect(await paymentOf(noShow.bookingId)).toMatchObject({ refundDueAmount: 0 });
   });
 });

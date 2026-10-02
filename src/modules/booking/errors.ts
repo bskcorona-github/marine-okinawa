@@ -29,7 +29,25 @@ export type BookingErrorCode =
   | 'OPERATOR_LOCKED'
   | 'OPERATOR_REQUIRED'
   | 'OPERATOR_DECLINED'
-  | 'OPERATOR_UNCONFIRMED';
+  | 'OPERATOR_UNCONFIRMED'
+  /** カードで払われた額が、今の支払い額と違う（支払いのページを開いたあとに人数・料金を変えたなど） */
+  | 'PAYMENT_AMOUNT_MISMATCH'
+  /** 画面を開いたあとに、ほかの画面から返金が記録された */
+  | 'REFUND_STALE'
+  /** 確定した精算に入っている予約（返金すると精算の数字とずれる） */
+  | 'REFUND_IN_SETTLEMENT'
+  | 'STRIPE_REFUND_FAILED'
+  | 'STRIPE_NOT_CONFIGURED'
+  /** 組合・事業者の都合の取消で、全額を返金しない */
+  | 'FULL_REFUND_REQUIRED'
+  /** 実績の確認で、手元に残る入金と料金が違うのに、差額の扱いを書いていない */
+  | 'AMOUNT_DIFFERENCE'
+  /** 支払待ちの予約の返金（確定するか取り消してから返金する） */
+  | 'REFUND_NOT_ALLOWED'
+  /** カードへの返金を送ったが、結果がまだ分からない */
+  | 'REFUND_PENDING'
+  /** 入金日・返金日が今日より後、または古すぎる */
+  | 'INVALID_DATE';
 
 export class BookingError extends Error {
   constructor(readonly code: BookingErrorCode) {

@@ -10,9 +10,9 @@ import {
   inArray,
   isNull,
   lt,
+  notInArray,
   or,
   sql,
-  type AnyColumn,
   type SQL,
 } from 'drizzle-orm';
 import type { DbOrTx } from '@/db/client';
@@ -28,6 +28,9 @@ import {
   menuTranslations,
   notifications,
   operators,
+  paymentEvents,
+  paymentReceipts,
+  paymentRefunds,
   payments,
   shops,
   slots,
@@ -37,12 +40,17 @@ import { addDays, zonedToUtc } from '@/lib/dates';
 import { normalizePhone } from '@/modules/customer/normalize';
 import { resolveSettings } from '@/modules/shop/settings';
 import { hashAccessToken } from './access-token';
+import { bookingStatusIn, confirmedOnceSql } from './status-sql';
 import {
+  BEFORE_PAYMENT_REQUEST_STATUSES,
   CONFIRMED_STATUSES as ACTIVE_STATUSES,
+  ENDED_STATUSES,
   OPEN_REQUEST_STATUSES,
   SEAT_HOLDING_STATUSES,
   type BookingStatus,
 } from './status';
+import { BOOKING_HISTORY_ACTION_LIST } from './history';
+import { DEFAULT_LOCALE } from '@/lib/locale';
 
 async function loadSummary(db: DbOrTx, condition: SQL) {
   const [row] = await db
@@ -68,6 +76,7 @@ async function loadSummary(db: DbOrTx, condition: SQL) {
       cancelReason: bookings.cancelReason,
       cancelCategory: bookings.cancelCategory,
       cancelOperatorNote: bookings.cancelOperatorNote,
+      operatorAgreement: bookings.operatorAgreement,
       createdAt: bookings.createdAt,
       secondChoice: bookings.secondChoice,
       customerNote: bookings.customerNote,
@@ -101,23 +110,36 @@ async function loadSummary(db: DbOrTx, condition: SQL) {
       shopPhone: sql<string | null>`${shops.profile} ->> 'phone'`,
       shopEmail: sql<string | null>`${shops.profile} ->> 'email'`,
       shopBusinessHours: sql<string | null>`${shops.profile} ->> 'businessHours'`,
+      // 領収書に載せる（組合の所在地、事業者のインボイスの登録番号）
+      shopAddress: sql<string | null>`${shops.profile} ->> 'address'`,
       timezone: shops.timezone,
       operatorName: operators.name,
       operatorPhone: operators.phone,
       operatorContactHours: operators.contactHours,
+      operatorInvoiceNumber: operators.invoiceNumber,
       paymentStatus: payments.status,
       paymentAmount: payments.amount,
       paymentDueAt: payments.dueAt,
       paymentReceivedAt: payments.receivedAt,
+      /** カード決済（Stripe）で受け取ったとき（返金を Stripe へ送るため） */
+      stripePaymentIntentId: payments.stripePaymentIntentId,
       refundDueAmount: payments.refundDueAmount,
       refundedAmount: payments.refundedAmount,
       refundedAt: payments.refundedAt,
+      /** 代金を受け取った方法（最初の「代金」の入金。二重のお支払い・追加の入金の方法では決めない） */
+      paymentReceiptMethod: sql<'transfer' | 'card' | 'other' | null>`(select r.method from ${paymentReceipts} r
+        where r.payment_id = ${payments.id} and r.purpose = 'payment' order by r.received_at limit 1)`,
+      /** 一度でも予約確定になったか（取消のあとでも、確定していたなら領収書・キャンセル料の対象） */
+      confirmedOnce: confirmedOnceSql,
     })
     .from(bookings)
     .innerJoin(slots, eq(slots.id, bookings.slotId))
     .innerJoin(menus, eq(menus.id, slots.menuId))
     // 多言語に対応するときに、予約の言語（bookings.locale）の翻訳に切り替える
-    .innerJoin(menuTranslations, and(eq(menuTranslations.menuId, menus.id), eq(menuTranslations.locale, 'ja')))
+    .innerJoin(
+      menuTranslations,
+      and(eq(menuTranslations.menuId, menus.id), eq(menuTranslations.locale, DEFAULT_LOCALE)),
+    )
     .innerJoin(shops, eq(shops.id, bookings.shopId))
     // 実施事業者は予約ごとに組合が割り当てる（お客様には予約確定まで見せない）
     .leftJoin(operators, eq(operators.id, bookings.operatorId))
@@ -165,8 +187,6 @@ export async function getBookingDetail(db: DbOrTx, params: { shopId: string; boo
   return { ...summary, payment: payment ?? null };
 }
 
-export type { BookingStatus };
-
 /** 予約の状態の履歴と、入金・返金・日時変更などの操作ログ（管理画面の予約詳細用。古い順） */
 export async function listBookingHistory(db: DbOrTx, params: { shopId: string; bookingId: string }) {
   const [events, logs] = await Promise.all([
@@ -192,6 +212,7 @@ export async function listBookingHistory(db: DbOrTx, params: { shopId: string; b
         at: auditLogs.createdAt,
         action: auditLogs.action,
         after: auditLogs.after,
+        actorType: auditLogs.actorType,
         actorName: user.name,
         actorEmail: user.email,
       })
@@ -202,13 +223,7 @@ export async function listBookingHistory(db: DbOrTx, params: { shopId: string; b
           eq(auditLogs.shopId, params.shopId),
           eq(auditLogs.targetType, 'booking'),
           eq(auditLogs.targetId, params.bookingId),
-          inArray(auditLogs.action, [
-            'booking.refund',
-            'booking.assign_operator',
-            'booking.resend_mail',
-            'booking.admin_note',
-            'booking.withdraw_operator_request',
-          ]),
+          inArray(auditLogs.action, BOOKING_HISTORY_ACTION_LIST),
         ),
       )
       .orderBy(asc(auditLogs.createdAt)),
@@ -256,39 +271,74 @@ export type BookingSearchParams = {
 
 /**
  * 入金の状況の区分。before：支払案内の前（申込の確認中）、awaiting：支払待ち、overdue：支払期限切れ、
- * paid：入金済み、refund_due：返金待ち（返金予定額のうち未返金の分がある）、refunded：返金済み（一部を含む）
+ * held：入金済み・確定待ち（カードで払われたが、実施事業者の受入・金額の確認で確定を保留した）、
+ * paid：入金済み、refund_due：返金待ち（返金予定額のうち未返金の分がある）、refunded：返金済み（一部を含む）、
+ * overpaid：料金より多い入金（二重のお支払い・人数が減ったなど。返金するか確かめる）、
+ * refund_sending：カードへの返金の結果待ち、dispute：チャージバックの対応中
  */
-export type PaymentFilter = 'before' | 'awaiting' | 'overdue' | 'paid' | 'refund_due' | 'refunded';
+export type PaymentFilter =
+  | 'before'
+  | 'awaiting'
+  | 'overdue'
+  | 'held'
+  | 'paid'
+  | 'refund_due'
+  | 'refunded'
+  | 'overpaid'
+  | 'refund_sending'
+  | 'dispute';
 
 export const PAYMENT_FILTER_LABELS: Record<PaymentFilter, string> = {
   before: '支払案内の前',
   awaiting: '支払待ち',
   overdue: '支払期限切れ',
+  held: '入金済み・確定待ち',
   paid: '入金済み',
   refund_due: '返金待ち',
   refunded: '返金済み',
+  overpaid: '料金より多い入金',
+  refund_sending: 'カード返金の結果待ち',
+  dispute: 'チャージバック対応中',
 };
 
 /** 返金予定額のうち、まだ返金していない分がある */
 const refundDueSql = sql`(${payments.refundDueAmount} is not null and ${payments.refundDueAmount} > ${payments.refundedAmount} and ${payments.status} in ('paid', 'partially_refunded'))`;
 
+/** 取消などで終わっていない予約で、手元に残る入金（受け取り − 返金）が料金より多い */
+const overpaidSql = and(
+  inArray(payments.status, ['paid', 'partially_refunded']),
+  notInArray(bookings.status, [...ENDED_STATUSES]),
+  sql`${payments.amount} - ${payments.refundedAmount} > ${bookings.totalAmount}`,
+)!;
+
+/** カードへの返金を送ったが、結果がまだ分からない */
+const refundSendingSql = sql`exists (select 1 from ${paymentRefunds} r where r.payment_id = ${payments.id} and r.status = 'pending')`;
+
+/** チャージバックの申し立てがあり、まだ決着していない */
+const disputeOpenSql = sql`exists (select 1 from ${paymentEvents} e where e.payment_id = ${payments.id} and e.result = 'dispute_open')`;
+
 function paymentCondition(filter: PaymentFilter, now: Date): SQL {
   switch (filter) {
     case 'before':
-      return and(
-        inArray(bookings.status, ['requested', 'reviewing', 'operator_checking']),
-        eq(bookings.paymentMethod, 'online'),
-      )!;
+      return and(bookingStatusIn(BEFORE_PAYMENT_REQUEST_STATUSES), eq(bookings.paymentMethod, 'online'))!;
     case 'awaiting':
       return eq(bookings.status, 'awaiting_payment');
     case 'overdue':
-      return and(eq(bookings.status, 'awaiting_payment'), lt(payments.dueAt, now))!;
+      return and(eq(bookings.status, 'awaiting_payment'), eq(payments.status, 'pending'), lt(payments.dueAt, now))!;
+    case 'held':
+      return and(eq(bookings.status, 'awaiting_payment'), eq(payments.status, 'paid'))!;
     case 'paid':
       return and(eq(payments.status, 'paid'), sql`not ${refundDueSql}`)!;
     case 'refund_due':
       return refundDueSql;
     case 'refunded':
       return inArray(payments.status, ['refunded', 'partially_refunded']);
+    case 'overpaid':
+      return overpaidSql;
+    case 'refund_sending':
+      return refundSendingSql;
+    case 'dispute':
+      return disputeOpenSql;
   }
 }
 
@@ -299,7 +349,7 @@ const CUSTOMER_MAIL_TYPES = ['requested', 'payment_request', 'confirmed', 'cance
  * 事業者の回答を組合がまだ受けて動いていない、確定前の申込。回答が「最後の照会」と「組合が最後に状態を変えた時刻」の
  * どちらよりも後なら数える（支払案内のあとに受入不可へ直した回答も拾い、照会し直したあとの古い回答は数えない）
  */
-const operatorRespondedSql = sql`(${bookings.status} in ('requested', 'reviewing', 'operator_checking', 'awaiting_payment') and exists (
+const operatorRespondedSql = sql`(${bookingStatusIn(OPEN_REQUEST_STATUSES)} and exists (
   select 1 from ${bookingOperatorRequests} r
   where r.booking_id = ${bookings.id}
     and r.status in ('accepted', 'conditional', 'declined')
@@ -398,7 +448,10 @@ function searchQuery(db: DbOrTx, params: BookingSearchParams) {
     .from(bookings)
     .innerJoin(slots, eq(slots.id, bookings.slotId))
     .innerJoin(menus, eq(menus.id, slots.menuId))
-    .innerJoin(menuTranslations, and(eq(menuTranslations.menuId, slots.menuId), eq(menuTranslations.locale, 'ja')))
+    .innerJoin(
+      menuTranslations,
+      and(eq(menuTranslations.menuId, slots.menuId), eq(menuTranslations.locale, DEFAULT_LOCALE)),
+    )
     .leftJoin(operators, eq(operators.id, bookings.operatorId))
     .leftJoin(payments, eq(payments.bookingId, bookings.id))
     .where(and(...searchConditions(params)))
@@ -447,7 +500,10 @@ export async function exportBookings(db: DbOrTx, params: BookingSearchParams, li
     .from(bookings)
     .innerJoin(slots, eq(slots.id, bookings.slotId))
     .innerJoin(menus, eq(menus.id, slots.menuId))
-    .innerJoin(menuTranslations, and(eq(menuTranslations.menuId, slots.menuId), eq(menuTranslations.locale, 'ja')))
+    .innerJoin(
+      menuTranslations,
+      and(eq(menuTranslations.menuId, slots.menuId), eq(menuTranslations.locale, DEFAULT_LOCALE)),
+    )
     .leftJoin(operators, eq(operators.id, bookings.operatorId))
     .leftJoin(payments, eq(payments.bookingId, bookings.id))
     .where(and(...searchConditions(params)))
@@ -485,6 +541,7 @@ export async function listSlotBookings(db: DbOrTx, params: { shopId: string; slo
       paymentStatus: payments.status,
       paymentAmount: payments.amount,
       refundedAmount: payments.refundedAmount,
+      policySnapshot: bookings.policySnapshot,
       paymentMethod: bookings.paymentMethod,
       operatorId: bookings.operatorId,
       // メールで知らせられるか（ない予約は電話で伝える）
@@ -496,7 +553,8 @@ export async function listSlotBookings(db: DbOrTx, params: { shopId: string; slo
     .orderBy(asc(bookings.createdAt));
 }
 
-const participantsSql = sql<number>`coalesce(sum(case when ${menus.capacityUnit} = '名' then ${bookings.partySize} else coalesce(${bookings.guestCount}, 0) end), 0)`;
+/** 参加人数（名で数えるプランは人数、艇で数える貸切は乗船人数） */
+export const participantsSql = sql<number>`coalesce(sum(case when ${menus.capacityUnit} = '名' then ${bookings.partySize} else coalesce(${bookings.guestCount}, 0) end), 0)`;
 
 /**
  * 参加日（ショップのタイムゾーン）の範囲の確定予約（確定〜精算）の件数・参加人数・金額。
@@ -546,7 +604,20 @@ export async function getActionCounts(db: DbOrTx, params: { shopId: string; now:
     .from(bookings)
     .innerJoin(payments, eq(payments.bookingId, bookings.id))
     .where(
-      and(eq(bookings.shopId, params.shopId), eq(bookings.status, 'awaiting_payment'), lt(payments.dueAt, params.now)),
+      and(
+        eq(bookings.shopId, params.shopId),
+        eq(bookings.status, 'awaiting_payment'),
+        eq(payments.status, 'pending'),
+        lt(payments.dueAt, params.now),
+      ),
+    );
+  // カードで払われたが、確定を保留している予約（組合が確かめて確定する）
+  const [paymentHeld] = await db
+    .select({ count: count() })
+    .from(bookings)
+    .innerJoin(payments, eq(payments.bookingId, bookings.id))
+    .where(
+      and(eq(bookings.shopId, params.shopId), eq(bookings.status, 'awaiting_payment'), eq(payments.status, 'paid')),
     );
   const [awaitingReport] = await db
     .select({ count: count() })
@@ -565,6 +636,16 @@ export async function getActionCounts(db: DbOrTx, params: { shopId: string; now:
     .from(bookings)
     .innerJoin(payments, eq(payments.bookingId, bookings.id))
     .where(and(eq(bookings.shopId, params.shopId), refundDueSql));
+  // お金の要確認：料金より多い入金・カード返金の結果待ち・チャージバック
+  const [money] = await db
+    .select({
+      overpaid: sql<number>`count(*) filter (where ${overpaidSql})`.mapWith(Number),
+      refundSending: sql<number>`count(*) filter (where ${refundSendingSql})`.mapWith(Number),
+      dispute: sql<number>`count(*) filter (where ${disputeOpenSql})`.mapWith(Number),
+    })
+    .from(bookings)
+    .innerJoin(payments, eq(payments.bookingId, bookings.id))
+    .where(eq(bookings.shopId, params.shopId));
   // 事業者から中止・無断キャンセルの報告があり、組合がまだ状態を変えていない予約
   const [operatorReports] = await db
     .select({ count: count() })
@@ -584,12 +665,16 @@ export async function getActionCounts(db: DbOrTx, params: { shopId: string; now:
   return {
     operatorResponded: operatorResponded?.count ?? 0,
     refundPending: refundPending?.count ?? 0,
+    overpaid: money?.overpaid ?? 0,
+    refundSending: money?.refundSending ?? 0,
+    dispute: money?.dispute ?? 0,
     operatorReports: operatorReports?.count ?? 0,
     requested: counts.requested ?? 0,
     reviewing: counts.reviewing ?? 0,
     operatorChecking: counts.operator_checking ?? 0,
     awaitingPayment: counts.awaiting_payment ?? 0,
     paymentOverdue: overdue?.count ?? 0,
+    paymentHeld: paymentHeld?.count ?? 0,
     awaitingReport: awaitingReport?.count ?? 0,
     awaitingVerification: counts.completed ?? 0,
   };
@@ -619,155 +704,15 @@ export async function listOpenRequests(db: DbOrTx, params: { shopId: string; lim
     .from(bookings)
     .innerJoin(slots, eq(slots.id, bookings.slotId))
     .innerJoin(menus, eq(menus.id, slots.menuId))
-    .innerJoin(menuTranslations, and(eq(menuTranslations.menuId, slots.menuId), eq(menuTranslations.locale, 'ja')))
+    .innerJoin(
+      menuTranslations,
+      and(eq(menuTranslations.menuId, slots.menuId), eq(menuTranslations.locale, DEFAULT_LOCALE)),
+    )
     .leftJoin(operators, eq(operators.id, bookings.operatorId))
     .leftJoin(payments, eq(payments.bookingId, bookings.id))
     .where(and(eq(bookings.shopId, params.shopId), inArray(bookings.status, [...OPEN_REQUEST_STATUSES])))
     .orderBy(asc(slots.startsAt), asc(bookings.createdAt))
     .limit(params.limit);
-}
-
-export type DailyRow = {
-  date: string;
-  /** その日に受け付けた申込（Web・手動） */
-  requests: number;
-  /** その日に予約確定にした件数 */
-  confirmed: number;
-  /** その日に取消・天候中止にした件数 */
-  cancelled: number;
-  /** その日に記録した入金額・返金額 */
-  received: number;
-  refunded: number;
-  /** その日が参加日の確定予約（確定〜精算）の件数・参加人数・金額 */
-  activityBookings: number;
-  participants: number;
-  activityAmount: number;
-};
-
-/**
- * 日次集計（from〜to の日ごと）。日付はショップのタイムゾーン。
- * 申込・確定・取消は操作した日、入金・返金は記録した日、参加人数・金額は参加日で数える
- */
-export async function getDailyReport(
-  db: DbOrTx,
-  params: { shopId: string; timezone: string; from: string; to: string; operatorId?: string | null },
-): Promise<DailyRow[]> {
-  // 事業者で絞るとき（予約の実施事業者で数える）
-  const byOperator = params.operatorId ? eq(bookings.operatorId, params.operatorId) : undefined;
-  const start = zonedToUtc(params.from, '00:00', params.timezone);
-  const end = zonedToUtc(addDays(params.to, 1), '00:00', params.timezone);
-  const day = (column: AnyColumn | SQL) =>
-    sql<string>`to_char(${column} at time zone ${params.timezone}, 'YYYY-MM-DD')`;
-
-  const [requests, events, received, refunded, activity] = await Promise.all([
-    db
-      .select({ date: day(bookings.createdAt), n: count() })
-      .from(bookings)
-      .where(
-        and(
-          eq(bookings.shopId, params.shopId),
-          gte(bookings.createdAt, start),
-          lt(bookings.createdAt, end),
-          byOperator,
-        ),
-      )
-      .groupBy(sql`1`),
-    db
-      .select({
-        date: day(bookingStatusEvents.createdAt),
-        confirmed:
-          sql<number>`count(*) filter (where ${bookingStatusEvents.toStatus} = 'confirmed' and ${bookingStatusEvents.fromStatus} is distinct from 'confirmed')`.mapWith(
-            Number,
-          ),
-        cancelled:
-          sql<number>`count(*) filter (where ${bookingStatusEvents.toStatus} in ('cancelled', 'weather_cancelled') and ${bookingStatusEvents.fromStatus} is distinct from ${bookingStatusEvents.toStatus})`.mapWith(
-            Number,
-          ),
-      })
-      .from(bookingStatusEvents)
-      .innerJoin(bookings, eq(bookings.id, bookingStatusEvents.bookingId))
-      .where(
-        and(
-          eq(bookings.shopId, params.shopId),
-          gte(bookingStatusEvents.createdAt, start),
-          lt(bookingStatusEvents.createdAt, end),
-          byOperator,
-        ),
-      )
-      .groupBy(sql`1`),
-    db
-      .select({
-        date: day(payments.receivedAt),
-        amount: sql<number>`coalesce(sum(${payments.amount}), 0)`.mapWith(Number),
-      })
-      .from(payments)
-      .innerJoin(bookings, eq(bookings.id, payments.bookingId))
-      .where(
-        and(
-          eq(payments.shopId, params.shopId),
-          gte(payments.receivedAt, start),
-          lt(payments.receivedAt, end),
-          byOperator,
-        ),
-      )
-      .groupBy(sql`1`),
-    // 返金は 1 件の予約で何回かに分けることがあるので、記録ごとの金額（操作ログ）を合計する
-    db
-      .select({
-        date: day(auditLogs.createdAt),
-        amount: sql<number>`coalesce(sum((${auditLogs.after} ->> 'amount')::int), 0)`.mapWith(Number),
-      })
-      .from(auditLogs)
-      .where(
-        and(
-          eq(auditLogs.shopId, params.shopId),
-          eq(auditLogs.action, 'booking.refund'),
-          gte(auditLogs.createdAt, start),
-          lt(auditLogs.createdAt, end),
-          params.operatorId
-            ? sql`${auditLogs.targetId} in (select ${bookings.id}::text from ${bookings} where ${bookings.operatorId} = ${params.operatorId})`
-            : undefined,
-        ),
-      )
-      .groupBy(sql`1`),
-    db
-      .select({
-        date: day(slots.startsAt),
-        n: count(),
-        participants: participantsSql.mapWith(Number),
-        amount: sql<number>`coalesce(sum(${bookings.totalAmount}), 0)`.mapWith(Number),
-      })
-      .from(bookings)
-      .innerJoin(slots, eq(slots.id, bookings.slotId))
-      .innerJoin(menus, eq(menus.id, slots.menuId))
-      .where(
-        and(
-          eq(bookings.shopId, params.shopId),
-          inArray(bookings.status, [...ACTIVE_STATUSES]),
-          gte(slots.startsAt, start),
-          lt(slots.startsAt, end),
-          byOperator,
-        ),
-      )
-      .groupBy(sql`1`),
-  ]);
-  const by = <T extends { date: string }>(rows: T[]) => new Map(rows.map((r) => [r.date, r]));
-  const [reqBy, evBy, recBy, refBy, actBy] = [by(requests), by(events), by(received), by(refunded), by(activity)];
-  const rows: DailyRow[] = [];
-  for (let d = params.from; d <= params.to; d = addDays(d, 1)) {
-    rows.push({
-      date: d,
-      requests: reqBy.get(d)?.n ?? 0,
-      confirmed: evBy.get(d)?.confirmed ?? 0,
-      cancelled: evBy.get(d)?.cancelled ?? 0,
-      received: recBy.get(d)?.amount ?? 0,
-      refunded: refBy.get(d)?.amount ?? 0,
-      activityBookings: actBy.get(d)?.n ?? 0,
-      participants: actBy.get(d)?.participants ?? 0,
-      activityAmount: actBy.get(d)?.amount ?? 0,
-    });
-  }
-  return rows;
 }
 
 /** メニューの今後の有効な予約（申込〜確定）の件数（メニューをアーカイブするときの警告用） */
@@ -812,61 +757,4 @@ export async function listBookingNotifications(db: DbOrTx, params: { shopId: str
     .from(notifications)
     .where(and(eq(notifications.shopId, params.shopId), eq(notifications.bookingId, params.bookingId)))
     .orderBy(desc(notifications.createdAt));
-}
-
-export type OperatorSummaryRow = {
-  operatorId: string | null;
-  operatorName: string | null;
-  /** 参加日が期間内の確定予約（確定〜精算）の件数・参加人数・金額 */
-  bookings: number;
-  participants: number;
-  amount: number;
-  /** うち実績確認済み・精算済み（月次精算の対象） */
-  verified: number;
-  verifiedAmount: number;
-  /** 参加日が期間内の取消・天候中止・無断キャンセル */
-  cancelled: number;
-};
-
-/** 事業者別の集計（参加日が期間内の予約。事業者との照合・月次精算の確認に使う） */
-export async function getOperatorSummary(
-  db: DbOrTx,
-  params: { shopId: string; timezone: string; from: string; to: string },
-): Promise<OperatorSummaryRow[]> {
-  const start = zonedToUtc(params.from, '00:00', params.timezone);
-  const end = zonedToUtc(addDays(params.to, 1), '00:00', params.timezone);
-  const active = sql`${bookings.status} in ('confirmed', 'completed', 'verified', 'settled')`;
-  const done = sql`${bookings.status} in ('verified', 'settled')`;
-  // 取消・中止は、一度確定した予約だけ数える（確定前の申込の取消は事業者の実績に入れない）
-  const ended = sql`(${bookings.status} = 'no_show' or (${bookings.status} in ('cancelled', 'weather_cancelled') and exists (
-    select 1 from ${bookingStatusEvents} e where e.booking_id = ${bookings.id} and e.to_status = 'confirmed')))`;
-  const rows = await db
-    .select({
-      operatorId: bookings.operatorId,
-      operatorName: operators.name,
-      bookings: sql<number>`count(*) filter (where ${active})`.mapWith(Number),
-      participants:
-        sql<number>`coalesce(sum(case when ${menus.capacityUnit} = '名' then ${bookings.partySize} else coalesce(${bookings.guestCount}, 0) end) filter (where ${active}), 0)`.mapWith(
-          Number,
-        ),
-      amount: sql<number>`coalesce(sum(${bookings.totalAmount}) filter (where ${active}), 0)`.mapWith(Number),
-      verified: sql<number>`count(*) filter (where ${done})`.mapWith(Number),
-      verifiedAmount: sql<number>`coalesce(sum(${bookings.totalAmount}) filter (where ${done}), 0)`.mapWith(Number),
-      cancelled: sql<number>`count(*) filter (where ${ended})`.mapWith(Number),
-    })
-    .from(bookings)
-    .innerJoin(slots, eq(slots.id, bookings.slotId))
-    .innerJoin(menus, eq(menus.id, slots.menuId))
-    .leftJoin(operators, eq(operators.id, bookings.operatorId))
-    .where(
-      and(
-        eq(bookings.shopId, params.shopId),
-        gte(slots.startsAt, start),
-        lt(slots.startsAt, end),
-        sql`(${active} or ${done} or ${ended})`,
-      ),
-    )
-    .groupBy(bookings.operatorId, operators.name)
-    .orderBy(asc(operators.name));
-  return rows;
 }

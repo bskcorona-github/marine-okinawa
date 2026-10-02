@@ -11,6 +11,8 @@ import { BookingError } from './errors';
 import { priceItems, type ItemRequest } from './pricing';
 import { reopenRequests } from './reopen-requests';
 import { isOpenRequest, type BookingStatus } from './status';
+import { formatPartyItems } from './party';
+import { isPerPerson } from '@/modules/catalog/capacity-unit';
 
 export type ChangeItemsInput = {
   shopId: string;
@@ -28,7 +30,8 @@ export type ChangeItemsInput = {
 
 /**
  * 人数・料金を変える（電話での人数変更・当日の実績人数など）。回の予約数を差分だけ動かし、
- * 料金は回の日付の料金区分で計算し直す。未払いの支払いは新しい金額にする（入金済みなら差額は画面で案内する）。
+ * 料金は、予約にある区分は予約のときの単価、新しく足した区分は回の日付の料金で計算し直す。
+ * 未払いの支払いは新しい金額にする（入金済みなら、追加の入金・返金を画面で案内する）。
  * 未確定の申込・予約確定・催行済み（実績の確認前）の予約だけ
  */
 export async function changeBookingItems(
@@ -64,8 +67,10 @@ export async function changeBookingItems(
       operatorId: menu.operatorId,
       date: localDate(slot.startsAt, timezone),
     });
-    const priced = priceItems(prices, input.items);
-    const byBoat = menu.capacityUnit !== '名';
+    const oldItems = await tx.select().from(bookingItems).where(eq(bookingItems.bookingId, booking.id));
+    // 予約にある区分は予約のときの単価のまま。新しく足した区分は回の日付の料金
+    const priced = priceItems(prices, input.items, oldItems);
+    const byBoat = !isPerPerson(menu.capacityUnit);
     const guestCount = byBoat ? (input.guestCount ?? null) : null;
     if (
       byBoat &&
@@ -92,7 +97,6 @@ export async function changeBookingItems(
         .where(eq(slots.id, slot.id));
     }
 
-    const oldItems = await tx.select().from(bookingItems).where(eq(bookingItems.bookingId, booking.id));
     await tx.delete(bookingItems).where(eq(bookingItems.bookingId, booking.id));
     await tx.insert(bookingItems).values(priced.lines.map((line) => ({ bookingId: booking.id, ...line })));
     await tx
@@ -118,7 +122,7 @@ export async function changeBookingItems(
         ? await reopenRequests(tx, { bookingId: booking.id, status: booking.status, operatorId: booking.operatorId })
         : [];
     const describe = (lines: { label: string; quantity: number }[], total: number) =>
-      `${lines.map((l) => `${l.label} ${l.quantity}${menu.capacityUnit}`).join('・')} ${formatYen(total)}`;
+      `${formatPartyItems(lines, menu.capacityUnit, { separator: '・' })} ${formatYen(total)}`;
     const note = `人数・料金を変更：${describe(oldItems, booking.totalAmount)} → ${describe(priced.lines, newTotal)}${
       reason ? `（${reason}）` : ''
     }${reopenedRequestIds.length ? '（事業者の回答を回答待ちに戻しました）' : ''}`;

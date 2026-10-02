@@ -49,6 +49,37 @@ export function isOpenRequest(status: BookingStatus): boolean {
   return (OPEN_REQUEST_STATUSES as readonly BookingStatus[]).includes(status);
 }
 
+/** 支払案内の前（組合と事業者が確かめている段階。事業者は回答し直せる） */
+export const BEFORE_PAYMENT_REQUEST_STATUSES = ['requested', 'reviewing', 'operator_checking'] as const;
+
+export function isBeforePaymentRequest(status: BookingStatus): boolean {
+  return (BEFORE_PAYMENT_REQUEST_STATUSES as readonly BookingStatus[]).includes(status);
+}
+
+/** 例外で終わった予約（取消・天候中止・無断キャンセル） */
+export const ENDED_STATUSES = ['cancelled', 'weather_cancelled', 'no_show'] as const;
+
+/** 取消・天候中止（無断キャンセルは含めない。枠を戻す・事業者の手配が要らなくなる終わり方） */
+export const CANCELLED_STATUSES = ['cancelled', 'weather_cancelled'] as const;
+
+export function isCancelled(status: BookingStatus): boolean {
+  return (CANCELLED_STATUSES as readonly BookingStatus[]).includes(status);
+}
+
+export function isEnded(status: BookingStatus): boolean {
+  return (ENDED_STATUSES as readonly BookingStatus[]).includes(status);
+}
+
+/** 実施事業者を変えられない状態（催行のあと・取消のあと。実績・精算・事業者画面の記録とずれないように） */
+export function isOperatorLocked(status: BookingStatus): boolean {
+  return status === 'completed' || status === 'verified' || status === 'settled' || isEnded(status);
+}
+
+/** 実施事業者が決まって先へ進める操作（支払案内・現地払いの確定）。実施事業者の確認が要る */
+export function decidesOperator(from: BookingStatus, to: BookingStatus): boolean {
+  return to === 'awaiting_payment' || (to === 'confirmed' && isOpenRequest(from));
+}
+
 /** 予約確定以降（実施事業者名・当日の連絡先をお客様に見せてよい状態。集計の「確定済み」もこれ） */
 export const CONFIRMED_STATUSES = ['confirmed', 'completed', 'verified', 'settled'] as const;
 

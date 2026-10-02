@@ -4,18 +4,18 @@ import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { z } from 'zod';
 import { db } from '@/db';
-import { zonedToUtc } from '@/lib/dates';
-import { getEnv } from '@/lib/env';
-import { isDateString } from '@/lib/validation';
+import { isPastDateWithin, zonedToUtc } from '@/lib/dates';
+import { isDateString, yenSchema } from '@/lib/validation';
 import { requireAdmin } from '@/modules/auth/guard';
 import { createBooking } from '@/modules/booking/create-booking';
 import { BookingError } from '@/modules/booking/errors';
 import { BOOKING_ERROR_LABELS } from '@/modules/booking/labels';
-import { getMailer } from '@/modules/notification/mailer';
 import { mailKindForStatus } from '@/modules/booking/status';
 import { sendBookingMail } from '@/modules/notification/send-booking-mail';
 import { sendOperatorBookingMail } from '@/modules/notification/send-operator-mail';
+import { sendQuietly } from '@/modules/notification/send-quietly';
 import { getShopById } from '@/modules/shop/shops';
+import { cardPaymentsEnabled } from '@/modules/payment/card-payments';
 
 export type ManualBookingState = { error: string | null };
 
@@ -38,10 +38,7 @@ const formSchema = z.object({
   secondChoice: z.string().trim().max(200),
   participantAges: z.string().trim().max(200),
   customerNote: z.string().trim().max(1000),
-  paymentAmount: z.preprocess(
-    (v) => (typeof v === 'string' ? v.normalize('NFKC').replace(/[,円¥\s]/g, '') : v),
-    z.coerce.number().int().min(1).max(10_000_000).optional(),
-  ),
+  paymentAmount: yenSchema.pipe(z.number().min(1)).optional(),
   paymentReceivedOn: z.string().refine(isDateString).optional(),
   paymentNote: z.string().trim().max(200).optional(),
 });
@@ -63,6 +60,11 @@ export async function submitManualBooking(_prev: ManualBookingState, formData: F
   }
   const input = parsed.data;
   const shop = await getShopById(db, admin.shopId);
+  const now = new Date();
+  // 入金日は今日まで（先の日付・古すぎる日付は打ち間違い）
+  if (input.paymentReceivedOn && !isPastDateWithin(input.paymentReceivedOn, shop.timezone, now)) {
+    return { error: BOOKING_ERROR_LABELS.INVALID_DATE };
+  }
   const paidNow = input.initialStatus === 'confirmed' && input.paymentMethod === 'online';
   const items = [...formData.entries()]
     .filter(([key]) => key.startsWith('qty.'))
@@ -82,13 +84,12 @@ export async function submitManualBooking(_prev: ManualBookingState, formData: F
       initialStatus: input.initialStatus,
       paymentMethod: input.paymentMethod,
       operator: { id: input.operatorId || null, confirmed: Boolean(input.operatorConfirmed) },
+      cardPayment: cardPaymentsEnabled(),
       payment:
         paidNow && input.paymentAmount !== undefined
           ? {
               amount: input.paymentAmount,
-              receivedAt: input.paymentReceivedOn
-                ? zonedToUtc(input.paymentReceivedOn, '12:00', shop.timezone)
-                : new Date(),
+              receivedAt: input.paymentReceivedOn ? zonedToUtc(input.paymentReceivedOn, '12:00', shop.timezone) : now,
               note: input.paymentNote,
             }
           : undefined,
@@ -98,7 +99,7 @@ export async function submitManualBooking(_prev: ManualBookingState, formData: F
         customerNote: input.customerNote,
       },
       actorId: admin.userId,
-      now: new Date(),
+      now,
     });
   } catch (error) {
     if (error instanceof BookingError) return { error: BOOKING_ERROR_LABELS[error.code] };
@@ -106,33 +107,26 @@ export async function submitManualBooking(_prev: ManualBookingState, formData: F
   }
 
   // 予約は登録済みなので、メール送信の失敗で画面をエラーにしない（結果は予約詳細に表示する）
-  let mail = 'off';
-  if (input.email && input.sendEmail) {
-    try {
-      mail = (
-        await sendBookingMail(db, getMailer(), {
-          bookingId: result.bookingId,
-          // 最初の状態に合うメール（仮受付 → 受付完了、支払待ち → 支払案内、確定 → 予約確定）
-          kind: mailKindForStatus(result.status)!,
-          accessToken: result.accessToken,
-          appUrl: getEnv().APP_URL,
-        })
-      ).status;
-    } catch (error) {
-      console.error('booking mail failed', { bookingId: result.bookingId, error });
-      mail = 'failed';
-    }
-  }
+  const { bookingId, accessToken } = result;
+  // 最初の状態に合うメール（仮受付 → 受付完了、支払待ち → 支払案内、確定 → 予約確定）
+  const kind = mailKindForStatus(result.status);
+  const mail =
+    input.email && input.sendEmail && kind
+      ? (
+          await sendQuietly('mail.booking.failed', { bookingId, kind }, (mailer, appUrl) =>
+            sendBookingMail(db, mailer, { bookingId, kind, accessToken, appUrl }),
+          )
+        ).status
+      : 'off';
   // 予約確定で登録したときは、実施事業者にも知らせる（現地払いなら、当日受け取る金額も伝わる）
-  let opMail = 'off';
-  if (result.status === 'confirmed' && formData.get('notifyOperator') === 'on') {
-    opMail = await sendOperatorBookingMail(db, getMailer(), { bookingId: result.bookingId, appUrl: getEnv().APP_URL })
-      .then((r) => r.status)
-      .catch((error) => {
-        console.error('operator mail failed', { bookingId: result.bookingId, error });
-        return 'failed' as const;
-      });
-  }
+  const opMail =
+    result.status === 'confirmed' && formData.get('notifyOperator') === 'on'
+      ? (
+          await sendQuietly('mail.operator_booking.failed', { bookingId }, (mailer, appUrl) =>
+            sendOperatorBookingMail(db, mailer, { bookingId, appUrl }),
+          )
+        ).status
+      : 'off';
   revalidatePath('/admin', 'layout');
   redirect(`/admin/bookings/${result.bookingId}?created=1&mail=${mail}&opMail=${opMail}`);
 }

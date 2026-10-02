@@ -1,11 +1,13 @@
 import { render } from '@react-email/components';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import { beforeEach, describe, expect, it } from 'vitest';
 import {
+  bookingItems,
   bookingOperatorRequests,
   bookings,
   bookingStatusEvents,
   menuOperators,
+  menuPrices,
   menus,
   operators,
   payments,
@@ -101,6 +103,22 @@ async function setup() {
 describe('支払案内・確定の前の、実施事業者の確認（サーバー側）', () => {
   beforeEach(() => resetDb(db));
 
+  it('条件付きの回答で合意した内容を予約に残す（事業者画面・確定のお知らせに出す）', async () => {
+    const { shop, a, bookingId, request, respond, change, booking } = await setup();
+    await request([a.id]);
+    await respond(a.id, 'conditional');
+    // 条件付きの回答では自動で実施事業者にならないので、組合が選ぶ
+    await assignOperator(db, { shopId: shop.id, bookingId, operatorId: a.id, actorId: null });
+    await change('awaiting_payment', {
+      operatorCheck: { confirmed: true },
+      operatorAgreement: '  送迎なし・集合はマリーナ受付  ',
+    });
+    expect((await booking()).operatorAgreement).toBe('送迎なし・集合はマリーナ受付');
+    // 確定のときに合意の内容を渡さなければ、残したまま
+    await change('confirmed', { payment: { amount: 10000, receivedAt: NOW }, operatorCheck: { confirmed: true } });
+    expect((await booking()).operatorAgreement).toBe('送迎なし・集合はマリーナ受付');
+  });
+
   it('実施事業者がいない・停止中・受入不可なら進めない', async () => {
     const { shop, a, bookingId, request, respond, change } = await setup();
     const check = { operatorCheck: { confirmed: true } };
@@ -162,6 +180,39 @@ describe('日時・人数の変更と、事業者の回答', () => {
     expect(result.status).toBe('operator_checking');
     expect(await requestOf(a.id)).toMatchObject({ status: 'pending', responseNote: '' });
     expect((await requestOf(b.id)).status).toBe('pending');
+  });
+
+  it('人数を直しても、予約にある区分は予約のときの単価のまま（新しく足した区分は今の料金）', async () => {
+    const { shop, bookingId } = await setup();
+    const [booked] = await db.select().from(bookingItems).where(eq(bookingItems.bookingId, bookingId));
+    const [menuId] = (
+      await db.select({ menuId: menuPrices.menuId }).from(menuPrices).where(eq(menuPrices.id, booked.priceId))
+    ).map((r) => r.menuId);
+    // 予約のあとに料金表を値上げした
+    await db.update(menuPrices).set({ price: 6000 }).where(eq(menuPrices.menuId, menuId));
+    const child = (await db.select().from(menuPrices).where(eq(menuPrices.menuId, menuId))).find(
+      (p) => p.label === '子供',
+    )!;
+    const result = await changeBookingItems(db, {
+      shopId: shop.id,
+      bookingId,
+      items: [
+        { priceId: booked.priceId, quantity: 3 },
+        { priceId: child.id, quantity: 1 },
+      ],
+      reason: '1 名追加・子供 1 名追加',
+      actorId: null,
+      now: NOW,
+    });
+    // 大人 5,000 円 × 3（予約のときの単価）＋ 子供 6,000 円 × 1（今の料金）
+    expect(result).toMatchObject({ oldTotal: 10000, newTotal: 21000 });
+    const items = await db.select().from(bookingItems).where(eq(bookingItems.bookingId, bookingId));
+    expect(items.map((i) => [i.label, i.unitPrice, i.quantity]).sort()).toEqual(
+      [
+        ['大人', 5000, 3],
+        ['子供', 6000, 1],
+      ].sort(),
+    );
   });
 
   it('確定前に日時を変えると、回答を回答待ちに戻す。確定後は戻さない', async () => {
@@ -479,7 +530,7 @@ describe('回の一括の天候中止（例外）', () => {
   beforeEach(() => resetDb(db));
 
   it('別のショップの回は見つからない。途中で失敗したら、回も予約も元のまま', async () => {
-    const { shop, a, slot, bookingId, request, respond, change } = await setup();
+    const { shop, adult, a, slot, bookingId, request, respond, change } = await setup();
     const otherShop = await seedShop(db, { name: '別の組合' });
     await expect(
       weatherCancelSlot(db, { shopId: otherShop.id, slotId: slot.id, actorId: null, now: NOW }),
@@ -489,15 +540,38 @@ describe('回の一括の天候中止（例外）', () => {
     await respond(a.id, 'accepted');
     await change('awaiting_payment');
     await change('confirmed', { payment: { amount: 10000, receivedAt: NOW } });
-    // 返金済みが入金額を超える壊れたデータで、返金予定額を決められない予約を作る
-    await db.update(payments).set({ refundedAmount: 20000 }).where(eq(payments.bookingId, bookingId));
-    await expect(
-      weatherCancelSlot(db, { shopId: shop.id, slotId: slot.id, actorId: null, now: NOW }),
-    ).rejects.toMatchObject({ code: 'REFUND_REQUIRED' });
+    // 後ろの予約（先の予約を天候中止にしたあと）で、DB への書き込みが失敗するようにする
+    const { bookingId: laterId } = await createBooking(db, {
+      shopId: shop.id,
+      slotId: slot.id,
+      source: 'phone',
+      items: [{ priceId: adult.id, quantity: 1 }],
+      contact: { name: '後の 予約', email: 'later@example.com', phone: '090-3333-4444' },
+      locale: 'ja',
+      consented: false,
+      actorId: null,
+      now: new Date(NOW.getTime() + 60_000),
+    });
+    await db.execute(sql`create or replace function test_fail_booking_update() returns trigger language plpgsql as $$
+      begin raise exception 'test failure'; end $$`);
+    await db.execute(
+      sql.raw(`create trigger test_fail_booking before update on bookings for each row
+        when (new.id = '${laterId}' and new.status <> old.status) execute function test_fail_booking_update()`),
+    );
+    try {
+      await expect(
+        weatherCancelSlot(db, { shopId: shop.id, slotId: slot.id, actorId: null, now: NOW }),
+      ).rejects.toThrow();
+    } finally {
+      await db.execute(sql`drop trigger if exists test_fail_booking on bookings`);
+      await db.execute(sql`drop function if exists test_fail_booking_update()`);
+    }
     const [s] = await db.select().from(slots).where(eq(slots.id, slot.id));
     expect(s.status).toBe('open');
     const [row] = await db.select().from(bookings).where(eq(bookings.id, bookingId));
     expect(row.status).toBe('confirmed');
+    const [pay] = await db.select().from(payments).where(eq(payments.bookingId, bookingId));
+    expect(pay.refundDueAmount).toBeNull();
   });
 
   it('一部返金済みの予約は全額を返金予定にし、メールにはまだ返していない分を出す。現地払いの確定も止める', async () => {

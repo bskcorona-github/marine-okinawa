@@ -1,15 +1,27 @@
 import { and, eq, inArray, ne, sql } from 'drizzle-orm';
 import type { Db, DbOrTx } from '@/db/client';
-import { bookingOperatorRequests, bookings, bookingStatusEvents, operators, payments, shops, slots } from '@/db/schema';
+import {
+  auditLogs,
+  bookingOperatorRequests,
+  bookings,
+  bookingStatusEvents,
+  operators,
+  payments,
+  shops,
+  slots,
+} from '@/db/schema';
 import { writeAuditLog } from '@/modules/audit/log';
 import { lockSlot } from '@/modules/inventory/reserve';
 import { paymentDueAt, resolveSettings } from '@/modules/shop/settings';
 import { BookingError } from './errors';
-import type { CancelCategory } from './labels';
+import { FULL_REFUND_CANCEL_CATEGORIES, type CancelCategory } from './labels';
+import { addReceipt } from '@/modules/payment/ledger';
+import { isPaymentReceived, isRefundable, keptAmount } from './payment-status';
 import {
   canTransition,
+  decidesOperator,
   holdsSeats,
-  isOpenRequest,
+  isOperatorLocked,
   mailKindForStatus,
   nextStatusesFor,
   type BookingMailKind,
@@ -29,15 +41,26 @@ export type ChangeStatusInput = {
   /** 変更の理由・メモ（取消では取消の理由として保存する） */
   note?: string;
   now: Date;
-  /** 入金の記録。事前払いの予約を確定するときは必須 */
-  payment?: { amount: number; receivedAt: Date; note?: string };
+  /**
+   * 入金の記録。事前払いの予約を確定するときは必須。カード決済では PaymentIntent の id を渡す
+   * （そのときは、払われた額が今の支払い額と同じかも確かめる）
+   */
+  payment?: { amount: number; receivedAt: Date; note?: string; stripePaymentIntentId?: string | null };
   /**
    * 実施事業者の確認（組合の画面からの操作で渡す）。支払案内・現地払いの確定へ進むとき、
    * 実施事業者が決まっていて停止中でなく、受入不可と答えていないこと、受入可でなければ confirmed（電話などで確認済み）を求める
    */
   operatorCheck?: { confirmed: boolean };
-  /** 入金済みの予約を取り消すときの返金予定額（0 円も可。キャンセル料を差し引いた額） */
+  /** カード決済（Stripe）で受け付けるとき true（支払方法の案内の文面がなくても支払案内を送れる） */
+  cardPayment?: boolean;
+  /** 入金済みの予約を取消・天候中止・無断キャンセルにするときの返金予定額（0 円も可。キャンセル料を差し引いた額） */
   refundDueAmount?: number | null;
+  /** 精算済みへ進めるのは、月次精算の振込の記録からだけ（markSettlementPaid が true を渡す） */
+  fromSettlement?: boolean;
+  /** 実績の確認で、手元に残る入金と料金が違うときの差額の扱い（履歴に残す） */
+  amountDifferenceNote?: string;
+  /** 実施事業者の条件付きの回答について、合意した内容（実施事業者が決まって進むときに予約に残す） */
+  operatorAgreement?: string;
   /** 取消の区分と、実施事業者に伝えたこと・影響（取消・天候中止のとき） */
   cancel?: { category: CancelCategory; operatorNote?: string };
 };
@@ -82,6 +105,12 @@ export async function changeBookingStatus(db: DbOrTx, input: ChangeStatusInput):
       throw new BookingError(input.to === 'cancelled' ? 'NOT_CANCELLABLE' : 'INVALID_TRANSITION');
     }
     if (!nextStatusesFor(from, booking.paymentMethod).includes(input.to)) throw new BookingError('INVALID_TRANSITION');
+    // 精算済みは振込の記録と一緒にだけ（ほかから進めると、どの精算にも入らず事業者に払われない）
+    if (input.to === 'settled' && !input.fromSettlement) throw new BookingError('INVALID_TRANSITION');
+    // 催行のあとの記録（実績・精算）は実施事業者が決まっていること（いないと精算から黙って外れる）
+    if ((input.to === 'completed' || input.to === 'verified' || input.to === 'no_show') && !booking.operatorId) {
+      throw new BookingError('OPERATOR_REQUIRED');
+    }
     // 催行済み・無断キャンセルは、開始時刻を過ぎてからだけ記録できる
     if ((input.to === 'completed' || input.to === 'no_show') && slot.startsAt > input.now) {
       throw new BookingError('NOT_STARTED');
@@ -93,6 +122,10 @@ export async function changeBookingStatus(db: DbOrTx, input: ChangeStatusInput):
       .where(eq(shops.id, input.shopId));
 
     const bookingPatch: Partial<typeof bookings.$inferInsert> = { status: input.to };
+    // 条件付きの回答で合意した内容は、実施事業者が決まって進むとき（支払案内・確定）に残す
+    if (input.operatorAgreement?.trim() && decidesOperator(from, input.to)) {
+      bookingPatch.operatorAgreement = input.operatorAgreement.trim();
+    }
     let paymentPatch: Partial<typeof payments.$inferInsert> | null = null;
     let releasedSeats = 0;
     // 照会と回答は先に読む（実施事業者の確認と、照会の片付けに使う。予約をロックしたあとなので回答と順番になる）
@@ -103,8 +136,7 @@ export async function changeBookingStatus(db: DbOrTx, input: ChangeStatusInput):
     const assignedRequest = requests.find((r) => r.operatorId === booking.operatorId);
 
     // 実施事業者が決まって先へ進める操作（支払案内・確定）。開いたままの古い画面から押されても止める
-    const decides = input.to === 'awaiting_payment' || (input.to === 'confirmed' && isOpenRequest(from));
-    if (input.operatorCheck && decides) {
+    if (input.operatorCheck && decidesOperator(from, input.to)) {
       if (!booking.operatorId) throw new BookingError('OPERATOR_REQUIRED');
       const [op] = await tx
         .select({ status: operators.status })
@@ -112,11 +144,14 @@ export async function changeBookingStatus(db: DbOrTx, input: ChangeStatusInput):
         .where(eq(operators.id, booking.operatorId));
       if (op?.status === 'suspended') throw new BookingError('OPERATOR_SUSPENDED');
       if (assignedRequest?.status === 'declined') throw new BookingError('OPERATOR_DECLINED');
-      // 支払待ちからの確定では、支払案内のときに確かめ済み。そのあと照会し直した（日時・人数の変更など）ときだけ、
-      // 受入可の回答か、電話などでの確認をもう一度求める
+      // 支払待ちからの確定では、支払案内のときに確かめ済み。そのあと照会し直した（日時・人数の変更など）とき、
+      // または組合が実施事業者を替えたときだけ、受入可の回答か、電話などでの確認をもう一度求める
       let needsConfirm = assignedRequest?.status !== 'accepted';
       if (from === 'awaiting_payment') {
         // 時刻は DB で比べる（マイクロ秒まで）
+        const requestedAt = sql`coalesce((select max(e.created_at) from ${bookingStatusEvents} e
+          where e.booking_id = ${booking.id} and e.to_status = 'awaiting_payment'
+            and e.from_status is distinct from 'awaiting_payment'), '-infinity'::timestamptz)`;
         const [reopened] = await tx
           .select({ id: bookingOperatorRequests.id })
           .from(bookingOperatorRequests)
@@ -125,12 +160,23 @@ export async function changeBookingStatus(db: DbOrTx, input: ChangeStatusInput):
               eq(bookingOperatorRequests.bookingId, booking.id),
               eq(bookingOperatorRequests.operatorId, booking.operatorId),
               ne(bookingOperatorRequests.status, 'withdrawn'),
-              sql`${bookingOperatorRequests.requestedAt} > coalesce((select max(e.created_at) from ${bookingStatusEvents} e
-                where e.booking_id = ${booking.id} and e.to_status = 'awaiting_payment'
-                  and e.from_status is distinct from 'awaiting_payment'), '-infinity'::timestamptz)`,
+              sql`${bookingOperatorRequests.requestedAt} > ${requestedAt}`,
             ),
           );
-        needsConfirm = needsConfirm && Boolean(reopened);
+        const [reassigned] = await tx
+          .select({ id: auditLogs.id })
+          .from(auditLogs)
+          .where(
+            and(
+              eq(auditLogs.shopId, input.shopId),
+              eq(auditLogs.targetType, 'booking'),
+              eq(auditLogs.targetId, booking.id),
+              eq(auditLogs.action, 'booking.assign_operator'),
+              sql`${auditLogs.createdAt} > ${requestedAt}`,
+            ),
+          )
+          .limit(1);
+        needsConfirm = needsConfirm && Boolean(reopened || reassigned);
       }
       if (needsConfirm && !input.operatorCheck.confirmed) throw new BookingError('OPERATOR_UNCONFIRMED');
     }
@@ -138,7 +184,7 @@ export async function changeBookingStatus(db: DbOrTx, input: ChangeStatusInput):
     if (input.to === 'awaiting_payment') {
       // 支払方法の案内がないと、お客様は支払えない（現地払いの予約は案内が要らない）
       const settings = resolveSettings(shop.settings);
-      if (booking.paymentMethod === 'online' && !settings.paymentInstructions) {
+      if (booking.paymentMethod === 'online' && !settings.paymentInstructions && !input.cardPayment) {
         throw new BookingError('PAYMENT_INSTRUCTIONS_MISSING');
       }
       paymentPatch = {
@@ -153,18 +199,44 @@ export async function changeBookingStatus(db: DbOrTx, input: ChangeStatusInput):
       };
     }
 
-    if (input.to === 'confirmed' && booking.paymentMethod === 'online' && payment?.status !== 'paid') {
-      // 入金前に確定扱いにしない（組合が入金を確認してから確定する。0 円の入金では確定しない）
-      if (!input.payment || !isAmount(input.payment.amount) || input.payment.amount === 0) {
-        throw new BookingError('PAYMENT_REQUIRED');
+    // 確定のときに記録する入金（事前払いで、手元に残る入金がまだないとき）
+    let receipt: Parameters<typeof addReceipt>[1] | null = null;
+    if (input.to === 'confirmed' && booking.paymentMethod === 'online') {
+      // カード決済の確定は、支払いのページを作ったときのまま（未入金）のときだけ。入金済みなら呼び出し側が
+      // 二重のお支払いとして記録する（Webhook とお客様の戻りが同時に来ても、確定の条件を飛ばさないように）
+      if (input.payment?.stripePaymentIntentId) {
+        if (!payment || payment.status !== 'pending') throw new BookingError('INVALID_TRANSITION');
+        // 支払いのページを開いたあとに人数・料金が変わっていたら、古い額のまま確定しない
+        if (payment.amount !== input.payment.amount) throw new BookingError('PAYMENT_AMOUNT_MISMATCH');
       }
-      paymentPatch = {
-        status: 'paid',
-        amount: input.payment.amount,
-        receivedAt: input.payment.receivedAt,
-        receivedBy: input.actor.id,
-        note: input.payment.note?.trim() ?? '',
-      };
+      // 手元に残る入金（受け取り − 返金）があれば、入金の記録は要らない（カードで受け付けて保留していた予約など）
+      const kept = keptAmount(payment);
+      if (kept <= 0) {
+        // 入金前に確定扱いにしない（組合が入金を確認してから確定する。0 円の入金では確定しない）
+        if (!input.payment || !isAmount(input.payment.amount) || input.payment.amount === 0) {
+          throw new BookingError('PAYMENT_REQUIRED');
+        }
+        if (!payment) throw new BookingError('PAYMENT_REQUIRED');
+        receipt = {
+          payment,
+          amount: input.payment.amount,
+          receivedAt: input.payment.receivedAt,
+          method: input.payment.stripePaymentIntentId ? 'card' : 'transfer',
+          purpose: isPaymentReceived(payment.status) ? 'additional' : 'payment',
+          stripePaymentIntentId: input.payment.stripePaymentIntentId ?? null,
+          note: input.payment.note,
+          actorId: input.actor.id,
+        };
+      }
+    }
+
+    // 実績の確認：事前払いで、手元に残る入金と料金が違うとき（催行のあとに人数を変えたなど）は、
+    // 差額の扱い（追加の入金・返金・受け取らない）を確かめてから（精算は手元に残る入金で計算する）
+    if (input.to === 'verified' && booking.paymentMethod === 'online' && payment) {
+      const kept = keptAmount(payment);
+      if (kept !== booking.totalAmount && !input.amountDifferenceNote?.trim()) {
+        throw new BookingError('AMOUNT_DIFFERENCE');
+      }
     }
 
     if (input.to === 'cancelled' || input.to === 'weather_cancelled') {
@@ -181,16 +253,27 @@ export async function changeBookingStatus(db: DbOrTx, input: ChangeStatusInput):
         cancelCategory: input.cancel?.category ?? (input.to === 'weather_cancelled' ? 'weather' : null),
         cancelOperatorNote: input.cancel?.operatorNote?.trim() || null,
       });
-      if (payment?.status === 'paid' || payment?.status === 'partially_refunded') {
-        // 入金済みなら、返金予定額（キャンセル料を差し引いた額。返金済みの分を含む）を必ず決めてから取り消す
-        const due = input.refundDueAmount;
-        if (!isAmount(due) || due > payment.amount || due < payment.refundedAmount) {
-          throw new BookingError('REFUND_REQUIRED');
-        }
-        paymentPatch = { refundDueAmount: due };
-      } else if (payment?.status === 'pending') {
-        paymentPatch = { status: 'expired' };
+      if (payment?.status === 'pending') paymentPatch = { status: 'expired' };
+    }
+    if (input.to === 'cancelled' || input.to === 'weather_cancelled' || input.to === 'no_show') {
+      bookingPatch.cancellationFeeToOperator = resolveSettings(shop.settings).cancellationFeeToOperator;
+    }
+    if (
+      (input.to === 'cancelled' || input.to === 'weather_cancelled' || input.to === 'no_show') &&
+      payment &&
+      isRefundable(payment.status)
+    ) {
+      // 入金済みなら、返金予定額（キャンセル料を差し引いた額。返金済みの分を含む）を必ず決めてから終える。
+      // 精算では、受け取った額からこの額を引いた分をキャンセル料として事業者に払う
+      const due = input.refundDueAmount;
+      if (!isAmount(due) || due > payment.amount || due < payment.refundedAmount) {
+        throw new BookingError('REFUND_REQUIRED');
       }
+      // 組合・事業者の都合の取消は、お客様に全額を返す
+      if (input.cancel && FULL_REFUND_CANCEL_CATEGORIES.includes(input.cancel.category) && due !== payment.amount) {
+        throw new BookingError('FULL_REFUND_REQUIRED');
+      }
+      paymentPatch = { refundDueAmount: due };
     }
 
     await tx.update(bookings).set(bookingPatch).where(eq(bookings.id, booking.id));
@@ -228,6 +311,7 @@ export async function changeBookingStatus(db: DbOrTx, input: ChangeStatusInput):
       if (!payment) throw new BookingError('PAYMENT_REQUIRED');
       await tx.update(payments).set(paymentPatch).where(eq(payments.id, payment.id));
     }
+    if (receipt) await addReceipt(tx, receipt);
     await tx.insert(bookingStatusEvents).values({
       bookingId: booking.id,
       fromStatus: from,
@@ -259,47 +343,6 @@ export async function changeBookingStatus(db: DbOrTx, input: ChangeStatusInput):
   });
 }
 
-/** 返金を記録する（入金済み・一部返金の予約だけ。合計が入金額を超える返金はできない） */
-export async function recordRefund(
-  db: Db,
-  input: { shopId: string; bookingId: string; amount: number; refundedAt: Date; note?: string; actorId: string | null },
-): Promise<void> {
-  if (!Number.isInteger(input.amount) || input.amount <= 0) throw new BookingError('INVALID_ITEMS');
-  await db.transaction(async (tx) => {
-    const [payment] = await tx
-      .select()
-      .from(payments)
-      .where(and(eq(payments.bookingId, input.bookingId), eq(payments.shopId, input.shopId)))
-      .for('update');
-    if (!payment) throw new BookingError('BOOKING_NOT_FOUND');
-    if (payment.status !== 'paid' && payment.status !== 'partially_refunded') {
-      throw new BookingError('INVALID_TRANSITION');
-    }
-    const refunded = payment.refundedAmount + input.amount;
-    // 取消で返金予定額を決めた予約は、その額まで（二重の送信などで予定より多く記録しないように）
-    const limit = payment.refundDueAmount ?? payment.amount;
-    if (refunded > Math.min(limit, payment.amount)) throw new BookingError('REFUND_TOO_LARGE');
-    const status = refunded >= payment.amount ? 'refunded' : 'partially_refunded';
-    const note = [payment.note, input.note?.trim()].filter(Boolean).join('\n');
-    await tx
-      .update(payments)
-      .set({ refundedAmount: refunded, refundedAt: input.refundedAt, status, note })
-      .where(eq(payments.id, payment.id));
-    await writeAuditLog(tx, {
-      shopId: input.shopId,
-      actorId: input.actorId,
-      action: 'booking.refund',
-      targetType: 'booking',
-      targetId: input.bookingId,
-      before: { status: payment.status, refundedAmount: payment.refundedAmount },
-      after: { status, refundedAmount: refunded, amount: input.amount, refundedAt: input.refundedAt },
-    });
-  });
-}
-
-/** 実施事業者を変えられない状態（催行済み以降は実績・精算の記録なので変えない） */
-const OPERATOR_LOCKED = new Set<BookingStatus>(['completed', 'verified', 'settled', 'no_show']);
-
 /**
  * 実施事業者を割り当てる（null で未割り当て）。組合が選んだ事業者として記録し、照会の回答で自動に置き換えない。
  * 別ショップの事業者・停止中の事業者は選べない。変えたときは、前の事業者と予約の状態を返す（連絡に使う）
@@ -318,7 +361,10 @@ export async function assignOperator(
     if (booking.operatorId === input.operatorId) {
       return { changed: false, previousOperatorId: booking.operatorId, status: booking.status };
     }
-    if (OPERATOR_LOCKED.has(booking.status)) throw new BookingError('OPERATOR_LOCKED');
+    // 催行・取消のあとは変えない（実績・精算・事業者画面の記録とずれないように）
+    if (isOperatorLocked(booking.status)) throw new BookingError('OPERATOR_LOCKED');
+    // 確定した予約は、お客様に実施事業者を案内済み。外すのではなく別の事業者に変える
+    if (!input.operatorId && booking.status === 'confirmed') throw new BookingError('OPERATOR_REQUIRED');
     if (input.operatorId) {
       const [op] = await tx
         .select({ id: operators.id, status: operators.status })

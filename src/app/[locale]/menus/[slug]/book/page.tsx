@@ -13,14 +13,17 @@ import { formatDateLabel, localDate, localTime, monthOf } from '@/lib/dates';
 import { formatYen } from '@/lib/format';
 import { isUuid } from '@/lib/validation';
 import { splitPlanTitle } from '@/modules/catalog/display-title';
+import { cancellationRateLines } from '@/modules/booking/cancellation-fee';
 import { getPublishedMenuBySlug } from '@/modules/catalog/menus';
 import { listPricesForDate } from '@/modules/catalog/prices';
 import { bookingDeadline, remainingSeats, slotLevel } from '@/modules/inventory/availability';
 import { getSlotForMenu } from '@/modules/inventory/queries';
 import { weatherPolicyText } from '@/modules/shop/settings';
+import { cardPaymentsEnabled } from '@/modules/payment/card-payments';
 import { getCurrentShop } from '@/modules/shop/shops';
 import { BookingForm } from './booking-form';
 import { BookingTotalSummary, SelectedCourse } from './booking-total';
+import { isPerPerson } from '@/modules/catalog/capacity-unit';
 
 export const metadata = { title: '申込内容の入力', robots: { index: false } };
 
@@ -84,7 +87,7 @@ export default async function BookPage({ params, searchParams }: PageProps<'/[lo
     now: new Date(),
     thresholdPercent: shop.lowStockThresholdPercent,
     thresholdCount: shop.lowStockThresholdCount,
-    minParty: menu.capacityUnit === '名' ? menu.minPartySize : 1,
+    minParty: isPerPerson(menu.capacityUnit) ? menu.minPartySize : 1,
   });
   const date = localDate(slot.startsAt, shop.timezone);
   // 申込の前は、お支払いの金額ではなく「合計（予定）」と呼ぶ（料金はまだ発生しないため）
@@ -98,7 +101,7 @@ export default async function BookPage({ params, searchParams }: PageProps<'/[lo
   const peopleNum = Number(sp.people);
   // 検索の人数は、人数で数えるプランだけに使う（貸切プランは 1 回の予約で 1 艇）
   const validPeople = Number.isInteger(peopleNum) && peopleNum >= 1 && peopleNum <= 200 ? peopleNum : null;
-  const charter = menu.capacityUnit !== '名';
+  const charter = !isPerPerson(menu.capacityUnit);
   const initialPeople = charter ? null : validPeople;
   const dateTime = `${formatDateLabel(slot.startsAt, shop.timezone)} ${localTime(slot.startsAt, shop.timezone)}`;
   const more = { moreLabel: t('menu.readMore'), lessLabel: t('menu.readLess') };
@@ -182,7 +185,9 @@ export default async function BookPage({ params, searchParams }: PageProps<'/[lo
                   <span className="sr-only">{t('menu.facts.payment')}</span>
                 </dt>
                 <dd className="jp-wrap text-ink/80">
-                  <Phrase>{t('menu.facts.paymentPrepaid')}</Phrase>
+                  <Phrase>
+                    {t(cardPaymentsEnabled() ? 'booking.paymentSummaryCard' : 'menu.facts.paymentPrepaid')}
+                  </Phrase>
                 </dd>
                 {prices.some((p) => p.season) && (
                   <dd className="text-ink/70">
@@ -224,6 +229,8 @@ export default async function BookPage({ params, searchParams }: PageProps<'/[lo
               initialPeople={initialPeople}
               policy={notice(
                 [
+                  // キャンセル料は設定の率から作る（料率と文面がずれないように）
+                  { heading: t('cancellationRates.title'), text: cancellationRateLines(shop.settings).join('\n') },
                   { heading: t('booking.policyCommon'), text: shop.settings.commonCancellationPolicy },
                   { heading: t('booking.policyPlan'), text: menu.cancellationPolicy },
                 ],
@@ -236,6 +243,8 @@ export default async function BookPage({ params, searchParams }: PageProps<'/[lo
               requireAges={menu.requireAges}
               priceLabel={priceLabel}
               slotLabel={dateTime}
+              changeHref={backHref}
+              cardPayment={cardPaymentsEnabled()}
             />
           ) : paused ? (
             <div className="space-y-4 rounded-3xl bg-white p-6 ring-1 ring-ocean/10" role="status">

@@ -10,6 +10,11 @@ export function issueAccessToken(): { token: string; hash: string } {
   return { token, hash: hashAccessToken(token) };
 }
 
+/** URL のトークンの形（base64url。古い形式も受けられるよう幅を持たせる）。DB を引く前に形だけ確かめる */
+export function isAccessTokenFormat(value: unknown): value is string {
+  return typeof value === 'string' && /^[A-Za-z0-9_-]{16,128}$/.test(value);
+}
+
 export function hashAccessToken(token: string): string {
   return createHash('sha256').update(token).digest('hex');
 }

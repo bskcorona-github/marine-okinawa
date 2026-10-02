@@ -4,6 +4,7 @@ import { buildBookingIcs } from '@/modules/booking/ics';
 import { getBookingByAccessToken } from '@/modules/booking/queries';
 import { isConfirmedOrLater } from '@/modules/booking/status';
 import { splitPlanTitle } from '@/modules/catalog/display-title';
+import { formatPartyItems } from '@/modules/booking/party';
 
 /**
  * 予約をカレンダーに追加する .ics（予約確認ページと同じトークンで保護）。
@@ -24,7 +25,7 @@ export async function GET(_request: Request, ctx: RouteContext<'/[locale]/bookin
     // 集合場所の案内（「30分前集合」など）も説明に入れる。開始時刻は出航・開始の時刻
     description: [
       `予約番号 ${booking.bookingNo}`,
-      booking.items.map((i) => `${i.label} ${i.quantity}${booking.capacityUnit}`).join(' / '),
+      formatPartyItems(booking.items, booking.capacityUnit),
       booking.guestCount ? `乗船人数 ${booking.guestCount}名` : null,
       `${booking.settings.priceLabel} ${formatYen(booking.totalAmount)}（${booking.paymentMethod === 'onsite' ? '当日現地払い' : 'お支払い済み'}）`,
       booking.meetingPoint ? `集合場所：${booking.meetingPoint}` : null,

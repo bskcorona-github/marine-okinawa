@@ -1,8 +1,8 @@
 import { ArrowDownUp, ChevronLeft, ChevronRight, Download, Search } from 'lucide-react';
 import Link from 'next/link';
-import { SELECT_CLASS } from '@/components/admin/field-styles';
-import { PageHeader } from '@/components/admin/page-header';
-import { BookingStatusBadge } from '@/components/admin/status-badge';
+import { SELECT_CLASS } from '@/components/backoffice/field-styles';
+import { PageHeader } from '@/components/backoffice/page-header';
+import { BookingStatusBadge } from '@/components/backoffice/status-badge';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { db } from '@/db';

@@ -8,7 +8,7 @@ import {
   type StatusFilter,
 } from '@/modules/booking/queries';
 
-export function isStatusFilter(value: unknown): value is StatusFilter {
+function isStatusFilter(value: unknown): value is StatusFilter {
   return isOwnKey(BOOKING_STATUS_LABELS, value) || isOwnKey(STATUS_GROUP_LABELS, value);
 }
 

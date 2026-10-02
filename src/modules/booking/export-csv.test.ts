@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { bookingsToCsv, csvCell } from './export-csv';
+import { csvCell } from '@/lib/csv';
+import { bookingsToCsv } from './export-csv';
 
 describe('csvCell', () => {
   it('カンマ・改行・ダブルクォートを含む値はクォートする', () => {

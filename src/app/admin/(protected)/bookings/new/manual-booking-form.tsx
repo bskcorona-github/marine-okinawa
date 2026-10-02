@@ -2,13 +2,15 @@
 
 import { Minus, Plus } from 'lucide-react';
 import { startTransition, useActionState, useState, type FormEvent } from 'react';
-import { Notice } from '@/components/admin/page-header';
+import { Notice } from '@/components/backoffice/page-header';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { formatYen } from '@/lib/format';
+import { normalizeYenInput } from '@/lib/yen';
 import { submitManualBooking, type ManualBookingState } from './actions';
 import { useHydrated } from '@/lib/use-hydrated';
+import { isPerPerson } from '@/modules/catalog/capacity-unit';
 
 type Props = {
   slotId: string;
@@ -74,7 +76,7 @@ export function ManualBookingForm({
   const [paidInput, setPaidInput] = useState<string | null>(null);
   const guestNumber = Number(guests);
   const extraGuests =
-    unit !== '名' && includedGuests && extraGuestPrice && Number.isInteger(guestNumber)
+    !isPerPerson(unit) && includedGuests && extraGuestPrice && Number.isInteger(guestNumber)
       ? Math.max(0, guestNumber - includedGuests)
       : 0;
   const extraAmount = extraGuests * (extraGuestPrice ?? 0);
@@ -171,7 +173,7 @@ export function ManualBookingForm({
           </span>
           <span className="text-xl font-bold text-slate-900 tabular-nums">{formatYen(total)}</span>
         </div>
-        {unit === '名' && partySize > 0 && partySize < minPartySize && (
+        {isPerPerson(unit) && partySize > 0 && partySize < minPartySize && (
           <p className="text-sm font-medium text-amber-800">
             このプランは Web では {minPartySize} 名からの受付です。{partySize}{' '}
             名で受ける場合は、事業者に確認してください。
@@ -186,7 +188,7 @@ export function ManualBookingForm({
         )}
       </fieldset>
 
-      {unit !== '名' && (
+      {!isPerPerson(unit) && (
         <div className="space-y-1">
           <Label htmlFor="guestCount">乗船人数（必須）</Label>
           <div className="flex items-center gap-2">
@@ -339,7 +341,7 @@ export function ManualBookingForm({
                 />
               </div>
             </div>
-            {paidInput !== null && Number(paidInput.replace(/[,，円￥¥\s]/g, '')) !== total && (
+            {paidInput !== null && Number(normalizeYenInput(paidInput)) !== total && (
               <p role="status" className="text-xs font-semibold text-amber-900">
                 料金の合計 {formatYen(total)} と違う金額です。
               </p>
