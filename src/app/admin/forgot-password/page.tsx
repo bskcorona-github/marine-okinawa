@@ -3,15 +3,21 @@ import { SubmitButton } from '@/components/backoffice/submit-button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { enabledSocialProviders, SOCIAL_PROVIDER_LABELS } from '@/lib/social-providers';
+import { SOCIAL_PROVIDER_LABELS } from '@/lib/social-providers';
 import { requestLoginHelpAction } from './actions';
+import { activeSocialProviders } from '@/modules/shop/features';
+import { getCurrentShop } from '@/modules/shop/shops';
+import { db } from '@/db';
+import { isFeatureOn } from '@/modules/shop/features';
 
 export const metadata = { title: 'ログインできないとき' };
 
 /** パスワードを忘れた・招待のリンクの期限が切れたとき。登録のメールアドレスに案内を送る */
 export default async function ForgotPasswordPage({ searchParams }: PageProps<'/admin/forgot-password'>) {
   const { sent, error } = await searchParams;
-  const providers = enabledSocialProviders().map((p) => SOCIAL_PROVIDER_LABELS[p]);
+  const shop = await getCurrentShop(db);
+  const paused = !(await isFeatureOn(db, shop.id, 'auth.login_help'));
+  const providers = (await activeSocialProviders(db, shop.id)).map((p) => SOCIAL_PROVIDER_LABELS[p]);
   return (
     <main className="flex min-h-screen items-center justify-center p-4">
       <Card className="w-full max-w-sm">
@@ -19,7 +25,14 @@ export default async function ForgotPasswordPage({ searchParams }: PageProps<'/a
           <CardTitle>ログインできないとき</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4 text-sm">
-          {sent ? (
+          {paused ? (
+            <p
+              role="status"
+              className="rounded-lg border border-amber-300 bg-amber-50 p-3 leading-relaxed text-amber-950"
+            >
+              ただいま、この画面からの案内の受け付けを止めています。お手数ですが、組合の担当者へご連絡ください。
+            </p>
+          ) : sent ? (
             <p
               role="status"
               className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 leading-relaxed text-emerald-950"
@@ -36,7 +49,7 @@ export default async function ForgotPasswordPage({ searchParams }: PageProps<'/a
               メールアドレスを確かめてください
             </p>
           )}
-          <form action={requestLoginHelpAction} className="space-y-3">
+          <form action={requestLoginHelpAction} className="space-y-3" hidden={paused}>
             <div className="space-y-1">
               <Label htmlFor="email">メールアドレス</Label>
               <Input id="email" name="email" type="email" autoComplete="username" required />
@@ -51,9 +64,9 @@ export default async function ForgotPasswordPage({ searchParams }: PageProps<'/a
             </p>
           )}
           <p className="text-xs leading-relaxed text-slate-600">
-            スマホの機種変更などで認証アプリが使えなくなったときは、ログインの画面の「バックアップコード」を使うか、組合の担当者へご連絡ください。
+            スマホの機種変更などで認証アプリが使えなくなったときは、コードを入れる画面の「バックアップコードを使う」を押すか、組合の担当者へご連絡ください。
           </p>
-          <Link href="/admin/login" className="block text-center text-sky-800 underline">
+          <Link href="/admin/login" className="flex min-h-11 items-center justify-center text-sky-800 underline">
             ログインの画面へ戻る
           </Link>
         </CardContent>

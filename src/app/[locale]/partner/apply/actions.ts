@@ -13,6 +13,7 @@ import { checkFile } from '@/modules/storage/files';
 import { getFileStore } from '@/modules/storage/store';
 import { readUpload } from '@/modules/storage/upload';
 import { MAX_FILES_PER_FIELD, MAX_TOTAL_UPLOAD } from './limits';
+import { isFeatureOn } from '@/modules/shop/features';
 
 /** 同じ IP からは 1 時間に 3 件、同じメールアドレスは 1 日に 2 件まで（迷惑な連投の対策） */
 const APPLY_IP_LIMIT = { limit: 3, windowSec: 3600 };
@@ -27,7 +28,7 @@ const FILE_FIELDS: { name: string; kind: DocumentKind }[] = [
 ];
 
 export type ApplyState = {
-  error: 'INVALID_INPUT' | 'AGREEMENT_REQUIRED' | 'RATE_LIMITED' | 'FILE_INVALID' | 'FILES_TOO_LARGE' | null;
+  error: 'INVALID_INPUT' | 'AGREEMENT_REQUIRED' | 'RATE_LIMITED' | 'FILE_INVALID' | 'FILES_TOO_LARGE' | 'PAUSED' | null;
   /** 入力に誤りがある欄（フォームで印を付ける） */
   field?: string;
   done?: boolean;
@@ -36,6 +37,8 @@ export type ApplyState = {
 export async function submitApplication(_prev: ApplyState, formData: FormData): Promise<ApplyState> {
   // 人には見えない欄に入力があれば、機械的な送信とみなして受け付けたふりをする
   if (String(formData.get('website') ?? '').trim()) return { error: null, done: true };
+  // 「機能の切り替え」で止めているあいだは受け付けない
+  if (!(await isFeatureOn(db, (await getCurrentShop(db)).id, 'site.partner_apply'))) return { error: 'PAUSED' };
   const text = (name: string) => String(formData.get(name) ?? '');
   const parsed = applicationInputSchema.safeParse({
     companyName: text('companyName'),

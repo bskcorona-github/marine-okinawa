@@ -1,16 +1,19 @@
 import { redirect } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { socialErrorMessage } from '@/lib/auth-errors';
-import { enabledSocialProviders, isSocialProvider } from '@/lib/social-providers';
+import { isSocialProvider } from '@/lib/social-providers';
 import { requireLoginSetup } from '@/modules/auth/guard';
 import { LoginChoices } from './login-choices';
+import { activeSocialProviders } from '@/modules/shop/features';
+import { getCurrentShop } from '@/modules/shop/shops';
+import { db } from '@/db';
 
 export const metadata = { title: 'ログインの方法を選ぶ' };
 
 /** 招待のリンクから入ったあと、ログインの方法を決める（決めるまで、ほかの画面からここへ戻す） */
 export default async function LoginSetupPage({ searchParams }: PageProps<'/admin/welcome/setup'>) {
   const me = await requireLoginSetup();
-  const providers = enabledSocialProviders();
+  const providers = await activeSocialProviders(db, (await getCurrentShop(db)).id);
   // LINE・Google が使えないときは、パスワードを決める画面へそのまま進む
   if (providers.length === 0) redirect(me.hasPassword ? '/admin/2fa/setup' : '/admin/welcome/password');
   const { start, error } = await searchParams;

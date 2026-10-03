@@ -9,6 +9,8 @@ import { logError } from '@/lib/log';
 import { isAccessTokenFormat } from '@/modules/booking/access-token';
 import { notifyAfterCardPayment } from '@/modules/payment/after-card-payment';
 import { checkoutNoticeOf, getCardPayments, startCardCheckout } from '@/modules/payment/card-payments';
+import { isFeatureOn } from '@/modules/shop/features';
+import { getCurrentShop } from '@/modules/shop/shops';
 
 /** 「カードで支払う」：Stripe の支払いのページを作って移る。作れないときは予約確認ページに理由を出す */
 export async function startCardCheckoutAction(token: string, locale: string) {
@@ -16,7 +18,9 @@ export async function startCardCheckoutAction(token: string, locale: string) {
   if (!isAccessTokenFormat(token)) redirect(`/${safeLocale}`);
   const page = `/${safeLocale}/bookings/${token}`;
   const provider = getCardPayments();
-  if (!provider) redirect(page);
+  // 「機能の切り替え」でカード決済を止めているあいだは、支払いのページを作らない
+  const shop = await getCurrentShop(db);
+  if (!provider || !(await isFeatureOn(db, shop.id, 'payment.card'))) redirect(page);
   let result: Awaited<ReturnType<typeof startCardCheckout>>;
   try {
     result = await startCardCheckout(db, provider, {

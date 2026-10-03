@@ -20,6 +20,7 @@ export function TwoFactorSetup({ email }: { email: string }) {
   const hydrated = useHydrated();
   // 二度押しで enable が 2 回呼ばれると、表示した QR と保存された秘密鍵がずれるため、送信中は押せなくする
   const [pending, setPending] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   async function onEnable(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -52,9 +53,26 @@ export function TwoFactorSetup({ email }: { email: string }) {
 
   const secret = enrollment ? new URL(enrollment.totpURI).searchParams.get('secret') : null;
 
+  /** バックアップコードを控える（コピー・ファイルに保存）。画面を閉じると二度と見られないため */
+  async function copyCodes(codes: string[]) {
+    await navigator.clipboard.writeText(codes.join('\n'));
+    setCopied(true);
+  }
+  function downloadCodes(codes: string[]) {
+    const text = `バックアップコード（${email}）\n各コードは 1 回だけ使えます。\n\n${codes.join('\n')}\n`;
+    const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'backup-codes.txt';
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
   return (
     <Card className="w-full max-w-md">
       <CardHeader>
+        <p className="text-xs font-semibold text-slate-500">手順 {enrollment ? '2' : '1'} / 2</p>
         <CardTitle>2 要素認証の設定</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -69,7 +87,7 @@ export function TwoFactorSetup({ email }: { email: string }) {
               <Input id="password" name="password" type="password" autoComplete="current-password" required />
             </div>
             <Button type="submit" disabled={!hydrated || pending}>
-              QR コードを表示
+              {pending ? '準備しています…' : 'QR コードを表示'}
             </Button>
           </form>
         ) : (
@@ -93,20 +111,43 @@ export function TwoFactorSetup({ email }: { email: string }) {
                 {secret}
               </code>
             </div>
-            <div className="rounded-md bg-amber-50 p-3 text-xs">
-              <p className="mb-1 font-semibold">バックアップコード（安全な場所に保管してください）</p>
+            <div className="space-y-2 rounded-md bg-amber-50 p-3 text-xs">
+              <p className="font-semibold">
+                バックアップコード（スマホをなくしたときに使います。この画面を閉じると二度と出ません）
+              </p>
               <ul className="grid grid-cols-2 gap-1 font-mono">
                 {enrollment.backupCodes.map((c) => (
                   <li key={c}>{c}</li>
                 ))}
               </ul>
+              <div className="flex flex-wrap gap-2">
+                <Button type="button" variant="outline" size="sm" onClick={() => copyCodes(enrollment.backupCodes)}>
+                  {copied ? 'コピーしました' : 'コピー'}
+                </Button>
+                <Button type="button" variant="outline" size="sm" onClick={() => downloadCodes(enrollment.backupCodes)}>
+                  ファイルに保存
+                </Button>
+              </div>
+              <label className="flex min-h-11 items-center gap-2 text-sm font-medium">
+                <input type="checkbox" name="saved" required className="size-4" />
+                バックアップコードを控えました
+              </label>
             </div>
             <div className="space-y-1">
               <Label htmlFor="code">認証アプリの 6 桁のコード</Label>
-              <Input id="code" name="code" inputMode="numeric" autoComplete="one-time-code" required />
+              <Input
+                id="code"
+                name="code"
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                pattern="[0-9]{6}"
+                maxLength={6}
+                title="6 桁の数字"
+                required
+              />
             </div>
             <Button type="submit" disabled={!hydrated || pending}>
-              設定を完了する
+              {pending ? '確認しています…' : '設定を完了する'}
             </Button>
           </form>
         )}

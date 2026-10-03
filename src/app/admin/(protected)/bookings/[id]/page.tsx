@@ -3,7 +3,6 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import type { ReactNode } from 'react';
 import { ConfirmDialog } from '@/components/backoffice/confirm-dialog';
-import { SELECT_CLASS } from '@/components/backoffice/field-styles';
 import { DetailList } from '@/components/backoffice/detail-list';
 import { Notice, PageHeader, Panel } from '@/components/backoffice/page-header';
 import { BookingStatusBadge } from '@/components/backoffice/status-badge';
@@ -27,11 +26,17 @@ import {
   CANCEL_CATEGORY_LABELS,
   PAYMENT_METHOD_LABELS,
 } from '@/modules/booking/labels';
-import { getBookingDetail, listBookingHistory, listBookingNotifications } from '@/modules/booking/queries';
+import {
+  getBookingDetail,
+  getOperatorResponse,
+  listBookingHistory,
+  listBookingNotifications,
+} from '@/modules/booking/queries';
 import { isPaymentReceived, isRefundable, keptAmount, refundableAmount } from '@/modules/booking/payment-status';
 import {
   decidesOperator,
   isBeforePaymentRequest,
+  isEnded,
   isOpenRequest,
   isOperatorLocked,
   nextStatusesFor,
@@ -49,18 +54,21 @@ import { REQUEST_STATUS_LABELS, listBookingRequests, listMenuCandidates } from '
 import { telHref } from '@/modules/shop/contact';
 import { paymentDueAt } from '@/modules/shop/settings';
 import { NOTIFICATION_TYPE_LABELS } from '@/modules/notification/labels';
-import { cardPaymentsEnabled, getCardPayments } from '@/modules/payment/card-payments';
+import { cardPaymentsActive, getCardPayments } from '@/modules/payment/card-payments';
 import { getPaymentLedger } from '@/modules/payment/ledger';
 import { getBookingSettlement } from '@/modules/settlement/settlements';
 import { assignOperatorAction, changeStatusAction, resendMailAction, saveAdminNoteAction } from './actions';
+import { CustomerPageLink } from './customer-page-link';
 import { AmountField } from './amount-field';
-import { bookingListBack } from './list-back';
+import { bookingBackLabel, bookingListBack } from './list-back';
 import { BookingFlow } from './booking-flow';
 import { CancelRefundFields } from './cancel-refund-fields';
 import { ItemsPanel, MovePanel } from './change-panels';
 import { HistoryPanel, MailHistoryPanel } from './history-panel';
-import { PaymentPanel } from './payment-panel';
+import { OperatorAssignForm } from './operator-assign-form';
+import { PaymentPanel, RefundForm, refundLeftOf } from './payment-panel';
 import { OperatorRequestsPanel } from './requests-panel';
+import { OperatorResponseBadge } from '../operator-response-badge';
 import { isPerPerson } from '@/modules/catalog/capacity-unit';
 
 export const metadata = { title: '予約詳細' };
@@ -84,9 +92,29 @@ const CHANGED: Partial<Record<BookingStatus, string>> = {
   no_show: '無断キャンセルにしました。',
 };
 
+/** 「予約をやめるとき」の見出しに並べる、やめ方の短い名前 */
+const EXCEPTION_SHORT: Partial<Record<BookingStatus, string>> = {
+  cancelled: '取消',
+  weather_cancelled: '天候中止',
+  no_show: '無断キャンセル',
+};
+
+/** 次の状態へ進めるときのダイアログの見出し（ボタンの言葉に合わせる） */
+const TRANSITION_TITLE: Partial<Record<BookingStatus, string>> = {
+  reviewing: '内容確認を始めますか？',
+  operator_checking: '電話で確認中として記録しますか？',
+  awaiting_payment: '支払案内を送りますか？',
+  confirmed: '予約を確定しますか？',
+  completed: '催行済みにしますか？',
+  verified: '実績を確認済みにしますか？',
+  cancelled: 'この予約を取り消しますか？',
+  weather_cancelled: '天候中止にしますか？',
+  no_show: '無断キャンセルにしますか？',
+};
+
 /** 次の状態へ進めるときに、ダイアログで説明すること */
 const TRANSITION_HELP: Partial<Record<BookingStatus, string>> = {
-  reviewing: '組合で入力内容（人数・年齢・第 2 希望など）を確認している状態にします。',
+  reviewing: '組合で入力内容（人数・年齢・ご連絡事項など）を確認している状態にします。',
   operator_checking:
     '電話などで事業者に空き・受入の可否を確かめているときに使います。事業者画面で確かめてもらうときは「事業者への受入確認」から依頼してください（自動でこの状態になります）。',
   awaiting_payment: 'お客様に金額・支払期限・支払方法を案内します。',
@@ -101,13 +129,14 @@ export default async function BookingDetailPage({ params, searchParams }: PagePr
   const { id } = await params;
   const sp = await searchParams;
   if (!isUuid(id)) notFound();
-  const [b, mails, history, operators, requests, bookingSettlement] = await Promise.all([
+  const [b, mails, history, operators, requests, bookingSettlement, operatorResponse] = await Promise.all([
     getBookingDetail(db, { shopId: admin.shopId, bookingId: id }),
     listBookingNotifications(db, { shopId: admin.shopId, bookingId: id }),
     listBookingHistory(db, { shopId: admin.shopId, bookingId: id }),
     listOperators(db, admin.shopId),
     listBookingRequests(db, { shopId: admin.shopId, bookingId: id }),
     getBookingSettlement(db, { shopId: admin.shopId, bookingId: id }),
+    getOperatorResponse(db, { shopId: admin.shopId, bookingId: id }),
   ]);
   if (!b) notFound();
   const ledger = b.payment ? await getPaymentLedger(db, b.payment.id) : null;
@@ -126,7 +155,7 @@ export default async function BookingDetailPage({ params, searchParams }: PagePr
   const errorText = ownValue(PAGE_ERRORS, sp.error) ?? ownValue<string>(BOOKING_ERROR_LABELS, sp.error) ?? null;
   // 予約一覧から開いたときは、一覧の絞り込み・ページを保ったまま戻る（管理画面の予約一覧以外の URL は使わない）
   const listBack = bookingListBack(sp.back);
-  const back = { href: listBack ?? '/admin/bookings', label: '予約台帳へ' };
+  const back = { href: listBack ?? '/admin/bookings', label: bookingBackLabel(listBack) };
   const backField = listBack && <input type="hidden" name="back" value={listBack} />;
   const movable = isOpenRequest(b.status) || b.status === 'confirmed';
   const moveDate = isDateString(sp.move) ? sp.move : null;
@@ -207,7 +236,6 @@ export default async function BookingDetailPage({ params, searchParams }: PagePr
   if (b.cancelOperatorNote) rows.push(['事業者への連絡', b.cancelOperatorNote]);
 
   const requestRows: [string, string][] = [
-    ['第2希望', b.secondChoice ?? ''],
     ['参加者の年齢', b.participantAges ?? ''],
     ['ご連絡事項', b.customerNote ?? ''],
     ['同意', b.consentedAt ? `参加条件・キャンセル規定・個人情報の取扱いに同意（${at(b.consentedAt)}）` : ''],
@@ -233,11 +261,11 @@ export default async function BookingDetailPage({ params, searchParams }: PagePr
     sp.mail === 'sent'
       ? mailSent
       : sp.mail === 'failed'
-        ? 'お客様へのメールを送信できませんでした。お電話などでお伝えください（「メールを送り直す」からもう一度送れます）。'
+        ? 'お客様へのメールを送信できませんでした。下の「お客様への案内ページ」からリンクを出して LINE などで送れます。「メールを送り直す」もできます。'
         : sp.mail === 'unknown'
-          ? 'お客様へのメールの送信結果を確認できませんでした。届いていない場合は、少し待ってから「メールを送り直す」を押してください。'
+          ? 'お客様へのメールの送信結果を確認できませんでした。届いていない場合は、下の「お客様への案内ページ」からリンクを出して渡すか、「メールを送り直す」を押してください。'
           : sp.mail === 'skipped'
-            ? 'メールアドレスがないため、お客様へのメールは送っていません。'
+            ? 'メールアドレスがないため、お客様へのメールは送っていません。案内が必要なときは、下の「お客様への案内ページ」からリンクを出して渡せます。'
             : null;
   const opMailResult =
     sp.opMail === 'sent'
@@ -264,7 +292,7 @@ export default async function BookingDetailPage({ params, searchParams }: PagePr
   const unsentCount = Number(sp.unsent) || 0;
 
   const notifyBox = (label: string) => (
-    <label className="flex items-start gap-2">
+    <label className="flex items-start gap-2 pointer-coarse:min-h-11">
       <input
         type="checkbox"
         name="notify"
@@ -281,7 +309,7 @@ export default async function BookingDetailPage({ params, searchParams }: PagePr
   );
   const notifyOperatorBox = (label: string) =>
     b.operatorName && (
-      <label className="flex items-start gap-2">
+      <label className="flex items-start gap-2 pointer-coarse:min-h-11">
         <input type="checkbox" name="notifyOperator" value="on" defaultChecked className="mt-0.5 size-4" />
         <span>{label}</span>
       </label>
@@ -295,7 +323,7 @@ export default async function BookingDetailPage({ params, searchParams }: PagePr
   const changeNotifyBox = (label: string) =>
     b.status === 'confirmed' &&
     b.operatorName && (
-      <label className="flex items-start gap-2">
+      <label className="flex items-start gap-2 pointer-coarse:min-h-11">
         <input type="checkbox" name="notifyOperator" value="on" defaultChecked className="mt-0.5 size-4" />
         <span>{label}</span>
       </label>
@@ -312,7 +340,7 @@ export default async function BookingDetailPage({ params, searchParams }: PagePr
   const dueForRequest = next.includes('awaiting_payment')
     ? paymentDueAt({ now, startsAt: b.startsAt, days: b.settings.paymentDueDays, timezone: b.timezone })
     : null;
-  const cardPayment = cardPaymentsEnabled();
+  const cardPayment = await cardPaymentsActive(db, admin.shopId);
   // カード決済が有効なら、支払案内にはカードの支払いのボタンを出す（振込先の案内は要らない）
   const instructionsMissing = b.paymentMethod === 'online' && !b.settings.paymentInstructions && !cardPayment;
   // お客様のカードでのお支払いを待っている予約（払われると自動で確定する）。入金済みなら組合が確定する
@@ -427,7 +455,8 @@ export default async function BookingDetailPage({ params, searchParams }: PagePr
 
   /**
    * 次の操作として勧めるもの（目立たせる）。事業者の回答待ちのあいだと、カードでのお支払いを待っているあいだは勧めない
-   * （カードで払われると自動で確定するため。組合の「入金を確認して確定する」は振込などで受け取ったときだけ使う）
+   * （カードで払われると自動で確定するため。組合の「入金を確認して確定する」は振込などで受け取ったときだけ使う）。
+   * 予約確定のあとも勧めない（開始後は事業者の催行報告を待つ。報告があると自動で催行済みになる）
    */
   const recommended: BookingStatus | null = isBeforePaymentRequest(b.status)
     ? assignedRequest?.status === 'accepted'
@@ -439,13 +468,12 @@ export default async function BookingDetailPage({ params, searchParams }: PagePr
       ? awaitingCard
         ? null
         : 'confirmed'
-      : b.status === 'confirmed'
-        ? started
-          ? 'completed'
-          : null
-        : b.status === 'completed'
-          ? 'verified'
-          : null;
+      : b.status === 'completed'
+        ? 'verified'
+        : null;
+
+  /** 確かめのダイアログの先頭に出す、誰のどの予約か（状態の変更・返金で同じ書き方にする） */
+  const summaryLine = `${b.contactName} 様 ・ ${at(b.startsAt)} ・ ${b.partySize}${unit} ・ ${formatYen(b.totalAmount)}`;
 
   /** 次の状態へ進めるボタン（確認ダイアログつき）。勧める操作だけを目立たせる */
   const transition = (to: BookingStatus) => {
@@ -483,14 +511,15 @@ export default async function BookingDetailPage({ params, searchParams }: PagePr
             primary && 'border-sky-700 bg-sky-700 text-white hover:bg-sky-800 hover:text-white',
           )}
           disabled={Boolean(blocked)}
-          title={`「${BOOKING_STATUS_LABELS[to]}」にしますか？`}
+          title={
+            b.status === 'operator_checking' && to === 'reviewing'
+              ? '内容確認に戻しますか？'
+              : (TRANSITION_TITLE[to] ?? `「${BOOKING_STATUS_LABELS[to]}」にしますか？`)
+          }
           confirmLabel={label}
           pendingLabel="保存中…"
         >
-          <p className="rounded-lg bg-slate-50 p-3">
-            {b.contactName} 様 ・ {at(b.startsAt)} ・ {b.partySize}
-            {unit} ・ {formatYen(b.totalAmount)}
-          </p>
+          <p className="rounded-lg bg-slate-50 p-3">{summaryLine}</p>
           {TRANSITION_HELP[to] && <p>{TRANSITION_HELP[to]}</p>}
 
           {to === 'awaiting_payment' && (
@@ -580,7 +609,9 @@ export default async function BookingDetailPage({ params, searchParams }: PagePr
                   {b.partySize}
                   {unit}分の枠が回に戻ります。
                 </li>
-                <li className="font-semibold text-red-700">取り消すと元に戻せません。</li>
+                <li className="font-semibold text-red-700">
+                  {to === 'weather_cancelled' ? '天候中止にすると元に戻せません。' : '取り消すと元に戻せません。'}
+                </li>
               </ul>
               {to === 'cancelled' ? (
                 // 区分を選ぶと返金予定額の初期値が入る（キャンセル料率はお客様のご都合のときだけ）
@@ -616,7 +647,11 @@ export default async function BookingDetailPage({ params, searchParams }: PagePr
                     name="cancelOperatorNote"
                     rows={2}
                     maxLength={500}
-                    placeholder="例：お客様のご都合で取消。キャンセル料は組合で精算します"
+                    placeholder={
+                      to === 'weather_cancelled'
+                        ? '例：強風のため中止。返金は組合で行います'
+                        : '例：お客様のご都合で取消。キャンセル料は組合で精算します'
+                    }
                   />
                 </label>
               )}
@@ -653,8 +688,16 @@ export default async function BookingDetailPage({ params, searchParams }: PagePr
           )}
 
           {noteBox(
-            ending ? '取消の理由（組合用・お客様には送りません）' : '履歴に残すメモ（任意）',
-            to === 'cancelled' ? '例：お客様から電話で取消の連絡' : undefined,
+            to === 'weather_cancelled'
+              ? '中止の理由（組合用・お客様には送りません）'
+              : ending
+                ? '取消の理由（組合用・お客様には送りません）'
+                : '履歴に残すメモ（任意）',
+            to === 'cancelled'
+              ? '例：お客様から電話で取消の連絡'
+              : to === 'weather_cancelled'
+                ? '例：強風・高波のため'
+                : undefined,
           )}
           {mailLabel && notifyBox(mailLabel)}
           {to === 'confirmed' && notifyOperatorBox('実施事業者に予約確定をメールで知らせる')}
@@ -674,12 +717,17 @@ export default async function BookingDetailPage({ params, searchParams }: PagePr
   };
 
   const isException = (s: BookingStatus) => s === 'cancelled' || s === 'weather_cancelled' || s === 'no_show';
+  // 開始前の催行済み・無断キャンセルは、押せないボタンを並べず「開始時刻を過ぎたら」の案内 1 行にまとめる
+  const beforeStart = (s: BookingStatus) => (s === 'completed' || s === 'no_show') && !started;
   // 勧める操作を先頭に、「電話で確認中として記録」「内容確認に戻す」は後ろに並べる
   const order = (s: BookingStatus) => (s === recommended ? 0 : s === 'operator_checking' || s === 'reviewing' ? 2 : 1);
-  const forward = next.filter((s) => !isException(s)).sort((x, y) => order(x) - order(y));
-  const exceptional = next.filter(isException);
+  const forward = next.filter((s) => !isException(s) && !beforeStart(s)).sort((x, y) => order(x) - order(y));
+  const exceptional = next.filter((s) => isException(s) && !beforeStart(s));
+  const waitingForStart = next.includes('completed') && !started;
 
   const report = b.reportResult ? (b.reportResult as ReportResult) : null;
+  // 開始したが、事業者の催行報告がまだ（ダッシュボードの「催行報告待ち」と同じ）
+  const waitingForReport = b.status === 'confirmed' && started && !report;
   // 取消・天候中止の返金予定額の初期値（設定のキャンセル料率・天候中止の返金率から。予約ごとに直せる）
   const refundSuggestion = (to: BookingStatus) =>
     b.confirmedOnce
@@ -742,6 +790,17 @@ export default async function BookingDetailPage({ params, searchParams }: PagePr
   const bookedCount = charter ? b.guestCount : b.partySize;
   const reportUnit = charter ? '名' : unit;
   const operatorLocked = isOperatorLocked(b.status);
+  const cardAvailable = getCardPayments() !== null;
+  // まだ返していない返金予定額。取消などで終わった予約でも、返金が残っていれば「次の操作」に出す
+  const refundLeft = refundLeftOf(b.status, payment);
+  /**
+   * 取消・天候中止などの「予約をやめる」操作は、押し間違えないよう畳んでおく。事業者から中止の報告があった・
+   * 受入不可の回答・支払期限切れなど、やめることが次の操作になりうるときは開いておく
+   */
+  const stopOpen =
+    Boolean(report && report !== 'done') ||
+    (checkingOperator && assignedRequest?.status === 'declined') ||
+    Boolean(overdue && !paid);
 
   return (
     <div className="max-w-5xl">
@@ -751,11 +810,23 @@ export default async function BookingDetailPage({ params, searchParams }: PagePr
           <span className="flex flex-wrap items-center gap-3">
             <span className="tabular-nums">予約 {b.bookingNo}</span>
             <BookingStatusBadge status={b.status} className="text-sm" />
+            {/* ダッシュボード・予約台帳と同じ「事業者の回答あり」の札 */}
+            {operatorResponse.operatorResponded && (
+              <OperatorResponseBadge response={operatorResponse.latestResponse} className="text-sm" />
+            )}
           </span>
         }
         description={`${b.contactName} 様 ・ ${at(b.startsAt)} ・ ${splitPlanTitle(b.menuTitle).title}`}
         actions={
-          <Link href={`/admin/slots/${b.slotId}`} className={buttonVariants({ variant: 'outline' })}>
+          <Link
+            href={
+              // 回の詳細から開いた予約はその画面へ戻し、そうでなければ回の詳細からこの予約へ戻れるようにする
+              listBack?.startsWith(`/admin/slots/${b.slotId}`)
+                ? listBack
+                : `/admin/slots/${b.slotId}?back=${encodeURIComponent(`/admin/bookings/${b.id}`)}`
+            }
+            className={buttonVariants({ variant: 'outline' })}
+          >
             この回を見る
           </Link>
         }
@@ -818,8 +889,8 @@ export default async function BookingDetailPage({ params, searchParams }: PagePr
             <Notice tone="warning">
               返金予定額 {formatYen(payment.refundDueAmount ?? 0)} を記録しました（まだ返金していません）。
               {payment.stripePaymentIntentId
-                ? '下の「入金・返金」の「カードへ返金する」で、お客様のカードへ返金してください。'
-                : '振込などで返金したら、下の「入金・返金」の「返金を記録」で記録してください。'}
+                ? '「次の操作」の「カードへ返金する」で、お客様のカードへ返金してください。'
+                : '振込などで返金したら、「次の操作」の「返金を記録する」で記録してください。'}
             </Notice>
           )}
         {sp.refunded && (
@@ -922,11 +993,145 @@ export default async function BookingDetailPage({ params, searchParams }: PagePr
           <Notice tone="warning">実施事業者が割り当てられていません。「実施事業者」で選んでください。</Notice>
         )}
 
-        <BookingFlow status={b.status} visited={visited} />
+        <BookingFlow status={b.status} visited={visited} refundLeft={refundLeft > 0 ? formatYen(refundLeft) : null} />
 
-        {/* スマホでは「次の操作・代表者」→ 予約の内容 →「実施事業者・組合メモ」の順。パソコンでは右の列にまとめる */}
-        <div className="grid gap-4 md:grid-cols-[1fr_19rem] md:items-start">
-          <div className="order-2 space-y-4 md:order-none md:col-start-1 md:row-span-2 md:row-start-1">
+        {/*
+          スマホでは「次の操作・代表者・組合メモ」→ 予約の内容 →「実施事業者」の順。パソコンでは右の列にまとめる。
+          読み上げ・Tab の順も同じにする（「次の操作」を先に。パソコンの並びは列と行の指定で決める）。
+          行の高さは右上の内容に合わせ、残りを 2 行目に回す（左の列が長くても、右の列の間が空かないように）。
+          列は minmax(0, …) にして、長い文字やボタンがあっても画面の幅を広げない
+        */}
+        <div className="grid grid-cols-[minmax(0,1fr)] gap-4 md:grid-cols-[minmax(0,1fr)_19rem] md:grid-rows-[auto_1fr] md:items-start">
+          <div className="space-y-4 md:col-start-2 md:row-start-1">
+            {(next.length > 0 || b.status === 'verified' || refundLeft > 0) && (
+              <Panel title="次の操作">
+                <div className="flex flex-col gap-2">
+                  {/* 返金が残っている予約（取消・天候中止など）は、返金を次の操作として目立たせる。額はボタンに書く */}
+                  {refundLeft > 0 && (
+                    <RefundForm
+                      booking={b}
+                      payment={payment}
+                      ledger={ledger}
+                      settlement={bookingSettlement}
+                      backField={backField}
+                      today={today}
+                      cardAvailable={cardAvailable}
+                      summary={summaryLine}
+                      primary
+                    />
+                  )}
+                  {canRequest && pendingRequests.length > 0 && (
+                    <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm font-medium text-amber-900">
+                      事業者の回答待ち（{pendingRequests.map((r) => r.operatorName).join('・')}）
+                    </p>
+                  )}
+                  {awaitingCard && (
+                    <p className="rounded-lg bg-sky-50 px-3 py-2 text-sm font-medium text-sky-900">
+                      お客様のカードでのお支払いを待っています。お支払いが済むと自動で予約確定になります。
+                    </p>
+                  )}
+                  {canRequest && activeRequests.length === 0 && (
+                    <a
+                      href="#operator-requests"
+                      className={buttonVariants({
+                        className: 'w-full border-sky-700 bg-sky-700 text-white hover:bg-sky-800',
+                      })}
+                    >
+                      事業者へ受入確認を依頼する
+                    </a>
+                  )}
+                  {/* ダッシュボードの「催行報告待ち」と同じ案内。報告を待たずに記録するボタンは下に出す */}
+                  {waitingForReport && (
+                    <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-950">
+                      事業者の催行報告を待っています。報告があると、自動で「催行済み」になります。電話などで催行を確かめたときは、下の「催行済みにする」で記録できます。
+                    </p>
+                  )}
+                  {forward.map((to) => transition(to))}
+                  {waitingForStart && (
+                    <p className="rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-700">
+                      開始時刻（{at(b.startsAt)}）を過ぎたら「催行済みにする」を押します。
+                    </p>
+                  )}
+                  {b.status === 'verified' && (
+                    <p className="text-sm text-slate-700">
+                      月次精算の対象です。
+                      <Link href="/admin/settlements" className="mx-1 font-semibold text-sky-800 underline">
+                        精算
+                      </Link>
+                      で振込を記録すると「精算済み」になります。
+                    </p>
+                  )}
+                  {exceptional.length > 0 && (
+                    // 取消・天候中止などは、ふだんの操作と分けて畳んでおく（押し間違えないように）
+                    <details className="mt-1 border-t border-slate-100" open={stopOpen}>
+                      <summary className="cursor-pointer py-3 text-sm font-semibold text-slate-700">
+                        予約をやめるとき（{exceptional.map((s) => EXCEPTION_SHORT[s]).join('・')}）
+                      </summary>
+                      <div className="flex flex-col gap-2 pb-1">{exceptional.map((to) => transition(to))}</div>
+                    </details>
+                  )}
+                </div>
+              </Panel>
+            )}
+
+            <CustomerPageLink bookingId={b.id} />
+            <Panel title="代表者">
+              <p className="text-base font-semibold text-slate-900">{b.contactName} 様</p>
+              <div className="mt-3 space-y-2">
+                {phone ? (
+                  <a
+                    href={telHref(b.contactPhone!)}
+                    className="flex min-h-11 items-center gap-2 rounded-lg border border-slate-200 px-3 font-semibold text-sky-800 tabular-nums hover:bg-sky-50"
+                  >
+                    <Phone aria-hidden className="size-4" />
+                    {phone}
+                  </a>
+                ) : (
+                  <p className="text-sm text-slate-600">電話番号なし</p>
+                )}
+                {b.contactEmail ? (
+                  <a
+                    href={`mailto:${b.contactEmail}`}
+                    className="flex min-h-11 items-center gap-2 rounded-lg border border-slate-200 px-3 text-sm break-all text-sky-800 hover:bg-sky-50"
+                  >
+                    <Mail aria-hidden className="size-4 shrink-0" />
+                    {b.contactEmail}
+                  </a>
+                ) : (
+                  <p className="text-sm text-slate-600">メールアドレスなし</p>
+                )}
+              </div>
+              {b.contactEmail && b.status !== 'no_show' && (
+                <form action={resendMailAction.bind(null, b.id)} className="mt-3">
+                  {backField}
+                  <ConfirmDialog
+                    tone="default"
+                    triggerLabel="メールを送り直す"
+                    triggerClassName="w-full"
+                    title="メールを送り直しますか？"
+                    confirmLabel="メールを送り直す"
+                    pendingLabel="送信中…"
+                  >
+                    <p>
+                      {b.contactEmail} に、今の状態（{BOOKING_STATUS_LABELS[b.status]}）のメールを送ります。
+                      以前に送ったメールのリンクも、そのまま使えます。
+                    </p>
+                  </ConfirmDialog>
+                </form>
+              )}
+            </Panel>
+            <Panel title="組合メモ" description="お客様・事業者には見えません。書き換えた人と日時は履歴に残ります。">
+              <form action={saveAdminNoteAction.bind(null, b.id)} className="space-y-2">
+                {backField}
+                <Textarea name="adminNote" rows={4} maxLength={2000} defaultValue={b.adminNote} aria-label="組合メモ" />
+                <SubmitButton variant="outline" className="w-full" pendingLabel="保存中…">
+                  メモを保存
+                </SubmitButton>
+              </form>
+            </Panel>
+          </div>
+
+          <div className="space-y-4 md:col-start-1 md:row-span-2 md:row-start-1">
             <Panel title="予約内容">
               <DetailList rows={rows} />
             </Panel>
@@ -990,9 +1195,11 @@ export default async function BookingDetailPage({ params, searchParams }: PagePr
               settlement={bookingSettlement}
               backField={backField}
               today={today}
-              cardAvailable={getCardPayments() !== null}
+              cardAvailable={cardAvailable}
               overdue={Boolean(overdue)}
               at={at}
+              refundInNextActions={refundLeft > 0}
+              summary={summaryLine}
             />
 
             {itemsEditable && priceSet && (
@@ -1000,6 +1207,11 @@ export default async function BookingDetailPage({ params, searchParams }: PagePr
                 booking={b}
                 priceSet={priceSet}
                 unit={unit}
+                extraGuest={
+                  slotInfo?.includedGuests && slotInfo.extraGuestPrice
+                    ? { included: slotInfo.includedGuests, price: slotInfo.extraGuestPrice }
+                    : null
+                }
                 open={Boolean(sp.error) && sp.from === 'items'}
                 paymentNote={
                   paid ? (
@@ -1055,188 +1267,38 @@ export default async function BookingDetailPage({ params, searchParams }: PagePr
             <MailHistoryPanel mails={mails} hasEmail={Boolean(b.contactEmail)} at={at} />
           </div>
 
-          <div className="order-1 space-y-4 md:order-none md:col-start-2 md:row-start-1">
-            {(next.length > 0 || b.status === 'verified') && (
-              <Panel title="次の操作">
-                <div className="flex flex-col gap-2">
-                  {canRequest && pendingRequests.length > 0 && (
-                    <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm font-medium text-amber-900">
-                      事業者の回答待ち（{pendingRequests.map((r) => r.operatorName).join('・')}）
-                    </p>
-                  )}
-                  {awaitingCard && (
-                    <p className="rounded-lg bg-sky-50 px-3 py-2 text-sm font-medium text-sky-900">
-                      お客様のカードでのお支払いを待っています。お支払いが済むと自動で予約確定になります。
-                    </p>
-                  )}
-                  {canRequest && activeRequests.length === 0 && (
-                    <a
-                      href="#operator-requests"
-                      className={buttonVariants({
-                        className: 'w-full border-sky-700 bg-sky-700 text-white hover:bg-sky-800',
-                      })}
-                    >
-                      事業者へ受入確認を依頼する
-                    </a>
-                  )}
-                  {forward.map((to) => transition(to))}
-                  {b.status === 'verified' && (
-                    <p className="text-sm text-slate-700">
-                      月次精算の対象です。
-                      <Link href="/admin/settlements" className="mx-1 font-semibold text-sky-800 underline">
-                        精算
-                      </Link>
-                      で振込を記録すると「精算済み」になります。
-                    </p>
-                  )}
-                  {exceptional.length > 0 && (
-                    <div className="mt-2 flex flex-col gap-2 border-t border-slate-100 pt-3">
-                      {exceptional.map((to) => transition(to))}
-                    </div>
-                  )}
-                </div>
-              </Panel>
-            )}
-
-            <Panel title="代表者">
-              <p className="text-base font-semibold text-slate-900">{b.contactName} 様</p>
-              <div className="mt-3 space-y-2">
-                {phone ? (
-                  <a
-                    href={telHref(b.contactPhone!)}
-                    className="flex min-h-11 items-center gap-2 rounded-lg border border-slate-200 px-3 font-semibold text-sky-800 tabular-nums hover:bg-sky-50"
-                  >
-                    <Phone aria-hidden className="size-4" />
-                    {phone}
-                  </a>
-                ) : (
-                  <p className="text-sm text-slate-600">電話番号なし</p>
-                )}
-                {b.contactEmail ? (
-                  <a
-                    href={`mailto:${b.contactEmail}`}
-                    className="flex min-h-11 items-center gap-2 rounded-lg border border-slate-200 px-3 text-sm break-all text-sky-800 hover:bg-sky-50"
-                  >
-                    <Mail aria-hidden className="size-4 shrink-0" />
-                    {b.contactEmail}
-                  </a>
-                ) : (
-                  <p className="text-sm text-slate-600">メールアドレスなし</p>
-                )}
-              </div>
-              {b.contactEmail && b.status !== 'no_show' && (
-                <form action={resendMailAction.bind(null, b.id)} className="mt-3">
-                  {backField}
-                  <ConfirmDialog
-                    tone="default"
-                    triggerLabel="メールを送り直す"
-                    triggerClassName="w-full"
-                    title="メールを送り直しますか？"
-                    confirmLabel="送り直す"
-                    pendingLabel="送信中…"
-                  >
-                    <p>
-                      {b.contactEmail} に、今の状態（{BOOKING_STATUS_LABELS[b.status]}）のメールを送ります。
-                      以前に送ったメールのリンクも、そのまま使えます。
-                    </p>
-                  </ConfirmDialog>
-                </form>
-              )}
-            </Panel>
-          </div>
-
-          <div className="order-3 space-y-4 md:order-none md:col-start-2 md:row-start-2">
+          <div className="space-y-4 md:col-start-2 md:row-start-2">
             <Panel
               title="実施事業者"
               description={
-                b.operatorAssignedVia === 'staff'
-                  ? '組合が選んだ事業者です（受入確認の回答で自動には変わりません）。お客様には予約確定後に案内します。'
-                  : 'お客様には予約確定後に案内します。'
+                // お客様への案内の説明は、確定の前だけ（確定後は案内済み。取消・催行のあとは変えられない）
+                !isOpenRequest(b.status)
+                  ? undefined
+                  : b.operatorAssignedVia === 'staff'
+                    ? '組合が選んだ事業者です（受入確認の回答で自動には変わりません）。お客様には予約確定後に案内します。'
+                    : 'お客様には予約確定後に案内します。'
               }
             >
               {operatorLocked ? (
                 <p className="text-sm text-slate-700">
                   {b.operatorName ?? '未割り当て'}
                   <span className="block text-xs text-slate-600">
-                    催行済み以降は変えられません（実績・精算の記録のため）。
+                    {isEnded(b.status)
+                      ? '取消・中止のあとは変えられません（精算・事業者画面の記録のため）。'
+                      : '催行済みのあとは変えられません（実績・精算の記録のため）。'}
                   </span>
                 </p>
               ) : (
-                <form action={assignOperatorAction.bind(null, b.id)} className="space-y-2 text-sm">
-                  {backField}
-                  <select
-                    name="operatorId"
-                    defaultValue={b.operatorId ?? ''}
-                    className={cn(SELECT_CLASS, 'w-full')}
-                    aria-label="実施事業者"
-                  >
-                    <option value="">未割り当て</option>
-                    {operators.map((o) => (
-                      <option key={o.id} value={o.id} disabled={o.status === 'suspended' && o.id !== b.operatorId}>
-                        {o.name}
-                        {o.status === 'suspended' ? '（停止中）' : ''}
-                      </option>
-                    ))}
-                  </select>
-                  {b.status === 'confirmed' ? (
-                    // 確定後は、お客様に事業者名・当日の連絡先を案内済みなので、変える前に確かめて連絡する
-                    <ConfirmDialog
-                      tone="default"
-                      triggerLabel="変更する…"
-                      triggerClassName="w-full"
-                      title="予約確定後に実施事業者を変えますか？"
-                      confirmLabel="変更する"
-                      pendingLabel="保存中…"
-                    >
-                      <p>
-                        今の実施事業者：{b.operatorName ?? '未割り当て'}
-                        。お客様には、確定メールでこの事業者の名前と当日の連絡先を案内しています。
-                      </p>
-                      <label className="flex items-start gap-2">
-                        <input type="checkbox" name="notifyNew" value="on" defaultChecked className="mt-0.5 size-4" />
-                        <span>新しい実施事業者に予約確定をメールで知らせる</span>
-                      </label>
-                      {b.operatorName && (
-                        <label className="flex items-start gap-2">
-                          <input
-                            type="checkbox"
-                            name="notifyPrevious"
-                            value="on"
-                            defaultChecked
-                            className="mt-0.5 size-4"
-                          />
-                          <span>{b.operatorName} に担当の変更をメールで知らせる</span>
-                        </label>
-                      )}
-                      <label className="flex items-start gap-2">
-                        <input
-                          type="checkbox"
-                          name="notifyCustomer"
-                          value="on"
-                          defaultChecked={Boolean(b.contactEmail)}
-                          disabled={!b.contactEmail}
-                          className="mt-0.5 size-4"
-                        />
-                        <span>お客様に、新しい事業者と当日の連絡先を載せた予約確定メールを送り直す</span>
-                      </label>
-                    </ConfirmDialog>
-                  ) : (
-                    <SubmitButton variant="outline" className="w-full" pendingLabel="保存中…">
-                      保存
-                    </SubmitButton>
-                  )}
-                </form>
+                <OperatorAssignForm
+                  key={b.operatorId ?? 'none'}
+                  action={assignOperatorAction.bind(null, b.id)}
+                  backField={backField}
+                  operators={operators.map((o) => ({ id: o.id, name: o.name, suspended: o.status === 'suspended' }))}
+                  current={b.operatorId ? { id: b.operatorId, name: b.operatorName ?? '' } : null}
+                  confirmed={b.status === 'confirmed'}
+                  hasEmail={Boolean(b.contactEmail)}
+                />
               )}
-            </Panel>
-
-            <Panel title="組合メモ" description="お客様・事業者には見えません。書き換えた人と日時は履歴に残ります。">
-              <form action={saveAdminNoteAction.bind(null, b.id)} className="space-y-2">
-                {backField}
-                <Textarea name="adminNote" rows={4} maxLength={2000} defaultValue={b.adminNote} aria-label="組合メモ" />
-                <SubmitButton variant="outline" className="w-full" pendingLabel="保存中…">
-                  メモを保存
-                </SubmitButton>
-              </form>
             </Panel>
           </div>
         </div>

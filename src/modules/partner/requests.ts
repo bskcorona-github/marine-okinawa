@@ -476,7 +476,10 @@ export async function listBookingRequests(db: DbOrTx, params: { shopId: string; 
   );
 }
 
-/** 事業者向けの照会の項目（お客様の連絡先は含めない。受入可否の判断に要る日時・プラン・人数・年齢・連絡事項だけ） */
+/** 取り下げ・取消の照会では、代表者の連絡先を出さない */
+const requestContactHiddenSql = sql`${bookingOperatorRequests.status} = 'withdrawn' or ${bookings.status} in ('cancelled', 'weather_cancelled')`;
+
+/** 事業者向けの照会の項目（自社への照会なら、受入の判断に要る内容と代表者の連絡先を出す） */
 function selectOperatorRequests(db: DbOrTx, where: SQL | undefined) {
   return db
     .select({
@@ -495,9 +498,18 @@ function selectOperatorRequests(db: DbOrTx, where: SQL | undefined) {
       guestCount: bookings.guestCount,
       participantAges: bookings.participantAges,
       customerNote: bookings.customerNote,
-      secondChoice: bookings.secondChoice,
+      contactName: sql<
+        string | null
+      >`case when ${requestContactHiddenSql} then null else ${bookings.contactName} end`,
+      contactPhone: sql<
+        string | null
+      >`case when ${requestContactHiddenSql} then null else ${bookings.contactPhone} end`,
+      contactEmail: sql<
+        string | null
+      >`case when ${requestContactHiddenSql} then null else ${bookings.contactEmail} end`,
       startsAt: slots.startsAt,
       menuTitle: menuTranslations.title,
+      meetingPoint: menuTranslations.meetingPoint,
       capacityUnit: menus.capacityUnit,
     })
     .from(bookingOperatorRequests)

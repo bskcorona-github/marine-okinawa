@@ -42,6 +42,17 @@ export async function peekInviteToken(value: string, now = new Date()): Promise<
   }
 }
 
+/**
+ * パスワードの再設定のリンクが、まだ使えるか（期限内で、使っていない）。画面を開いた時点で確かめ、使えないリンクで
+ * パスワードを入れさせないため（決めるときの確かめは Better Auth の /reset-password が行う）
+ */
+export async function peekPasswordResetToken(value: string, now = new Date()): Promise<boolean> {
+  if (!/^[A-Za-z0-9_-]{20,64}$/.test(value)) return false;
+  const ctx = await auth.$context;
+  const row = await ctx.internalAdapter.findVerificationValue(`reset-password:${value}`);
+  return Boolean(row && row.expiresAt >= now);
+}
+
 /** パスワードの再設定のリンクの値を作る（/admin/reset-password で新しいパスワードを決める。1 回だけ使える） */
 export async function createPasswordResetToken(userId: string, now = new Date()) {
   const ctx = await auth.$context;

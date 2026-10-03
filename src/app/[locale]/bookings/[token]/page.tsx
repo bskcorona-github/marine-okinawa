@@ -16,7 +16,7 @@ import { getBookingByAccessToken } from '@/modules/booking/queries';
 import { isBeforePaymentRequest, isConfirmedOrLater, isEnded } from '@/modules/booking/status';
 import { splitPlanTitle } from '@/modules/catalog/display-title';
 import { dayOfContact, shopContact } from '@/modules/shop/contact';
-import { cardPaymentsEnabled } from '@/modules/payment/card-payments';
+import { cardPaymentsActive } from '@/modules/payment/card-payments';
 import { weatherPolicyText } from '@/modules/shop/settings';
 import { startCardCheckoutAction } from './actions';
 import { CardPayButton } from './card-pay-button';
@@ -57,7 +57,7 @@ export default async function BookingViewPage({ params, searchParams }: PageProp
   const awaitingPayment = status === 'awaiting_payment';
   const received = isPaymentReceived(booking.paymentStatus);
   // カード決済（Stripe）が使えるときは、振込先の案内の代わりにカードの支払いのボタンを出す
-  const cardPayment = cardPaymentsEnabled() && booking.paymentMethod === 'online';
+  const cardPayment = (await cardPaymentsActive(db, booking.shopId)) && booking.paymentMethod === 'online';
   // 支払期限を過ぎたら、払えないボタンを出さずに問い合わせへ案内する
   const paymentExpired = awaitingPayment && !received && Boolean(booking.paymentDueAt && booking.paymentDueAt <= now);
   const checkoutNotice = typeof sp.checkout === 'string' && CHECKOUT_NOTICES.has(sp.checkout) ? sp.checkout : null;
@@ -89,7 +89,6 @@ export default async function BookingViewPage({ params, searchParams }: PageProp
     { label: t('menu'), value: splitPlanTitle(booking.menuTitle).title },
     // 実施できると分かった支払待ち以降は「日時」、確認中のあいだは「ご希望の日時」
     { label: t(open ? 'dateTimeRequested' : 'dateTime'), value: at(booking.startsAt), strike: ended },
-    { label: t('secondChoice'), value: open ? booking.secondChoice : null },
     {
       // 貸切は料金区分がコース・出発港なので、項目名もそれに合わせる
       label: t(isPerPerson(booking.capacityUnit) ? 'people' : 'course'),

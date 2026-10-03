@@ -58,7 +58,6 @@ async function run(kind: 'desktop' | 'mobile') {
   await page.getByLabel('メールアドレス', { exact: true }).fill(`review-${kind}-${Date.now()}@example.com`);
   await page.getByLabel('メールアドレス（確認）').fill('mismatch@example.com');
   await page.getByLabel('電話番号').fill('090-1234-5678');
-  await page.getByLabel('第2希望の日時').fill('翌日の午前中');
   await page.getByLabel('ご連絡事項').fill('小学生の子供がいます');
   await page.getByRole('checkbox').check();
   await page.getByRole('button', { name: /この内容で申し込む/ }).click();

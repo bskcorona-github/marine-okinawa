@@ -51,7 +51,6 @@ function operatorRows(t: ReturnType<typeof createTranslator<typeof messages, 'em
     { label: t('common.bookingNo'), value: booking.bookingNo },
     { label: t('common.menu'), value: title },
     { label: t('common.dateTimeConfirmed'), value: `${date} ${time}` },
-    { label: t('common.secondChoice'), value: booking.secondChoice },
     { label: t(isPerPerson(booking.capacityUnit) ? 'common.people' : 'common.course'), value: peopleLine(booking) },
     {
       label: t('common.guestCount'),

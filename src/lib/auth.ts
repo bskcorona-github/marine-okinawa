@@ -1,7 +1,7 @@
 import { eq } from 'drizzle-orm';
 import { betterAuth } from 'better-auth';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
-import { createAuthMiddleware, getSessionFromCtx, isAPIError } from 'better-auth/api';
+import { APIError, createAuthMiddleware, getSessionFromCtx, isAPIError } from 'better-auth/api';
 import { nextCookies } from 'better-auth/next-js';
 import { magicLink, twoFactor } from 'better-auth/plugins';
 import { db } from '@/db';
@@ -9,6 +9,8 @@ import * as schema from '@/db/schema';
 import { markPasswordChanged } from '@/modules/partner/accounts';
 import { authEventOf, recordAuthEvent, socialEventOf } from '@/modules/security/auth-events';
 import { isSocialProvider, socialProvidersFromEnv } from './social-providers';
+import { activeSocialProviders } from '@/modules/shop/features';
+import { getCurrentShop } from '@/modules/shop/shops';
 
 /** つながりを外す操作の、外す前に控えた方法（アカウントの行の id → google・line） */
 const unlinkingProviders = new Map<string, string>();
@@ -94,6 +96,19 @@ export const auth = betterAuth({
   hooks: {
     // ログアウトは、セッションが消える前に記録する（あとからは誰のログアウトか分からない）
     before: createAuthMiddleware(async (ctx) => {
+      // 「機能の切り替え」で止めている LINE・Google では、ログイン・つなぐ操作を受け付けない
+      if (ctx.path === '/sign-in/social' || ctx.path === '/link-social' || ctx.path === '/callback/:id') {
+        const provider =
+          ctx.path === '/callback/:id' ? ctx.params?.id : (ctx.body as { provider?: unknown } | undefined)?.provider;
+        if (isSocialProvider(provider)) {
+          const shop = await getCurrentShop(db);
+          const active = await activeSocialProviders(db, shop.id);
+          if (!active.includes(provider)) {
+            if (ctx.path === '/callback/:id') throw ctx.redirect('/admin/login?error=provider_disabled');
+            throw new APIError('FORBIDDEN', { message: 'This sign-in method is paused', code: 'PROVIDER_DISABLED' });
+          }
+        }
+      }
       // つながりを外す前に、どの方法（Google・LINE）かを控える（外したあとは行が消えて分からない）
       if (ctx.path === '/unlink-account') {
         const accountId = (ctx.body as { accountId?: unknown })?.accountId;

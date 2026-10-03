@@ -1,7 +1,7 @@
 import { Notice, PageHeader } from '@/components/backoffice/page-header';
 import { db } from '@/db';
 import { requireAdmin } from '@/modules/auth/guard';
-import { cardPaymentsEnabled } from '@/modules/payment/card-payments';
+import { cardPaymentsActive } from '@/modules/payment/card-payments';
 import { getShopById } from '@/modules/shop/shops';
 import { updateSettingsAction } from './actions';
 import { SettingsForm } from './settings-form';
@@ -22,7 +22,7 @@ export default async function SettingsPage({ searchParams }: PageProps<'/admin/s
       />
       <div className="space-y-4">
         {sp.saved && <Notice tone="success">保存しました。</Notice>}
-        {cardPaymentsEnabled() ? (
+        {(await cardPaymentsActive(db, shop.id)) ? (
           <Notice tone="info">
             カード決済（Stripe）が有効です。支払案内のメールと予約確認ページに「カードで支払う」を出し、決済が済んだら自動で予約確定にします（下の「支払方法の案内」の文面は使いません）。
           </Notice>

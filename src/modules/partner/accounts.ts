@@ -1,4 +1,4 @@
-import { and, asc, eq, sql } from 'drizzle-orm';
+import { and, asc, eq, isNull, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import type { Db, DbOrTx } from '@/db/client';
 import { isUniqueViolation } from '@/db/errors';
@@ -147,6 +147,16 @@ export async function setOperatorAccountDisabled(
 }
 
 /** 事業者のアカウント一覧（管理画面の事業者詳細用） */
+/** 事業者ごとの、使えるアカウント（停止していないもの）の数（事業者の一覧で「アカウントなし」を出す） */
+export async function countActiveAccountsByOperator(db: DbOrTx, shopId: string): Promise<Map<string, number>> {
+  const rows = await db
+    .select({ operatorId: operatorMembers.operatorId, count: sql<number>`count(*)::int` })
+    .from(operatorMembers)
+    .where(and(eq(operatorMembers.shopId, shopId), isNull(operatorMembers.disabledAt)))
+    .groupBy(operatorMembers.operatorId);
+  return new Map(rows.map((r) => [r.operatorId, r.count]));
+}
+
 export async function listOperatorAccounts(db: DbOrTx, params: { shopId: string; operatorId: string }) {
   return db
     .select({

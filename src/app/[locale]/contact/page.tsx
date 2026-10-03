@@ -8,6 +8,7 @@ import { Link } from '@/i18n/navigation';
 import { shopContact } from '@/modules/shop/contact';
 import { getCurrentShop } from '@/modules/shop/shops';
 import { ContactForm } from './contact-form';
+import { isFeatureOn } from '@/modules/shop/features';
 
 export const metadata = { title: 'お問い合わせ' };
 
@@ -19,6 +20,7 @@ export default async function ContactPage({ params, searchParams }: PageProps<'/
   await connection();
   const sp = await searchParams;
   const shop = await getCurrentShop(db);
+  const paused = !(await isFeatureOn(db, shop.id, 'site.contact_form'));
   const t = await getTranslations();
   const contact = shopContact({
     shopName: shop.name,
@@ -51,7 +53,13 @@ export default async function ContactPage({ params, searchParams }: PageProps<'/
             <ContactLinks contact={{ ...contact, email: null }} />
           </div>
         )}
-        <ContactForm initialKind={initialKind} />
+        {paused ? (
+          <p role="status" className="rounded-3xl bg-white p-6 text-sm leading-relaxed text-ink ring-1 ring-ocean/10">
+            ただいま、フォームでのお問い合わせの受け付けを止めています。お急ぎの方は、上のお電話でお問い合わせください。
+          </p>
+        ) : (
+          <ContactForm initialKind={initialKind} />
+        )}
       </div>
     </div>
   );

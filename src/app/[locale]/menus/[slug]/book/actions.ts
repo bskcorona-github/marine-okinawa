@@ -34,7 +34,6 @@ const formSchema = z.object({
   emailConfirm: z.string().trim().max(254),
   phone: z.string().trim().min(1).max(30),
   guestCount: z.coerce.number().int().min(1).max(200).optional(),
-  secondChoice: z.string().trim().max(200).optional(),
   participantAges: z.string().trim().max(200).optional(),
   customerNote: z.string().trim().max(1000).optional(),
 });
@@ -75,7 +74,6 @@ export async function submitBooking(_prev: SubmitBookingState, formData: FormDat
       contact: { name: input.name, email: input.email, phone: input.phone },
       guestCount: input.guestCount ?? null,
       request: {
-        secondChoice: input.secondChoice,
         participantAges: input.participantAges,
         customerNote: input.customerNote,
       },

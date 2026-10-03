@@ -11,6 +11,7 @@ import {
   addRuleAction,
   deleteExceptionAction,
   deleteRuleAction,
+  updateAllRuleCapacityAction,
   updateRuleCapacityAction,
 } from '../../actions';
 
@@ -48,6 +49,7 @@ export default async function PartnerPlanSchedulePage({
       actions={{
         addRule: addRuleAction,
         updateRuleCapacity: updateRuleCapacityAction,
+        updateAllCapacity: updateAllRuleCapacityAction,
         deleteRule: deleteRuleAction,
         addException: addExceptionAction,
         deleteException: deleteExceptionAction,

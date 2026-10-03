@@ -17,11 +17,17 @@ import { useHydrated } from '@/lib/use-hydrated';
  * socialProviders：使える Google・LINE でのログイン。socialError：Google・LINE から失敗して戻ってきたときの案内
  */
 export function LoginForm({
+  shopName,
   noAccess,
+  partnerPaused,
   socialProviders,
   socialError,
 }: {
+  /** 組合の名前（どこのログイン画面かを分かるように） */
+  shopName: string;
   noAccess: boolean;
+  /** 「機能の切り替え」で事業者画面を止めている */
+  partnerPaused: boolean;
   socialProviders: SocialProviderId[];
   socialError: string | null;
 }) {
@@ -71,9 +77,15 @@ export function LoginForm({
     <main className="flex min-h-screen items-center justify-center p-4">
       <Card className="w-full max-w-sm">
         <CardHeader>
+          <p className="text-xs font-medium text-slate-600">{shopName}</p>
           <CardTitle>ログイン（組合・事業者）</CardTitle>
         </CardHeader>
         <CardContent>
+          {partnerPaused && (
+            <p role="alert" className="mb-4 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950">
+              事業者画面は、いま一時的に止めています。急ぎのご用件は、組合の担当者へご連絡ください。
+            </p>
+          )}
           {noAccess && (
             <p role="alert" className="mb-4 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950">
               このアカウントでは、いまは利用できません（停止中など）。組合の担当者へお問い合わせください。
@@ -94,7 +106,7 @@ export function LoginForm({
               </p>
             )}
             <Button type="submit" className="w-full" disabled={pending || !hydrated}>
-              ログイン
+              {pending ? 'ログインしています…' : 'ログイン'}
             </Button>
           </form>
           {socialProviders.length > 0 && (

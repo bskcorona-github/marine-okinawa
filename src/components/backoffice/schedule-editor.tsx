@@ -1,8 +1,8 @@
 import Link from 'next/link';
 import type { ReactNode } from 'react';
 import { ConfirmDialog } from '@/components/backoffice/confirm-dialog';
-import { SELECT_CLASS } from '@/components/backoffice/field-styles';
 import { Notice, PageHeader, Panel } from '@/components/backoffice/page-header';
+import { ExceptionFields } from '@/components/backoffice/schedule-exception-fields';
 import { SubmitButton } from '@/components/backoffice/submit-button';
 import { buttonVariants } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -18,6 +18,7 @@ import {
   exceptionInputSchema,
   listScheduleRules,
   listUpcomingExceptions,
+  previewAllRuleCapacityChange,
   previewExceptionAddition,
   previewRuleAddition,
   previewRuleCapacityChange,
@@ -31,17 +32,18 @@ import type { getShopById } from '@/modules/shop/shops';
 const EXCEPTION_LABELS = { closed: '休止', capacity_override: '定員変更', extra_slot: '臨時の回' } as const;
 
 const EXCEPTION_DELETE_EFFECT = {
-  closed: '休止していた回が、ルールどおり受付中に戻ります。',
-  capacity_override: 'この回の定員がルールの定員に戻ります。予約済みの人数より少なくなる場合は定員超過になります。',
+  closed: '休止していた回が、毎週の回の設定どおり受付中に戻ります。',
+  capacity_override: 'この回の定員が、毎週の回の定員に戻ります。予約済みの人数より少なくなる場合は定員超過になります。',
   extra_slot: '臨時の回がなくなります。',
 } as const;
 
 const ERRORS: Record<string, string> = {
   date: '日付を確認してください（終了日は開始日以降にしてください）。',
   weekdays: '曜日を 1 つ以上選んでください。',
-  startTime: '開始時刻を入力してください（臨時の回には開始時刻が必要です）。',
+  startTime: '開始時刻を入力してください（臨時の回には時刻が必要です）。',
+  moreTimes: '「同じ設定で追加する時刻」は、「10:30、12:00」のように時刻を区切って入れてください（一度に 12 個まで）。',
   capacity: '定員を 0〜500 の整数で入力してください（休止以外は必須です）。',
-  pastDate: '過去の日付には例外を追加できません。',
+  pastDate: '過去の日付には、特定の日の変更を追加できません。',
   notFound:
     'プランまたは開催時間が見つかりません（ほかの画面で削除された可能性があります）。画面を開き直してください。',
   input: '入力内容を確認してください。',
@@ -56,14 +58,30 @@ type Shop = Awaited<ReturnType<typeof getShopById>>;
 export type ScheduleActions = {
   addRule: (menuId: string, formData: FormData) => Promise<void>;
   updateRuleCapacity: (menuId: string, ruleId: string, formData: FormData) => Promise<void>;
+  /** すべてのルールの定員をまとめて変える（渡したときだけ、まとめて変える欄を出す） */
+  updateAllCapacity?: (menuId: string, formData: FormData) => Promise<void>;
   deleteRule: (menuId: string, ruleId: string) => Promise<void>;
   addException: (menuId: string, formData: FormData) => Promise<void>;
   deleteException: (menuId: string, exceptionId: string) => Promise<void>;
 };
 
+/** URL の値（1 つの文字列）。エラーで戻ってきたときの入力の初期値に使う */
+const one = (value: string | string[] | undefined) => (typeof value === 'string' ? value : '');
+
+/** 影響の件数を足し合わせる（いくつかの時刻をまとめて追加するとき） */
+const sumImpacts = (impacts: ScheduleImpact[]): ScheduleImpact =>
+  impacts.reduce(
+    (sum, i) => ({
+      bookedSlots: sum.bookedSlots + i.bookedSlots,
+      people: sum.people + i.people,
+      overBooked: sum.overBooked + i.overBooked,
+    }),
+    { bookedSlots: 0, people: 0, overBooked: 0 },
+  );
+
 /**
- * 回の設定の画面（定期の回のルール・例外・今後 14 日の回）。管理画面と事業者画面で共通。
- * page は画面の URL（確認・やめるの戻り先）、intro は画面の上に出す案内
+ * 回の設定の画面（毎週の回のルール・特定の日の変更・今後 14 日の回）。管理画面と事業者画面で共通。
+ * page は画面の URL（確認・やめるの戻り先）、intro は画面の上に出す案内、slotHref は回の画面へのリンク（管理画面だけ）
  */
 export async function ScheduleEditor({
   menu,
@@ -74,6 +92,7 @@ export async function ScheduleEditor({
   title,
   actions,
   intro,
+  slotHref,
 }: {
   menu: AdminMenu;
   shop: Shop;
@@ -83,6 +102,7 @@ export async function ScheduleEditor({
   title: string;
   actions: ScheduleActions;
   intro?: ReactNode;
+  slotHref?: (slotId: string) => string;
 }) {
   const now = new Date();
   const today = localDate(now, shop.timezone);
@@ -99,11 +119,15 @@ export async function ScheduleEditor({
   const label = (d: string) => formatDateLabel(zonedToUtc(d, '12:00', shop.timezone), shop.timezone);
   const error = ownValue(ERRORS, sp.error);
   const noImpact: ScheduleImpact = { bookedSlots: 0, people: 0, overBooked: 0 };
+  // エラーで戻ってきたときは、入れた値を初期値にする（入れ直さなくてよいように）
+  const keptRule = sp.form === 'rule' && error;
+  const keptException = sp.form === 'exception' && error;
+  const keptWeekdays = keptRule ? one(sp.in_weekdays).split(',').filter(Boolean) : null;
 
   // 保存前の確認（例外の追加・ルールの追加・ルールの定員変更）。URL の値は検証し直し、影響の件数もここで数え直す
   const cancelLink = (
     <Link href={page} className={buttonVariants({ variant: 'outline' })}>
-      やめる
+      やめる（保存しない）
     </Link>
   );
   const confirmButton = (text: string) => (
@@ -138,18 +162,27 @@ export async function ScheduleEditor({
       };
     }
   } else if (sp.confirm === 'ruleAdd') {
-    const parsed = ruleInputSchema.safeParse({
-      validFrom: sp.validFrom,
-      validTo: sp.validTo || null,
-      weekdays: typeof sp.weekdays === 'string' ? sp.weekdays.split(',') : [],
-      startTime: sp.startTime,
-      capacity: sp.capacity,
-    });
-    if (parsed.success) {
-      const rule = parsed.data;
+    // いくつかの時刻をまとめて追加するときは、startTime が「09:00,10:30」のようにカンマでつながっている
+    const times = one(sp.startTime).split(',').filter(Boolean);
+    const parsedRules = times.map((startTime) =>
+      ruleInputSchema.safeParse({
+        validFrom: sp.validFrom,
+        validTo: sp.validTo || null,
+        weekdays: typeof sp.weekdays === 'string' ? sp.weekdays.split(',') : [],
+        startTime,
+        capacity: sp.capacity,
+      }),
+    );
+    if (parsedRules.length > 0 && parsedRules.every((p) => p.success)) {
+      const inputs = parsedRules.map((p) => p.data!);
+      const rule = inputs[0];
       pending = {
-        what: `${rule.startTime}（${weekdays(rule.weekdays)}・定員 ${rule.capacity}${unit}）のルールを追加すると、`,
-        impact: await previewRuleAddition(db, { shopId: shop.id, menuId: menu.id, now, input: rule }),
+        what: `${inputs.map((i) => i.startTime).join('・')}（${weekdays(rule.weekdays)}・定員 ${rule.capacity}${unit}）の毎週の回を追加すると、`,
+        impact: sumImpacts(
+          await Promise.all(
+            inputs.map((input) => previewRuleAddition(db, { shopId: shop.id, menuId: menu.id, now, input })),
+          ),
+        ),
         form: (
           <form action={actions.addRule.bind(null, menu.id)} className="flex flex-wrap gap-2">
             <input type="hidden" name="validFrom" value={rule.validFrom} />
@@ -158,6 +191,14 @@ export async function ScheduleEditor({
               <input key={w} type="hidden" name="weekdays" value={w} />
             ))}
             <input type="hidden" name="startTime" value={rule.startTime} />
+            <input
+              type="hidden"
+              name="moreTimes"
+              value={inputs
+                .slice(1)
+                .map((i) => i.startTime)
+                .join(',')}
+            />
             <input type="hidden" name="capacity" value={rule.capacity} />
             <input type="hidden" name="confirmed" value="1" />
             {confirmButton('このまま追加する')}
@@ -171,7 +212,7 @@ export async function ScheduleEditor({
     const capacity = Number(sp.capacity);
     if (rule && Number.isInteger(capacity) && capacity >= 1 && capacity <= 500) {
       pending = {
-        what: `${toHhmm(rule.startTime)} のルールの定員を ${capacity}${unit} にすると、`,
+        what: `${toHhmm(rule.startTime)} の毎週の回の定員を ${capacity}${unit} にすると、`,
         impact: await previewRuleCapacityChange(db, {
           shopId: shop.id,
           menuId: menu.id,
@@ -181,6 +222,22 @@ export async function ScheduleEditor({
         }),
         form: (
           <form action={actions.updateRuleCapacity.bind(null, menu.id, rule.id)} className="flex flex-wrap gap-2">
+            <input type="hidden" name="capacity" value={capacity} />
+            <input type="hidden" name="confirmed" value="1" />
+            {confirmButton('このまま変更する')}
+            {cancelLink}
+          </form>
+        ),
+      };
+    }
+  } else if (sp.confirm === 'ruleCapacityAll' && actions.updateAllCapacity) {
+    const capacity = Number(sp.capacity);
+    if (Number.isInteger(capacity) && capacity >= 1 && capacity <= 500) {
+      pending = {
+        what: `すべての毎週の回の定員を ${capacity}${unit} にすると、`,
+        impact: await previewAllRuleCapacityChange(db, { shopId: shop.id, menuId: menu.id, capacity, now }),
+        form: (
+          <form action={actions.updateAllCapacity.bind(null, menu.id)} className="flex flex-wrap gap-2">
             <input type="hidden" name="capacity" value={capacity} />
             <input type="hidden" name="confirmed" value="1" />
             {confirmButton('このまま変更する')}
@@ -240,10 +297,13 @@ export async function ScheduleEditor({
         {overlapping.length > 0 && (
           <Notice tone="warning">
             {overlapping.join('・')}{' '}
-            のルールが、同じ曜日・期間で重なっています。重なる日は、開始日が新しいルール（開始日が同じならあとから追加したルール）の定員を使います。
+            の毎週の回が、同じ曜日・期間で重なっています。重なる日は、開始日が新しいもの（開始日が同じならあとから追加したもの）の定員を使います。
           </Notice>
         )}
-        <Panel title="定期の回（ルール）" description="曜日と開始時刻ごとの回です。今後 180 日分を自動で作ります。">
+        <Panel
+          title="毎週の回（ルール）"
+          description="曜日と開始時刻ごとに、毎週くり返す回です。今後 180 日分を自動で作ります。"
+        >
           <ul className="divide-y divide-slate-100 text-sm">
             {rules.map((r) => {
               const impact = impacts.rules[r.id] ?? noImpact;
@@ -276,18 +336,18 @@ export async function ScheduleEditor({
                         <span className="text-slate-600">{unit}</span>
                       </label>
                       <SubmitButton variant="outline" pendingLabel="保存中…">
-                        変更
+                        定員を変更
                       </SubmitButton>
                     </form>
                     <form action={actions.deleteRule.bind(null, menu.id, r.id)}>
                       <ConfirmDialog
-                        triggerLabel="削除"
-                        title={`${toHhmm(r.startTime)} のルールを削除しますか？`}
-                        confirmLabel="削除する"
+                        triggerLabel="削除…"
+                        title={`${toHhmm(r.startTime)} の毎週の回を削除しますか？`}
+                        confirmLabel="毎週の回を削除する"
                       >
                         <ul className="list-disc space-y-1 rounded-lg bg-slate-50 p-3 pl-7">
                           <li>
-                            このルールで作られていた今後の回がなくなります（別のルールで同じ時刻がある日は残ります）。
+                            この設定で作られていた今後の回がなくなります（別の設定で同じ時刻がある日は残ります）。
                           </li>
                           {impact.bookedSlots > 0 ? (
                             <li className="font-semibold text-red-700">
@@ -303,7 +363,7 @@ export async function ScheduleEditor({
                               定員より予約が多い回（定員超過）が {impact.overBooked} 件できます。
                             </li>
                           )}
-                          <li>定員を変えるだけなら、削除せずに「変更」を使ってください。</li>
+                          <li>定員を変えるだけなら、削除せずに「定員を変更」を使ってください。</li>
                         </ul>
                       </ConfirmDialog>
                     </form>
@@ -311,48 +371,109 @@ export async function ScheduleEditor({
                 </li>
               );
             })}
-            {rules.length === 0 && <li className="py-2 text-slate-500">まだ登録されていません</li>}
+            {rules.length === 0 && (
+              <li className="py-2 text-slate-500">
+                まだ登録されていません。下の欄で開始時刻と定員を入れて追加してください。
+              </li>
+            )}
           </ul>
+          {actions.updateAllCapacity && rules.length >= 2 && (
+            <form
+              action={actions.updateAllCapacity.bind(null, menu.id)}
+              className="mt-3 flex flex-wrap items-end gap-2 rounded-lg bg-slate-50 p-3 text-sm"
+            >
+              <label className="space-y-1">
+                <span className="block font-medium">すべての回の定員をまとめて変える（{unit}）</span>
+                <Input
+                  type="number"
+                  name="capacity"
+                  inputMode="numeric"
+                  min={1}
+                  max={500}
+                  required
+                  defaultValue={rules[0].capacity}
+                  className="w-28"
+                />
+              </label>
+              <SubmitButton variant="outline" pendingLabel="保存中…">
+                まとめて変更
+              </SubmitButton>
+              <p className="w-full text-xs text-slate-600">
+                上の {rules.length}{' '}
+                つの毎週の回の定員を、同じ数にそろえます。予約が定員より多くなる回があるときは、保存の前に件数を見せて確認します。
+              </p>
+            </form>
+          )}
           <form
             action={actions.addRule.bind(null, menu.id)}
             className="mt-3 grid gap-3 border-t border-slate-100 pt-4 text-sm sm:grid-cols-4"
           >
-            <p className="font-semibold sm:col-span-4">ルールを追加</p>
+            <h3 className="font-semibold sm:col-span-4">毎週の回を追加</h3>
             <label className="space-y-1">
               <span className="block font-medium">開始時刻</span>
-              <Input type="time" name="startTime" required />
+              <Input type="time" name="startTime" required defaultValue={keptRule ? one(sp.in_startTime) : undefined} />
             </label>
+            <div className="space-y-1 sm:col-span-3">
+              <label htmlFor="moreTimes" className="block font-medium">
+                同じ設定で追加する時刻（任意）
+              </label>
+              <Input
+                id="moreTimes"
+                name="moreTimes"
+                placeholder="例：10:30、12:00、13:30"
+                aria-describedby="moreTimes-hint"
+                defaultValue={keptRule ? one(sp.in_moreTimes) : undefined}
+              />
+              {/* 説明はラベルの外に置く（「開始時刻」の欄の名前と紛れないように） */}
+              <p id="moreTimes-hint" className="text-xs text-slate-500">
+                1 日に何回もあるときは、ほかの時刻もここに入れると、同じ曜日・定員で一度に追加できます。
+              </p>
+            </div>
             <label className="space-y-1">
               <span className="block font-medium">定員（{unit}）</span>
-              <Input type="number" name="capacity" inputMode="numeric" min={1} defaultValue={10} required />
+              <Input
+                type="number"
+                name="capacity"
+                inputMode="numeric"
+                min={1}
+                defaultValue={keptRule ? one(sp.in_capacity) : 10}
+                required
+              />
             </label>
             <label className="space-y-1">
               <span className="block font-medium">開始日</span>
-              <Input type="date" name="validFrom" defaultValue={today} required />
+              <Input type="date" name="validFrom" defaultValue={keptRule ? one(sp.in_validFrom) : today} required />
             </label>
             <label className="space-y-1">
               <span className="block font-medium">終了日（任意）</span>
-              <Input type="date" name="validTo" />
+              <Input type="date" name="validTo" defaultValue={keptRule ? one(sp.in_validTo) : undefined} />
             </label>
             <fieldset className="space-y-1 sm:col-span-4">
               <legend className="font-medium">曜日</legend>
               <div className="flex flex-wrap gap-x-2">
                 {WEEKDAY_LABELS.map((w, i) => (
                   <label key={w} className={CHECK_LABEL}>
-                    <input type="checkbox" name="weekdays" value={i} defaultChecked className="size-4" /> {w}
+                    <input
+                      type="checkbox"
+                      name="weekdays"
+                      value={i}
+                      defaultChecked={keptWeekdays ? keptWeekdays.includes(String(i)) : true}
+                      className="size-4"
+                    />{' '}
+                    {w}
                   </label>
                 ))}
               </div>
             </fieldset>
             <div className="sm:col-span-4">
-              <SubmitButton pendingLabel="追加中…">ルールを追加</SubmitButton>
+              <SubmitButton pendingLabel="追加中…">毎週の回を追加</SubmitButton>
             </div>
           </form>
         </Panel>
 
         <Panel
-          title="例外（休業日・定員変更・臨時の回）"
-          description="台風などで終日休むときは、時刻を空欄にして「休止」を追加します。"
+          title="特定の日の変更（休み・定員変更・臨時の回）"
+          description="台風などで終日休むときは、時刻を空欄にして「休止」を追加します。休止にしても、入っている予約は取り消されません。"
         >
           <ul className="divide-y divide-slate-100 text-sm">
             {exceptions.map((e) => {
@@ -375,10 +496,10 @@ export async function ScheduleEditor({
                   </span>
                   <form action={actions.deleteException.bind(null, menu.id, e.id)}>
                     <ConfirmDialog
-                      triggerLabel="削除"
+                      triggerLabel="削除…"
                       tone={e.type === 'closed' ? 'default' : 'danger'}
-                      title="この例外を削除しますか？"
-                      confirmLabel="削除する"
+                      title="この日の変更を削除しますか？"
+                      confirmLabel="この日の変更を削除する"
                     >
                       <p>{EXCEPTION_DELETE_EFFECT[e.type]}</p>
                       {impact.overBooked > 0 && (
@@ -397,60 +518,77 @@ export async function ScheduleEditor({
                 </li>
               );
             })}
-            {exceptions.length === 0 && <li className="py-2 text-slate-500">今後の例外はありません</li>}
+            {exceptions.length === 0 && <li className="py-2 text-slate-500">今後の特定の日の変更はありません</li>}
           </ul>
           <form
             action={actions.addException.bind(null, menu.id)}
-            className="mt-3 grid gap-3 border-t border-slate-100 pt-4 text-sm sm:grid-cols-5"
+            className="mt-3 grid gap-3 border-t border-slate-100 pt-4 text-sm sm:grid-cols-4"
           >
-            <p className="font-semibold sm:col-span-5">例外を追加</p>
-            <label className="space-y-1">
-              <span className="block font-medium">日付</span>
-              <Input type="date" name="date" min={today} required />
-            </label>
-            <label className="space-y-1">
-              <span className="block font-medium">種類</span>
-              <select name="type" className={cn(SELECT_CLASS, 'w-full')} defaultValue="closed">
-                {Object.entries(EXCEPTION_LABELS).map(([v, l]) => (
-                  <option key={v} value={v}>
-                    {l}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="space-y-1">
-              <span className="block font-medium">時刻（空欄＝終日）</span>
-              <Input type="time" name="startTime" />
-            </label>
-            <label className="space-y-1">
-              <span className="block font-medium">定員（休止以外）</span>
-              <Input type="number" name="capacity" inputMode="numeric" min={0} />
-            </label>
-            <div className="self-end">
-              <SubmitButton pendingLabel="確認中…">例外を追加</SubmitButton>
+            <h3 className="font-semibold sm:col-span-4">特定の日の変更を追加</h3>
+            <ExceptionFields
+              today={today}
+              unit={unit}
+              initial={{
+                date: keptException ? one(sp.in_date) : '',
+                type: keptException ? one(sp.in_type) : 'closed',
+                startTime: keptException ? one(sp.in_startTime) : '',
+                capacity: keptException ? one(sp.in_capacity) : '',
+              }}
+            />
+            <div className="sm:col-span-4">
+              <SubmitButton pendingLabel="確認中…">特定の日の変更を追加</SubmitButton>
+              <p className="mt-1 text-xs text-slate-500">
+                予約の入っている回が休止になる場合は、追加する前に件数を表示して確認します。
+              </p>
             </div>
-            <p className="text-xs text-slate-500 sm:col-span-5">
-              予約の入っている回が休止になる場合は、追加する前に件数を表示して確認します。
-            </p>
           </form>
         </Panel>
 
-        <Panel title="今後 14 日の回">
-          <ul className="grid gap-2 text-sm sm:grid-cols-2">
+        <Panel
+          title="今後 14 日の回"
+          description={`時刻と「予約の人数／定員」です。${slotHref ? '回を押すと、その回の予約を見られます。' : ''}`}
+        >
+          <ul className="divide-y divide-slate-100 text-sm">
             {previewDates.map((d) => {
               const daySlots = previewSlots.filter((s) => s.date === d);
               return (
-                <li key={d} className="flex gap-2">
-                  <span className="w-28 shrink-0 text-slate-600">{label(d).replace(/^\d+年/, '')}</span>
-                  <span className="flex flex-wrap gap-x-3 gap-y-0.5">
-                    {daySlots.length === 0
-                      ? '—'
-                      : daySlots.map((s) => (
-                          <span key={s.id} className="whitespace-nowrap tabular-nums">
-                            {s.time}（{s.status === 'open' ? `定員 ${s.capacity}${unit}` : SLOT_STATUS_LABELS[s.status]}
-                            ）
+                <li key={d} className="grid gap-1 py-2 sm:grid-cols-[7.5rem_1fr] sm:items-baseline">
+                  <span className="text-slate-600">{label(d).replace(/^\d+年/, '')}</span>
+                  <span className="flex flex-wrap gap-1.5">
+                    {daySlots.length === 0 ? (
+                      <span className="text-slate-400">回はありません</span>
+                    ) : (
+                      daySlots.map((s) => {
+                        const open = s.status === 'open';
+                        const over = open && s.reservedCount > s.capacity;
+                        const text = open
+                          ? `${s.time} ${s.reservedCount}/${s.capacity}${unit}${over ? '（定員超過）' : s.reservedCount >= s.capacity ? '（満席）' : ''}`
+                          : `${s.time} ${SLOT_STATUS_LABELS[s.status]}`;
+                        const className = cn(
+                          'inline-flex min-h-8 items-center rounded-md px-2 whitespace-nowrap tabular-nums ring-1',
+                          !open
+                            ? 'bg-slate-100 text-slate-500 ring-slate-200'
+                            : over || s.reservedCount >= s.capacity
+                              ? 'bg-red-50 text-red-800 ring-red-200'
+                              : s.reservedCount > 0
+                                ? 'bg-sky-50 text-sky-900 ring-sky-200'
+                                : 'text-slate-700 ring-slate-200',
+                        );
+                        return slotHref ? (
+                          <Link
+                            key={s.id}
+                            href={slotHref(s.id)}
+                            className={cn(className, 'hover:bg-sky-100 pointer-coarse:min-h-11')}
+                          >
+                            {text}
+                          </Link>
+                        ) : (
+                          <span key={s.id} className={className}>
+                            {text}
                           </span>
-                        ))}
+                        );
+                      })
+                    )}
                   </span>
                 </li>
               );

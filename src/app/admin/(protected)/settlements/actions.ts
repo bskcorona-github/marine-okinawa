@@ -79,6 +79,48 @@ export async function confirmSettlementAction(id: string, formData: FormData) {
   });
 }
 
+/**
+ * その月の下書きをまとめて確定する。1 件ずつ、画面で見た金額・件数（seen:<id>）と比べてから確定し、
+ * 数字が変わっていた・確定できなかったものは下書きのまま残して件数を知らせる
+ */
+export async function confirmAllSettlementsAction(formData: FormData) {
+  const admin = await requireAdmin();
+  const period = String(formData.get('period') ?? '');
+  if (!isMonthString(period)) redirect('/admin/settlements?error=INVALID_PERIOD');
+  const ids = formData.getAll('id').filter((id): id is string => isUuid(id));
+  let confirmed = 0;
+  let skipped = 0;
+  for (const id of ids) {
+    const [payoutAmount, itemCount, adjustmentCount] = String(formData.get(`seen:${id}`) ?? '').split(':');
+    const seen = seenSchema.safeParse({ payoutAmount, itemCount, adjustmentCount });
+    if (!seen.success) {
+      skipped++;
+      continue;
+    }
+    try {
+      const { result } = await confirmSettlement(db, {
+        shopId: admin.shopId,
+        id,
+        actorId: admin.userId,
+        now: new Date(),
+        seen: seen.data,
+      });
+      if (result === 'confirmed') confirmed++;
+      else skipped++;
+    } catch (error) {
+      // 下書きでなくなった・明細がないなど：その精算は確定せず、残りを続ける
+      if (error instanceof SettlementError) {
+        skipped++;
+        continue;
+      }
+      throw error;
+    }
+  }
+  revalidatePath('/admin', 'layout');
+  revalidatePath('/partner', 'layout');
+  redirect(`/admin/settlements?period=${period}&confirmedAll=${confirmed}&skipped=${skipped}`);
+}
+
 /** 確定を取り消す（理由を記録に残す。事業者画面から明細が消えるため） */
 export async function unconfirmSettlementAction(id: string, formData: FormData) {
   const reason = String(formData.get('reason') ?? '')

@@ -90,10 +90,10 @@ describe('照会（受入確認）', () => {
       partySize: 2,
       participantAges: '40歳、8歳',
       customerNote: '子供が泳げません',
+      contactName: '沖縄 太郎',
+      contactPhone: '+819012345678',
+      contactEmail: 'taro@example.com',
     });
-    // 照会の段階では、お客様の連絡先を事業者に渡さない
-    expect(Object.keys(forA)).not.toContain('contactPhone');
-    expect(Object.keys(forA)).not.toContain('contactEmail');
 
     // 他社の照会には回答できない・見えない
     const forB = (await listOperatorRequests(db, { operatorId: b.id }))[0];
@@ -261,8 +261,14 @@ describe('照会（受入確認）', () => {
         ]),
       );
     expect(await statuses()).toEqual({ アクアマリン: 'accepted', ココマリン: 'withdrawn' });
-    // 取り下げた照会には回答できない
+    // 取り下げた照会には回答できない。連絡先も出さない
     const [forB] = await listOperatorRequests(db, { operatorId: b.id });
+    expect(forB).toMatchObject({
+      status: 'withdrawn',
+      contactName: null,
+      contactPhone: null,
+      contactEmail: null,
+    });
     await expect(
       respondToRequest(db, {
         operatorId: b.id,
@@ -298,19 +304,25 @@ describe('照会（受入確認）', () => {
 describe('事業者の予約と催行報告', () => {
   beforeEach(() => resetDb(db));
 
-  it('自社に割り当てられた確定予約だけが見え、連絡先は氏名と電話だけ', async () => {
+  it('自社に割り当てられた支払待ち以降の予約が見え、代表者の氏名・電話・メールが出る', async () => {
     const { a, b, bookingId, change } = await setup();
     await db.update(bookings).set({ operatorId: a.id }).where(eq(bookings.id, bookingId));
     expect(await getOperatorBooking(db, { operatorId: a.id, bookingId, now: NOW })).toBeNull();
     await change('awaiting_payment');
+    expect(await getOperatorBooking(db, { operatorId: a.id, bookingId, now: NOW })).toMatchObject({
+      status: 'awaiting_payment',
+      contactName: '沖縄 太郎',
+      contactPhone: '+819012345678',
+      contactEmail: 'taro@example.com',
+    });
     await change('confirmed', { payment: { amount: 10000, receivedAt: NOW } });
     const booking = await getOperatorBooking(db, { operatorId: a.id, bookingId, now: NOW });
     expect(booking).toMatchObject({
       contactName: '沖縄 太郎',
       contactPhone: '+819012345678',
+      contactEmail: 'taro@example.com',
       items: [{ label: '大人', quantity: 2 }],
     });
-    expect(Object.keys(booking!)).not.toContain('contactEmail');
     expect(Object.keys(booking!)).not.toContain('adminNote');
     expect(await getOperatorBooking(db, { operatorId: b.id, bookingId, now: NOW })).toBeNull();
     expect(await listOperatorBookings(db, { operatorId: b.id, now: NOW })).toEqual([]);
@@ -322,6 +334,7 @@ describe('事業者の予約と催行報告', () => {
       status: 'cancelled',
       contactName: null,
       contactPhone: null,
+      contactEmail: null,
     });
   });
 
@@ -563,32 +576,28 @@ describe('事業者アカウント・資料・登録申請・更新申請', () =
       actorId: null,
     });
     if (!submitted.ok) throw new Error(submitted.error);
+    const review = {
+      shopId: shop.id,
+      operatorId: a.id,
+      requestId: submitted.requestId,
+      note: '',
+      actorId: null,
+      now: NOW,
+    };
+    // 電話番号が変わる申請は、折り返して確かめた印がないと反映しない。ほかの事業者の画面からは扱えない
+    expect(await reviewChangeRequest(db, { ...review, approve: true, verifiedByPhone: false })).toBe('unverified');
     expect(
-      await reviewChangeRequest(db, {
-        shopId: shop.id,
-        requestId: submitted.requestId,
-        approve: true,
-        note: '',
-        actorId: null,
-        now: NOW,
-      }),
-    ).toBe('ok');
+      await reviewChangeRequest(db, { ...review, operatorId: randomUUID(), approve: true, verifiedByPhone: true }),
+    ).toBe('done');
+    expect(await getOperatorProfile(db, a.id)).toMatchObject({ phone: current.phone });
+    expect(await reviewChangeRequest(db, { ...review, approve: true, verifiedByPhone: true })).toBe('ok');
     expect(await getOperatorProfile(db, a.id)).toMatchObject({ phone: '098-999-0000', contactHours: '8:00〜17:00' });
     // 履歴には変わった項目の前後だけ（口座などの値は残さない）
     const [log] = await db.select().from(auditLogs).where(eq(auditLogs.action, 'operator.change_approve'));
     expect(log.before).toMatchObject({ phone: expect.any(String) });
     expect(log.after).toMatchObject({ phone: '098-999-0000', requestId: submitted.requestId });
     // 反映済みの申請はもう一度処理できない
-    expect(
-      await reviewChangeRequest(db, {
-        shopId: shop.id,
-        requestId: submitted.requestId,
-        approve: true,
-        note: '',
-        actorId: null,
-        now: NOW,
-      }),
-    ).toBe('done');
+    expect(await reviewChangeRequest(db, { ...review, approve: true, verifiedByPhone: true })).toBe('done');
     expect((await db.select().from(menus)).length).toBeGreaterThan(0);
   });
 });

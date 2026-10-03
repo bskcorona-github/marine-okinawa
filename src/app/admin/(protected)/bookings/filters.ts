@@ -41,11 +41,14 @@ export function parseBookingFilters(get: (key: string) => unknown): BookingFilte
   const operator = one('operator');
   const payment = one('payment');
   const sort = one('sort');
-  const validDate = isDateString(date) ? date : null;
+  // 「まで」だけ入れたときはその 1 日、前後が逆のときは入れ替える（入れた条件を黙って捨てない）
+  const dates = [date, to].filter(isDateString).sort();
+  const from = dates[0] ?? null;
+  const until = dates[1] && dates[1] !== from ? dates[1] : null;
   return {
     query: one('q') ?? '',
-    date: validDate,
-    dateTo: validDate && isDateString(to) && to >= validDate ? to : null,
+    date: from,
+    dateTo: until,
     status: isStatusFilter(status) ? status : null,
     menuId: isUuid(menu) ? menu : null,
     operatorId: isUuid(operator) ? operator : null,

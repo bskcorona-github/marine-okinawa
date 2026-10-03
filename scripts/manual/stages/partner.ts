@@ -141,6 +141,7 @@ export async function partnerFirstLogin(browser: Browser) {
     .first();
   await capture(page, 'partner-first-login', 2, { marks: [qr.locator('xpath=..')], focus: qr });
   account.secret = (await secret.textContent())!.trim();
+  await page.getByLabel('バックアップコードを控えました').check();
   const code = page.getByLabel('認証アプリの 6 桁のコード');
   const { generate } = await import('otplib');
   await code.fill(await generate({ secret: account.secret }));
@@ -184,7 +185,7 @@ export async function partnerPlan(browser: Browser) {
   const title = 'サンセット SUP 体験（宜野湾マリーナ発）';
   await page.getByLabel(/^プラン名/).fill(title);
   // サイトのアクティビティの分類に SUP はまだないので空のまま。カテゴリは SUP
-  await page.getByLabel('カテゴリ').selectOption('sup');
+  await page.getByLabel('種類（一覧のアイコン・色）').selectOption('sup');
   await page.getByLabel(/^所要時間/).fill('90');
   await page.getByLabel(/^対象年齢/).fill('6');
   await page.getByLabel(/^1 予約の最大人数/).fill('8');
@@ -211,10 +212,10 @@ export async function partnerPlan(browser: Browser) {
   await page.waitForURL(/\/partner\/plans\/[0-9a-f-]{36}\/schedule/);
   const planUrl = page.url().replace(/\/schedule.*$/, '');
   saveState({ planTitle: title });
-  const ruleForm = page.getByText('ルールを追加', { exact: true }).locator('xpath=ancestor::form[1]');
+  const ruleForm = page.getByText('毎週の回を追加', { exact: true }).first().locator('xpath=ancestor::form[1]');
   await ruleForm.locator('input[name="startTime"]').fill('16:30');
   await ruleForm.locator('input[name="capacity"]').fill('8');
-  const addRule = ruleForm.getByRole('button', { name: 'ルールを追加' });
+  const addRule = ruleForm.getByRole('button', { name: '毎週の回を追加' });
   await capture(page, 'partner-plan', 5, { marks: [ruleForm], focus: ruleForm.locator('input[name="startTime"]') });
   await addRule.click();
   await page.getByText('保存し、今後 180 日分の回に反映しました。').waitFor();

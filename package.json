@@ -18,6 +18,8 @@
     "seed": "tsx --import ./scripts/load-env.ts scripts/seed.ts",
     "auth:generate": "npx @better-auth/cli@latest generate --config src/lib/auth.ts --output .tmp/auth-schema.ts --yes",
     "seed:sample": "tsx --import ./scripts/load-env.ts scripts/seed-sample.ts",
+    "seed:demo": "tsx --import ./scripts/load-env.ts scripts/seed-demo.ts",
+    "clear:demo": "tsx --import ./scripts/load-env.ts scripts/clear-demo.ts",
     "import:ginowan": "tsx --import ./scripts/load-env.ts scripts/import-ginowan.ts",
     "format": "prettier --write .",
     "format:check": "prettier --check ."

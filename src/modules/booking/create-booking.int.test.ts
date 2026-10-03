@@ -63,7 +63,7 @@ describe('createBooking', () => {
     const ctx = await setup();
     const result = await createBooking(
       db,
-      webInput(ctx, { request: { secondChoice: ' 10/2 の午前 ', customerNote: '', participantAges: null } }),
+      webInput(ctx, { request: { customerNote: ' 子供は泳げません ', participantAges: null } }),
     );
 
     const [booking] = await db.select().from(bookings).where(eq(bookings.id, result.bookingId));
@@ -72,8 +72,8 @@ describe('createBooking', () => {
       bookingNo: result.bookingNo,
       status: 'requested',
       paymentMethod: 'online',
-      secondChoice: '10/2 の午前',
-      customerNote: null,
+      secondChoice: null,
+      customerNote: '子供は泳げません',
       consentedAt: NOW,
       source: 'web',
       partySize: 3,

@@ -32,7 +32,7 @@ async function setup(email: string | null, profile: Record<string, string> = {})
     source: 'web',
     items: [{ priceId: adult.id, quantity: 2 }],
     contact: { name: '沖縄 太郎', email: email ?? 'none@example.com', phone: '090-1234-5678' },
-    request: { secondChoice: '10/2 午前', customerNote: '子供は泳げません' },
+    request: { customerNote: '子供は泳げません' },
     locale: 'ja',
     consented: true,
     now: NOW,
@@ -75,8 +75,7 @@ describe('sendBookingMail', () => {
     );
     const html = await render(mail.react);
     expect(html).toContain('まだご予約は確定していません');
-    // 第 2 希望・ご連絡事項は載せない（確かめていないアドレスへ、入力された文を組合の名前で送らないように）
-    expect(html).not.toContain('10/2 午前');
+    // ご連絡事項は載せない（確かめていないアドレスへ、入力された文を組合の名前で送らないように）
     expect(html).not.toContain('子供は泳げません');
     expect(html).toContain('お支払総額');
     expect(html).toContain(`${APP_URL}/ja/bookings/${booking.accessToken}`);

@@ -41,12 +41,12 @@ const SOCIAL_EVENT_LABELS = Object.fromEntries(
 
 export const AUTH_EVENT_LABELS: Record<AuthEventName, string> = {
   'sign_in.success': 'ログイン',
-  'sign_in.password_ok': 'パスワードを確認（2 段階認証へ）',
+  'sign_in.password_ok': 'パスワードを確認（2 要素認証へ）',
   'sign_in.failed': 'ログインの失敗',
   sign_out: 'ログアウト',
-  'two_factor.enabled': '2 段階認証を設定',
-  'two_factor.verified': '2 段階認証でログイン',
-  'two_factor.failed': '2 段階認証の失敗',
+  'two_factor.enabled': '2 要素認証を設定',
+  'two_factor.verified': '2 要素認証でログイン',
+  'two_factor.failed': '2 要素認証の失敗',
   'backup_code.used': 'バックアップコードでログイン',
   'password.changed': 'パスワードを変更',
   'password.reset': 'リンクからパスワードを決めた',

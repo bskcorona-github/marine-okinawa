@@ -7,6 +7,7 @@ import { sendQuietly } from '@/modules/notification/send-quietly';
 import { createInquiry, inquiryInputSchema, sendInquiryMails } from '@/modules/content/inquiries';
 import { clientIp, consumeRateLimit } from '@/modules/security/rate-limit';
 import { getCurrentShop } from '@/modules/shop/shops';
+import { isFeatureOn } from '@/modules/shop/features';
 
 /** 同じ IP からのお問い合わせは 10 分間に 3 件まで、同じメールアドレスは 1 時間に 3 件まで（迷惑な連投の対策） */
 const INQUIRY_RATE_LIMIT = { limit: 3, windowSec: 600 };
@@ -14,11 +15,16 @@ const INQUIRY_EMAIL_LIMIT = { limit: 3, windowSec: 3600 };
 /** IP が取れない環境では、全体で 10 分間に 30 件まで */
 const INQUIRY_UNKNOWN_IP_LIMIT = { limit: 30, windowSec: 600 };
 
-export type ContactState = { error: 'INVALID_INPUT' | 'AGREEMENT_REQUIRED' | 'RATE_LIMITED' | null; done?: boolean };
+export type ContactState = {
+  error: 'INVALID_INPUT' | 'AGREEMENT_REQUIRED' | 'RATE_LIMITED' | 'PAUSED' | null;
+  done?: boolean;
+};
 
 export async function submitInquiry(_prev: ContactState, formData: FormData): Promise<ContactState> {
   // 人には見えない欄に入力があれば、機械的な送信とみなして受け付けたふりをする
   if (String(formData.get('website') ?? '').trim()) return { error: null, done: true };
+  // 「機能の切り替え」で止めているあいだは受け付けない
+  if (!(await isFeatureOn(db, (await getCurrentShop(db)).id, 'site.contact_form'))) return { error: 'PAUSED' };
   const parsed = inquiryInputSchema.safeParse({
     kind: formData.get('kind'),
     name: formData.get('name') ?? '',

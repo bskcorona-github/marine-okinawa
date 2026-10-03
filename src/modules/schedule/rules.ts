@@ -354,6 +354,17 @@ export async function previewRuleCapacityChange(
   return closingBooked(ctx, rules, ctx.exceptions);
 }
 
+/** すべてのルールの定員をまとめて変えたときの影響（定員が予約済みの人数を下回る回）。保存前の確認用 */
+export async function previewAllRuleCapacityChange(
+  db: Db,
+  params: { shopId: string; menuId: string; capacity: number; now: Date },
+): Promise<ScheduleImpact> {
+  const menu = await findMenu(db, params.shopId, params.menuId);
+  const ctx = await loadScheduleContext(db, { ...params, timezone: menu.timezone });
+  const rules = ctx.rules.map((r) => ({ ...r, capacity: params.capacity }));
+  return closingBooked(ctx, rules, ctx.exceptions);
+}
+
 /** ルールを追加したときの影響（同じ時刻の定員が変わって定員超過になる回など）。保存前の確認用 */
 export async function previewRuleAddition(
   db: Db,

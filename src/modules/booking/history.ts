@@ -10,6 +10,7 @@ export const BOOKING_HISTORY_ACTIONS = {
   'booking.receipt_add': '追加の入金を記録',
   'booking.assign_operator': '実施事業者を変更',
   'booking.resend_mail': 'メールを送り直し',
+  'booking.issue_customer_link': '予約確認ページのリンクを発行',
   'booking.admin_note': '組合メモを更新',
   'booking.withdraw_operator_request': '受入確認を取り下げ',
   'payment.checkout_create': 'カードの支払いのページを作成',

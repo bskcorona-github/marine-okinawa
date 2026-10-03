@@ -19,15 +19,25 @@ const STATUS_TONE = {
   rejected: 'bg-slate-200 text-slate-700',
 } as const;
 
+/** 対応が必要な申請（未確認・確認中） */
+const isOpen = (status: string) => status === 'new' || status === 'reviewing';
+
 export default async function ApplicationsPage({ searchParams }: PageProps<'/admin/operators/applications'>) {
   const admin = await requireAdmin();
   const sp = await searchParams;
   const shop = await getShopById(db, admin.shopId);
-  const status = isOwnKey(APPLICATION_STATUS_LABELS, sp.status) ? sp.status : null;
-  const applications = await listApplications(db, { shopId: admin.shopId, status });
+  // 最初は「対応が必要」（未確認・確認中）だけを出す。件数を出すため、絞り込みは画面で行う
+  const status = isOwnKey(APPLICATION_STATUS_LABELS, sp.status) ? sp.status : sp.status === 'all' ? 'all' : 'open';
+  const all = await listApplications(db, { shopId: admin.shopId, status: null });
+  const applications = all.filter((a) =>
+    status === 'all' ? true : status === 'open' ? isOpen(a.status) : a.status === status,
+  );
+  const countOf = (value: string) =>
+    all.filter((a) => (value === 'open' ? isOpen(a.status) : a.status === value)).length;
   const tabs = [
-    { value: null, label: 'すべて' },
-    ...Object.entries(APPLICATION_STATUS_LABELS).map(([value, label]) => ({ value, label })),
+    { value: 'open', label: '対応が必要', count: countOf('open') },
+    ...Object.entries(APPLICATION_STATUS_LABELS).map(([value, label]) => ({ value, label, count: countOf(value) })),
+    { value: 'all', label: 'すべて', count: all.length },
   ];
 
   return (
@@ -39,11 +49,14 @@ export default async function ApplicationsPage({ searchParams }: PageProps<'/adm
       />
       <TabLinks
         label="状態で絞り込む"
-        current={status ?? 'all'}
+        current={status}
         tabs={tabs.map((tab) => ({
-          value: tab.value ?? 'all',
-          label: tab.label,
-          href: tab.value ? `/admin/operators/applications?status=${tab.value}` : '/admin/operators/applications',
+          value: tab.value,
+          label: `${tab.label}（${tab.count}）`,
+          href:
+            tab.value === 'open'
+              ? '/admin/operators/applications'
+              : `/admin/operators/applications?status=${tab.value}`,
         }))}
       />
       <ul className="divide-y divide-slate-100 rounded-xl border border-slate-200 bg-white shadow-sm">
@@ -67,7 +80,11 @@ export default async function ApplicationsPage({ searchParams }: PageProps<'/adm
             </Link>
           </li>
         ))}
-        {applications.length === 0 && <li className="p-4 text-sm text-slate-600">申請はありません。</li>}
+        {applications.length === 0 && (
+          <li className="p-4 text-sm text-slate-600">
+            {status === 'open' ? '対応が必要な申請はありません。' : 'この状態の申請はありません。'}
+          </li>
+        )}
       </ul>
     </div>
   );

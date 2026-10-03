@@ -56,7 +56,7 @@ export default async function PartnerBookingsPage({ searchParams }: PageProps<'/
     <div className="max-w-3xl space-y-4">
       <PageHeader
         title="予約・催行報告"
-        description="自社で実施する、予約確定した予約です。当日が終わったら、予約ごとに催行報告をしてください。"
+        description="自社で実施する予約です（支払待ち以降）。当日が終わったら、予約ごとに催行報告をしてください。"
       />
       {awaiting.length > 0 && (
         <section aria-labelledby="awaiting-title" className="space-y-2">

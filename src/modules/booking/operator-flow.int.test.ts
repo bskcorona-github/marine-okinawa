@@ -410,6 +410,32 @@ describe('回の一括の天候中止', () => {
       .where(and(eq(bookingOperatorRequests.bookingId, bookingId), eq(bookingOperatorRequests.status, 'pending')));
     expect(requests).toHaveLength(0);
   });
+
+  it('終わった日の回は中止にしない（予約・回はそのまま）', async () => {
+    const { shop, a, slot, bookingId, request, respond, change } = await setup();
+    await request([a.id]);
+    await respond(a.id, 'accepted');
+    await change('awaiting_payment');
+    await change('confirmed', { payment: { amount: 10000, receivedAt: NOW } });
+
+    // 回は JST 10月1日 10:00。翌日（JST 10月2日 09:00）には止める
+    await expect(
+      weatherCancelSlot(db, { shopId: shop.id, slotId: slot.id, actorId: null, now: new Date('2026-10-02T00:00:00Z') }),
+    ).rejects.toMatchObject({ code: 'SLOT_DAY_PASSED' });
+    const [s] = await db.select().from(slots).where(eq(slots.id, slot.id));
+    expect(s.status).toBe('open');
+    const [booking] = await db.select().from(bookings).where(eq(bookings.id, bookingId));
+    expect(booking.status).toBe('confirmed');
+
+    // 当日（JST 10月1日 18:00）なら、開始後でも中止できる
+    const result = await weatherCancelSlot(db, {
+      shopId: shop.id,
+      slotId: slot.id,
+      actorId: null,
+      now: new Date('2026-10-01T09:00:00Z'),
+    });
+    expect(result.bookings.map((r) => r.to)).toEqual(['weather_cancelled']);
+  });
 });
 
 describe('支払案内のあとの変更と、確定の前の確認', () => {

@@ -3,6 +3,7 @@ import type { Db } from '@/db/client';
 import { bookings, payments, shops, slots } from '@/db/schema';
 import { writeAuditLog } from '@/modules/audit/log';
 import { lockSlot } from '@/modules/inventory/reserve';
+import { isPastSlotDay } from '@/modules/schedule/slot-day';
 import { resolveSettings, type ShopSettings } from '@/modules/shop/settings';
 import { feeSettingsFor, suggestedRefund } from './cancellation-fee';
 import { changeBookingStatus, type ChangeStatusResult } from './change-status';
@@ -75,6 +76,8 @@ export async function weatherCancelSlot(
       .where(eq(shops.id, input.shopId));
     const settings = resolveSettings(shop.settings);
     if (slot.status === 'weather_cancelled') throw new BookingError('INVALID_TRANSITION');
+    // 終わった日の回は中止にしない（実績・精算の記録とずれないように。当日の回は中止できる）
+    if (isPastSlotDay(slot.startsAt, input.now, shop.timezone)) throw new BookingError('SLOT_DAY_PASSED');
 
     await tx.update(slots).set({ status: 'weather_cancelled' }).where(eq(slots.id, slot.id));
     await writeAuditLog(tx, {

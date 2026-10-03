@@ -27,7 +27,7 @@ export default async function EditSitePage({ params, searchParams }: PageProps<'
             rel="noreferrer"
             className={buttonVariants({ variant: 'outline', size: 'sm' })}
           >
-            公開ページ ↗
+            公開ページを見る ↗<span className="sr-only">（新しいタブで開きます）</span>
           </a>
         }
       />

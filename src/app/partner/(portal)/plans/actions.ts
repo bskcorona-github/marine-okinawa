@@ -28,12 +28,14 @@ import {
   runAddRule,
   runDeleteException,
   runDeleteRule,
+  runUpdateAllRuleCapacity,
   runUpdateRuleCapacity,
   type ScheduleActionContext,
 } from '@/modules/schedule/schedule-actions';
 import { consumeRateLimit } from '@/modules/security/rate-limit';
 import { getFileStore } from '@/modules/storage/store';
 import { readUpload } from '@/modules/storage/upload';
+import { isFeatureOn } from '@/modules/shop/features';
 
 const planPage = (menuId: string, query = '') => `/partner/plans/${menuId}${query ? `?${query}` : ''}`;
 
@@ -65,8 +67,15 @@ async function notifyReview(menuId: string, kind: 'publish' | 'revision') {
 }
 
 /** 新しいプランを作る（下書き）。作ったら開催時間の登録へ進む */
+/** 「機能の切り替え」で、事業者によるプランの登録・変更を止めているか */
+async function planEditPaused(shopId: string): Promise<boolean> {
+  return !(await isFeatureOn(db, shopId, 'partner.plan_edit'));
+}
+const PLAN_EDIT_PAUSED = 'ただいま、プランの登録・変更を止めています。組合へお問い合わせください';
+
 export async function createPlanAction(_prev: AdminFormState, formData: FormData): Promise<AdminFormState> {
   const operator = await requireOperator();
+  if (await planEditPaused(operator.shopId)) return { error: PLAN_EDIT_PAUSED };
   // URL 名・公開状態・掲載元はサーバーで決める（フォームの値は使わない）
   const parsed = parseMenuForm(formData, {
     slug: 'draft',
@@ -97,6 +106,7 @@ export async function savePlanAction(
 ): Promise<AdminFormState> {
   const operator = await requireOperator();
   if (!isUuid(menuId)) redirect('/partner/plans');
+  if (await planEditPaused(operator.shopId)) return { error: PLAN_EDIT_PAUSED };
   const parsed = parseMenuForm(formData, {
     slug: 'draft',
     status: 'draft',
@@ -132,6 +142,7 @@ async function planCommand(
 ) {
   const operator = await requireOperator();
   if (!isUuid(menuId)) redirect('/partner/plans');
+  if (await planEditPaused(operator.shopId)) redirect(planPage(menuId, 'error=PAUSED'));
   try {
     await run({ shopId: operator.shopId, operatorId: operator.operatorId, menuId, actorId: operator.userId });
   } catch (error) {
@@ -175,6 +186,7 @@ const PLAN_IMAGE_RATE_LIMIT = { limit: 100, windowSec: 24 * 60 * 60 };
 /** プランの写真のアップロード（事業者）。保存した写真の URL を返し、フォームの写真の欄に入れる */
 export async function uploadPlanImageAction(formData: FormData): Promise<UploadImageResult> {
   const operator = await requireOperator();
+  if (await planEditPaused(operator.shopId)) return { ok: false, error: PLAN_EDIT_PAUSED };
   if (!(await consumeRateLimit(db, { key: `plan-image:${operator.operatorId}`, ...PLAN_IMAGE_RATE_LIMIT }))) {
     return { ok: false, error: '今日アップロードできる写真の数を超えました。明日もう一度お試しください。' };
   }
@@ -194,6 +206,7 @@ export async function uploadPlanImageAction(formData: FormData): Promise<UploadI
 async function scheduleContext(menuId: string, ...ids: string[]): Promise<ScheduleActionContext> {
   const operator = await requireOperator();
   if (![menuId, ...ids].every(isUuid)) redirect('/partner/plans');
+  if (await planEditPaused(operator.shopId)) redirect(planPage(menuId, 'error=PAUSED'));
   const owned = await isOperatorPlan(db, { shopId: operator.shopId, operatorId: operator.operatorId, menuId });
   if (!owned) redirect('/partner/plans');
   return {
@@ -215,6 +228,11 @@ export async function addRuleAction(menuId: string, formData: FormData) {
 
 export async function updateRuleCapacityAction(menuId: string, ruleId: string, formData: FormData) {
   done(await runUpdateRuleCapacity(await scheduleContext(menuId, ruleId), menuId, ruleId, formData));
+}
+
+/** すべての毎週の回の定員をまとめて変える（自社が掲載元のプランだけ。確かめ方は 1 つずつ変えるときと同じ） */
+export async function updateAllRuleCapacityAction(menuId: string, formData: FormData) {
+  done(await runUpdateAllRuleCapacity(await scheduleContext(menuId), menuId, formData));
 }
 
 export async function deleteRuleAction(menuId: string, ruleId: string) {

@@ -3,9 +3,24 @@ import type { Db, DbOrTx } from '@/db/client';
 import { scheduleExceptions, shops, slots } from '@/db/schema';
 import { localDate, localTime } from '@/lib/dates';
 import { writeAuditLog } from '@/modules/audit/log';
+import { isPastSlotDay } from './slot-day';
 import { syncSlots } from './sync-slots';
 
-type Ctx = { shopId: string; actorId: string | null };
+/** now：終わった日の回かを判定する時刻（省くと今） */
+type Ctx = { shopId: string; actorId: string | null; now?: Date };
+
+/** 回の日と、ショップのタイムゾーン（終わった日の回かを判定するため） */
+async function slotDayOf(db: DbOrTx, ctx: Ctx, slotId: string) {
+  const [row] = await db
+    .select({ menuId: slots.menuId, startsAt: slots.startsAt, timezone: shops.timezone })
+    .from(slots)
+    .innerJoin(shops, eq(shops.id, slots.shopId))
+    .where(and(eq(slots.id, slotId), eq(slots.shopId, ctx.shopId)));
+  if (!row) throw new SlotOverrideError('NOT_FOUND');
+  // 終わった日の回は、定員・休止を変えない（実績・集計の記録とずれないように）
+  if (isPastSlotDay(row.startsAt, ctx.now ?? new Date(), row.timezone)) throw new SlotOverrideError('DAY_PASSED');
+  return row;
+}
 
 /**
  * 回単位の定員変更・休止。ルールで上書きされないよう例外（schedule_exceptions）として保存し、
@@ -62,7 +77,8 @@ async function replaceSlotException(
 }
 
 export class SlotOverrideError extends Error {
-  constructor(readonly code: 'BELOW_RESERVED' | 'NOT_OPEN' | 'STILL_CLOSED' | 'NOT_FOUND') {
+  /** DAY_PASSED：終わった日（今日より前）の回 */
+  constructor(readonly code: 'BELOW_RESERVED' | 'NOT_OPEN' | 'STILL_CLOSED' | 'NOT_FOUND' | 'DAY_PASSED') {
     super(code);
     this.name = 'SlotOverrideError';
   }
@@ -75,11 +91,7 @@ export class SlotOverrideError extends Error {
 export async function overrideSlotCapacity(db: Db, ctx: Ctx, slotId: string, capacity: number): Promise<void> {
   if (!Number.isInteger(capacity) || capacity < 0) throw new Error('invalid capacity');
   await db.transaction(async (tx) => {
-    const [target] = await tx
-      .select({ menuId: slots.menuId })
-      .from(slots)
-      .where(and(eq(slots.id, slotId), eq(slots.shopId, ctx.shopId)));
-    if (!target) throw new SlotOverrideError('NOT_FOUND');
+    const target = await slotDayOf(tx, ctx, slotId);
     await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${`sync-slots:${target.menuId}`}))`);
     const [slot] = await tx
       .select({ status: slots.status, reservedCount: slots.reservedCount })
@@ -96,11 +108,7 @@ export async function overrideSlotCapacity(db: Db, ctx: Ctx, slotId: string, cap
 /** 回の休止。回の状態を確かめ、例外の保存と再同期を 1 つのトランザクションで行う */
 export async function closeSlot(db: Db, ctx: Ctx, slotId: string): Promise<void> {
   await db.transaction(async (tx) => {
-    const [target] = await tx
-      .select({ menuId: slots.menuId })
-      .from(slots)
-      .where(and(eq(slots.id, slotId), eq(slots.shopId, ctx.shopId)));
-    if (!target) throw new SlotOverrideError('NOT_FOUND');
+    const target = await slotDayOf(tx, ctx, slotId);
     await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${`sync-slots:${target.menuId}`}))`);
     const [slot] = await tx.select({ status: slots.status }).from(slots).where(eq(slots.id, slotId)).for('update');
     if (!slot) throw new SlotOverrideError('NOT_FOUND');
@@ -122,6 +130,9 @@ export async function reopenSlot(db: Db, ctx: Ctx, slotId: string): Promise<void
       .innerJoin(shops, eq(shops.id, slots.shopId))
       .where(and(eq(slots.id, slotId), eq(slots.shopId, ctx.shopId)));
     if (!row) throw new SlotOverrideError('NOT_FOUND');
+    if (isPastSlotDay(row.slot.startsAt, ctx.now ?? new Date(), row.timezone)) {
+      throw new SlotOverrideError('DAY_PASSED');
+    }
     if (row.slot.status !== 'closed') throw new SlotOverrideError('NOT_OPEN');
 
     const date = localDate(row.slot.startsAt, row.timezone);

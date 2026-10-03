@@ -32,7 +32,8 @@ export const BOOKING_TRANSITION_LABELS = {
   completed: '催行済みにする',
   verified: '実績を確認済みにする',
   settled: '精算済みにする',
-  cancelled: '取り消す',
+  // 「取り消す」だけだと、ダイアログを閉じる意味にも読めるので目的語をつける
+  cancelled: '予約を取り消す',
   weather_cancelled: '天候中止にする',
   no_show: '無断キャンセルにする',
 } as const satisfies Partial<Record<BookingStatus, string>>;
@@ -69,7 +70,8 @@ export const MENU_STATUS_LABELS = {
   draft: '下書き',
   published: '公開中',
   paused: '受付停止',
-  archived: 'アーカイブ',
+  // 「アーカイブ」は職員に分かりにくいため、事業者画面の言い方（掲載を終える）にそろえる
+  archived: '掲載終了',
 } as const;
 
 export const MENU_CATEGORY_LABELS = {
@@ -138,6 +140,7 @@ export const BOOKING_ERROR_LABELS: Record<BookingErrorCode | 'INVALID_INPUT', st
   REFUND_PENDING:
     'カードへの返金を Stripe へ送りましたが、結果がまだ分かりません。少し待ってから「Stripe に確かめる」を押してください（同じ返金は 2 回送りません）',
   INVALID_DATE: '日付が正しくありません（今日より後の日付は入れられません）',
+  SLOT_DAY_PASSED: '終わった日の回のため、この操作はできません',
 };
 
 export const WEEKDAY_LABELS = ['日', '月', '火', '水', '木', '金', '土'] as const;

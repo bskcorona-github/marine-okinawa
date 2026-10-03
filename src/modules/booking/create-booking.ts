@@ -54,7 +54,7 @@ export function extraGuestsOf(
   return { count, amount: count * menu.extraGuestPrice };
 }
 
-/** 申込の自由入力（第 2 希望・備考・年齢）。空欄は null にする */
+/** 申込の自由入力（備考・年齢）。空欄は null にする */
 const textOrNull = (value: string | null | undefined) => value?.trim() || null;
 
 export type CreateBookingInput = {
@@ -68,8 +68,8 @@ export type CreateBookingInput = {
   overCapacityReason?: string | null;
   /** 乗船人数（定員を艇で数える貸切プランだけ。Web 予約では必須） */
   guestCount?: number | null;
-  /** 第 2 希望の日時・備考・参加者の年齢（年齢の確認が必要なプランの Web 申込では年齢が必須） */
-  request?: { secondChoice?: string | null; customerNote?: string | null; participantAges?: string | null };
+  /** 備考・参加者の年齢（年齢の確認が必要なプランの Web 申込では年齢が必須） */
+  request?: { customerNote?: string | null; participantAges?: string | null };
   /** 参加条件・キャンセル規定・個人情報の取扱いへの同意（Web 申込では必須。同意日時は now） */
   consented?: boolean;
   /** 手動予約の最初の状態（既定は仮受付）と支払方法（既定は組合への事前払い） */
@@ -114,7 +114,6 @@ export async function createBooking(db: Db, input: CreateBookingInput): Promise<
   const overCapacityReason = isWeb ? null : input.overCapacityReason?.trim() || null;
   const status: InitialStatus = isWeb ? 'requested' : (input.initialStatus ?? 'requested');
   const paymentMethod = isWeb ? 'online' : (input.paymentMethod ?? 'online');
-  const secondChoice = textOrNull(input.request?.secondChoice);
   const customerNote = textOrNull(input.request?.customerNote);
   const participantAges = textOrNull(input.request?.participantAges);
 
@@ -252,7 +251,7 @@ export async function createBooking(db: Db, input: CreateBookingInput): Promise<
         createdBy: input.actorId ?? null,
         operatorId: assignedOperatorId,
         operatorAssignedVia: assignedVia,
-        secondChoice,
+        secondChoice: null,
         customerNote,
         participantAges,
         consentedAt: input.consented ? input.now : null,

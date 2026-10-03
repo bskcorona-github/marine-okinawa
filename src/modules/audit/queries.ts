@@ -24,11 +24,20 @@ const beforeCursor = (at: AnyColumn, id: AnyColumn, cursor: LogCursor | null | u
   cursor ? sql`(${at}, ${id}) < (${cursor.at}::timestamptz, ${cursor.id}::uuid)` : undefined;
 
 /**
- * 操作の記録（新しい順）。before（この時刻より前）で続きを読む。操作の種類・操作した人の種類で絞れる
+ * 操作の記録（新しい順）。before（この時刻より前）で続きを読む。操作の種類・操作した人の種類で絞れる。
+ * since・until で日時の範囲、targetIds で対象（予約・プラン・事業者など）にも絞れる
  */
 export async function listAuditLogs(
   db: DbOrTx,
-  params: { shopId: string; action?: string | null; actorType?: string | null; cursor?: LogCursor | null },
+  params: {
+    shopId: string;
+    action?: string | null;
+    actorType?: string | null;
+    cursor?: LogCursor | null;
+    since?: Date | null;
+    until?: Date | null;
+    targetIds?: string[] | null;
+  },
 ) {
   return db
     .select({
@@ -51,6 +60,9 @@ export async function listAuditLogs(
         eq(auditLogs.shopId, params.shopId),
         params.action ? eq(auditLogs.action, params.action) : undefined,
         params.actorType ? eq(auditLogs.actorType, params.actorType as 'staff') : undefined,
+        params.since ? gte(auditLogs.createdAt, params.since) : undefined,
+        params.until ? lt(auditLogs.createdAt, params.until) : undefined,
+        params.targetIds ? inArray(auditLogs.targetId, params.targetIds) : undefined,
         beforeCursor(auditLogs.createdAt, auditLogs.id, params.cursor),
       ),
     )

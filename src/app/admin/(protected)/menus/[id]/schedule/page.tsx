@@ -10,6 +10,7 @@ import {
   addRuleAction,
   deleteExceptionAction,
   deleteRuleAction,
+  updateAllRuleCapacityAction,
   updateRuleCapacityAction,
 } from './actions';
 
@@ -30,9 +31,11 @@ export default async function SchedulePage({ params, searchParams }: PageProps<'
       page={`/admin/menus/${menu.id}/schedule`}
       back={{ href: `/admin/menus/${menu.id}`, label: 'プランの編集へ' }}
       title="回の設定"
+      slotHref={(slotId) => `/admin/slots/${slotId}`}
       actions={{
         addRule: addRuleAction,
         updateRuleCapacity: updateRuleCapacityAction,
+        updateAllCapacity: updateAllRuleCapacityAction,
         deleteRule: deleteRuleAction,
         addException: addExceptionAction,
         deleteException: deleteExceptionAction,

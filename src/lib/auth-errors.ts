@@ -18,6 +18,8 @@ export function socialErrorMessage(code: string | undefined): string | null {
       return 'この Google・LINE のアカウントは、ほかのアカウントにつながっています。つなぐのは 1 つのアカウントだけです';
     case 'access_denied':
       return 'Google・LINE でのログインを取り消しました';
+    case 'provider_disabled':
+      return 'この方法でのログインは、いま止めています。メールアドレスとパスワードでログインしてください';
     default:
       return 'Google・LINE でのログインに失敗しました。少し待ってから、もう一度お試しください';
   }

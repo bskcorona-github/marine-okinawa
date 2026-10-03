@@ -1,4 +1,4 @@
-import { Phone } from 'lucide-react';
+import { ChevronRight, MessageSquareText, Phone } from 'lucide-react';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import type { ReactNode } from 'react';
@@ -29,10 +29,13 @@ import { splitPlanTitle } from '@/modules/catalog/display-title';
 import { formatPhoneForDisplay } from '@/modules/customer/normalize';
 import { remainingSeats } from '@/modules/inventory/availability';
 import { getSlotForAdmin } from '@/modules/inventory/queries';
+import { telHref } from '@/modules/shop/contact';
 import { getShopById } from '@/modules/shop/shops';
 import { occupancyTone, TONE_STYLE } from '@/components/backoffice/occupancy';
 import { WEATHER_TARGET_STATUSES, weatherRefundDue } from '@/modules/booking/weather-cancel-slot';
 import { changeCapacityAction, closeSlotAction, reopenSlotAction, weatherCancelSlotAction } from './actions';
+import { isPastSlotDay } from '@/modules/schedule/slot-day';
+import { slotBack, slotBackLabel } from './back';
 
 export const metadata = { title: '回の詳細' };
 
@@ -44,8 +47,8 @@ const ACTIVE = new Set<string>(SEAT_HOLDING_STATUSES);
 
 const SAVED: Record<string, string> = {
   capacity: '定員を変更しました。',
-  closed: 'この回を休止しました。新規の予約は受け付けません。',
-  reopened: '休止を解除しました。Web でも予約を受け付けます。',
+  closed: 'この回の新しい予約の受付を止めました（休止）。入っている予約はそのままです。',
+  reopened: '受付を再開しました（休止を解除）。Web でも予約を受け付けます。',
   weather: 'この回を天候中止にしました。',
 };
 
@@ -68,6 +71,8 @@ export default async function SlotPage({ params, searchParams }: PageProps<'/adm
   const remaining = remainingSeats(slot.capacity, slot.reservedCount);
   const tone = occupancyTone(slot, shop);
   const started = slot.startsAt.getTime() <= new Date().getTime();
+  // 終わった日（今日より前）の回は、名簿と記録の確認だけにする（定員・休止・天候中止・手動予約はサーバーでも止める）
+  const pastDay = isPastSlotDay(slot.startsAt, new Date(), shop.timezone);
   const scheduleHref = `/admin/menus/${slot.menuId}/schedule`;
   const saved = ownValue(SAVED, sp.saved);
   const weatherCount = Number(sp.count) || 0;
@@ -95,16 +100,21 @@ export default async function SlotPage({ params, searchParams }: PageProps<'/adm
       : b.paymentMethod === 'onsite'
         ? '現地払い'
         : '未入金';
-  // タイムテーブルの表示（週表示・絞り込み）のまま戻れるようにする。他サイトへの移動は受け付けない
-  const backHref =
-    typeof sp.back === 'string' && sp.back.startsWith('/admin/timetable?') ? sp.back : `/admin/timetable?date=${date}`;
+  // タイムテーブルの表示（週表示・絞り込み）か、開いた元の予約へ戻れるようにする。他サイトへの移動は受け付けない
+  const backHref = slotBack(sp.back) ?? `/admin/timetable?date=${date}`;
+  // 名簿から開いた予約の詳細で「回の詳細へ戻る」を出すための、この画面の URL（タイムテーブルの表示も引き継ぐ）
+  const selfHref = backHref.startsWith('/admin/timetable?')
+    ? `/admin/slots/${slot.id}?back=${encodeURIComponent(backHref)}`
+    : `/admin/slots/${slot.id}`;
 
   const errors: Record<string, ReactNode> = {
     capacity: '定員は 0〜500 の整数で入力してください。',
-    BELOW_RESERVED: `定員は予約済みの人数（${slot.reservedCount}${unit}）より少なくできません。新規の予約を止めたい場合は「この回を休止」を使ってください。`,
+    BELOW_RESERVED: `定員は予約済みの人数（${slot.reservedCount}${unit}）より少なくできません。新しい予約を止めたい場合は「新しい予約の受付を止める（休止）」を使ってください。`,
     NOT_OPEN: 'この回の状態が変わったため、操作できませんでした。画面を確認してください。',
     INVALID_TRANSITION: 'この回の状態が変わったため、天候中止にできませんでした。画面を確認してください。',
     REFUND_REQUIRED: '返金の記録が合わない予約があるため、天候中止にできませんでした。予約ごとに確認してください。',
+    DAY_PASSED: '終わった日の回のため、定員・休止は変えられません。',
+    SLOT_DAY_PASSED: '終わった日の回のため、天候中止にはできません。予約ごとの記録は、名簿から開いて確かめてください。',
     INVALID_INPUT: '入力を確認してください。',
     STILL_CLOSED: (
       <>
@@ -121,7 +131,7 @@ export default async function SlotPage({ params, searchParams }: PageProps<'/adm
   return (
     <div className="max-w-5xl">
       <PageHeader
-        back={{ href: backHref, label: 'タイムテーブルへ' }}
+        back={{ href: backHref, label: slotBackLabel(backHref) }}
         title={
           <span className="flex flex-wrap items-center gap-3">
             <span className="whitespace-nowrap tabular-nums">
@@ -147,7 +157,8 @@ export default async function SlotPage({ params, searchParams }: PageProps<'/adm
         }
         description={splitPlanTitle(slot.menuTitle).title}
         actions={
-          slot.status === 'open' && (
+          slot.status === 'open' &&
+          !pastDay && (
             <Link href={`/admin/bookings/new?slot=${slot.id}`} className={buttonVariants()}>
               この回に手動予約
             </Link>
@@ -155,7 +166,7 @@ export default async function SlotPage({ params, searchParams }: PageProps<'/adm
         }
       />
 
-      {/* スマホでは予約者の一覧（名簿と電話番号）を先に出し、定員・休止の操作はその下にする */}
+      {/* 予約者の一覧（名簿と電話番号）を先に出し、定員・休止・天候中止の操作はその下にする */}
       <div className="flex flex-col gap-4">
         {saved && (
           <Notice tone="success">
@@ -180,24 +191,107 @@ export default async function SlotPage({ params, searchParams }: PageProps<'/adm
         )}
         {sp.saved === 'weather' && mailFailed > 0 && (
           <Notice tone="warning">
-            {mailFailed} 件のメールを送れませんでした。予約ごとの画面で送り直すか、お電話などでお伝えください。
+            {mailFailed} 件のメールを送れませんでした。予約ごとの画面で「お客様への案内ページ」のリンクを出すか、メールを送り直してください。
           </Notice>
         )}
         {error && <Notice tone="error">{error}</Notice>}
+        {pastDay && (
+          <Notice tone="info">
+            終わった日の回です。名簿と記録の確認だけできます（定員・休止・天候中止・手動予約は変えられません）。予約ごとの記録は、名簿から予約を開いて確かめてください。
+          </Notice>
+        )}
         {slot.reservedCount > slot.capacity && (
           <Notice tone="error">
             定員を {slot.reservedCount - slot.capacity}
             {unit}超えて予約が入っています。
           </Notice>
         )}
-        {slot.status === 'closed' && active.length > 0 && (
+        {slot.status === 'closed' && active.length > 0 && !pastDay && (
           <Notice tone="warning">
             休止中ですが、予約が {active.length}{' '}
             件残っています（休止しても予約は取り消されません）。お客様へ連絡するか、下の「この回の予約を一括で天候中止にする」を使ってください。
           </Notice>
         )}
 
-        <div className="order-2 grid gap-4 md:order-none md:grid-cols-3">
+        <Panel title={`予約者（${active.length} 件・${slot.reservedCount}${unit}）`}>
+          {bookings.length === 0 ? (
+            <p className="text-sm text-slate-500">
+              予約はまだありません。
+              {slot.status === 'open' && !pastDay && '電話で受けた予約は、上の「この回に手動予約」から登録できます。'}
+            </p>
+          ) : (
+            <ul className="divide-y divide-slate-100">
+              {bookings.map((b) => {
+                const phone = formatPhoneForDisplay(b.contactPhone);
+                const notes = [
+                  b.participantAges && `年齢：${b.participantAges}`,
+                  b.customerNote && `連絡事項：${b.customerNote}`,
+                ].filter(Boolean);
+                return (
+                  <li
+                    key={b.id}
+                    className={cn(
+                      'flex flex-wrap items-center gap-x-4 gap-y-1 py-2',
+                      !ACTIVE.has(b.status) && 'opacity-60',
+                    )}
+                  >
+                    {/* 押せることが分かるように、行の右に「›」を付ける（スマホにはマウスを乗せたときの表示がない） */}
+                    <Link
+                      href={`/admin/bookings/${b.id}?back=${encodeURIComponent(selfHref)}`}
+                      className="flex min-h-11 min-w-0 flex-1 basis-60 items-center gap-2 rounded-md py-1 hover:bg-slate-50"
+                    >
+                      <span className="min-w-0 flex-1">
+                        <span className="flex flex-wrap items-center gap-2">
+                          <span className="font-semibold text-slate-900 underline-offset-2 hover:underline">
+                            {b.contactName} 様
+                          </span>
+                          <BookingStatusBadge status={b.status} />
+                        </span>
+                        {b.items.length > 0 && (
+                          <span className="mt-0.5 block text-sm text-slate-800">
+                            {b.items.map((i) => `${i.label} ${i.quantity}${unit}`).join('・')}
+                            {b.guestCount !== null && `（乗船 ${b.guestCount}名）`}
+                          </span>
+                        )}
+                        <span className="mt-0.5 block text-xs text-slate-500 tabular-nums">
+                          {b.bookingNo} ・ {BOOKING_SOURCE_LABELS[b.source]} ・ {formatYen(b.totalAmount)}
+                          {b.paymentStatus && `（${PAYMENT_STATUS_LABELS[b.paymentStatus]}）`}
+                        </span>
+                        {notes.length > 0 && (
+                          <span className="mt-1 flex items-start gap-1 text-xs text-amber-900">
+                            <MessageSquareText aria-hidden className="mt-0.5 size-3.5 shrink-0" />
+                            <span className="line-clamp-2">{notes.join(' ／ ')}</span>
+                          </span>
+                        )}
+                      </span>
+                      <ChevronRight aria-hidden className="size-4 shrink-0 text-slate-400" />
+                    </Link>
+                    <span className="w-16 text-right font-semibold tabular-nums">
+                      {b.partySize}
+                      {unit}
+                      {b.guestCount && (
+                        <span className="block text-xs font-normal text-slate-500">{b.guestCount}名</span>
+                      )}
+                    </span>
+                    {phone ? (
+                      <a
+                        href={telHref(b.contactPhone!)}
+                        className="inline-flex min-h-11 items-center gap-1.5 rounded-lg px-2 text-sm text-sky-800 tabular-nums hover:bg-sky-50"
+                      >
+                        <Phone aria-hidden className="size-4" />
+                        {phone}
+                      </a>
+                    ) : (
+                      <span className="min-w-32 text-sm text-slate-400">電話番号なし</span>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </Panel>
+
+        <div className="grid gap-4 md:grid-cols-3">
           <div
             className={cn(
               'rounded-xl border p-4',
@@ -218,7 +312,9 @@ export default async function SlotPage({ params, searchParams }: PageProps<'/adm
           </div>
 
           <Panel title="定員" className="md:col-span-1">
-            {slot.status === 'open' ? (
+            {pastDay ? (
+              <p className="text-sm text-slate-600">終わった日の回のため、変更できません。</p>
+            ) : slot.status === 'open' ? (
               <form action={changeCapacityAction.bind(null, slot.id)} className="flex items-end gap-2">
                 <input type="hidden" name="back" value={backHref} />
                 <label className="space-y-1 text-sm">
@@ -234,7 +330,7 @@ export default async function SlotPage({ params, searchParams }: PageProps<'/adm
                   />
                 </label>
                 <SubmitButton variant="outline" pendingLabel="保存中…">
-                  変更
+                  定員を変更
                 </SubmitButton>
               </form>
             ) : (
@@ -242,24 +338,31 @@ export default async function SlotPage({ params, searchParams }: PageProps<'/adm
             )}
             <p className="mt-2 text-xs text-slate-500">
               予約済みの人数より少なくはできません。曜日ごとの定員は
-              <Link href={scheduleHref} className="mx-0.5 underline">
+              <Link
+                href={scheduleHref}
+                className="mx-0.5 inline-flex items-center underline pointer-coarse:min-h-11 pointer-coarse:px-1"
+              >
                 回の設定
               </Link>
               で変更します。
             </p>
           </Panel>
 
-          <Panel title={slot.status === 'open' ? '休止' : '休止の解除'}>
-            {slot.status === 'open' && started ? (
+          <Panel title={slot.status === 'open' ? '受付の休止' : '受付の再開'}>
+            {pastDay ? (
+              <p className="text-sm text-slate-600">終わった日の回のため、休止・再開はできません。</p>
+            ) : slot.status === 'open' && started ? (
               <p className="text-sm text-slate-600">開始済みの回は休止できません。</p>
             ) : slot.status === 'open' ? (
               <form action={closeSlotAction.bind(null, slot.id)}>
                 <input type="hidden" name="back" value={backHref} />
+                {/* 元に戻せる操作なので、赤ではなく控えめなボタンにする（天候中止と見分けられるように） */}
                 <ConfirmDialog
-                  triggerLabel="この回を休止"
-                  title="この回を休止しますか？"
-                  confirmLabel="休止する"
-                  triggerClassName="w-full"
+                  tone="default"
+                  triggerLabel="新しい予約の受付を止める（休止）"
+                  title="この回の新しい予約の受付を止めますか？"
+                  confirmLabel="受付を止める（休止）"
+                  triggerClassName="w-full whitespace-normal"
                 >
                   <ul className="list-disc space-y-1 rounded-lg bg-slate-50 p-3 pl-7">
                     <li>新規の予約（Web・手動）を受け付けなくなります。</li>
@@ -271,7 +374,7 @@ export default async function SlotPage({ params, searchParams }: PageProps<'/adm
                     ) : (
                       <li>この回に予約はありません。</li>
                     )}
-                    <li>あとから「休止を解除」で元に戻せます。</li>
+                    <li>あとから「受付を再開する」で元に戻せます。</li>
                   </ul>
                 </ConfirmDialog>
               </form>
@@ -281,90 +384,35 @@ export default async function SlotPage({ params, searchParams }: PageProps<'/adm
               <form action={reopenSlotAction.bind(null, slot.id)}>
                 <input type="hidden" name="back" value={backHref} />
                 <SubmitButton variant="outline" className="w-full" pendingLabel="保存中…">
-                  休止を解除
+                  受付を再開する（休止を解除）
                 </SubmitButton>
               </form>
             )}
             <p className="mt-2 text-xs text-slate-500">
-              {slot.status === 'weather_cancelled'
+              {slot.status === 'weather_cancelled' || pastDay
                 ? '予約の返金は、予約ごとの画面で記録します。'
                 : slot.status === 'open' && started
                   ? '当日の天候中止は、下の「この回の予約を一括で天候中止にする」から行えます。'
                   : slot.status === 'open'
-                    ? '新規の予約だけを止めるときに使います（入っている予約はそのまま）。天候で中止するときは下の一括の天候中止を使います。'
+                    ? '入っている予約はそのままです。天候で中止するときは、下の天候中止を使います。'
                     : '終日の休業日で休止している場合は、回の設定で変更します。'}
             </p>
           </Panel>
         </div>
 
-        <Panel title={`予約者（${active.length} 件・${slot.reservedCount}${unit}）`} className="order-1 md:order-none">
-          {bookings.length === 0 ? (
-            <p className="text-sm text-slate-500">予約はまだありません</p>
-          ) : (
-            <ul className="divide-y divide-slate-100">
-              {bookings.map((b) => {
-                const phone = formatPhoneForDisplay(b.contactPhone);
-                return (
-                  <li
-                    key={b.id}
-                    className={cn(
-                      'flex flex-wrap items-center gap-x-4 gap-y-1 py-3',
-                      !ACTIVE.has(b.status) && 'opacity-60',
-                    )}
-                  >
-                    <Link
-                      href={`/admin/bookings/${b.id}`}
-                      className="min-w-0 flex-1 basis-60 rounded-md hover:bg-slate-50"
-                    >
-                      <span className="flex flex-wrap items-center gap-2">
-                        <span className="font-semibold text-slate-900 underline-offset-2 hover:underline">
-                          {b.contactName} 様
-                        </span>
-                        <BookingStatusBadge status={b.status} />
-                      </span>
-                      <span className="mt-0.5 block text-xs text-slate-500 tabular-nums">
-                        {b.bookingNo} ・ {BOOKING_SOURCE_LABELS[b.source]} ・ {formatYen(b.totalAmount)}
-                        {b.paymentStatus && `（${PAYMENT_STATUS_LABELS[b.paymentStatus]}）`}
-                      </span>
-                    </Link>
-                    <span className="w-16 text-right font-semibold tabular-nums">
-                      {b.partySize}
-                      {unit}
-                      {b.guestCount && (
-                        <span className="block text-xs font-normal text-slate-500">{b.guestCount}名</span>
-                      )}
-                    </span>
-                    {phone ? (
-                      <a
-                        href={`tel:${b.contactPhone}`}
-                        className="inline-flex min-h-11 items-center gap-1.5 rounded-lg px-2 text-sm text-sky-800 tabular-nums hover:bg-sky-50"
-                      >
-                        <Phone aria-hidden className="size-4" />
-                        {phone}
-                      </a>
-                    ) : (
-                      <span className="min-w-32 text-sm text-slate-400">電話番号なし</span>
-                    )}
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-        </Panel>
-
-        {slot.status !== 'weather_cancelled' && (
+        {slot.status !== 'weather_cancelled' && !pastDay && (
           <Panel
             title="天候による中止"
-            description="天候・海況でこの回をまるごと中止するときに使います。予約ごとに取り消す必要はありません。"
-            className="order-3 md:order-none"
+            description="天候・海況でこの回をまるごと中止し、入っている予約もまとめて中止します。予約ごとに取り消す必要はありません。"
           >
             <form action={weatherCancelSlotAction.bind(null, slot.id)}>
               <input type="hidden" name="back" value={backHref} />
               <ConfirmDialog
                 tone="danger"
                 triggerLabel="この回の予約を一括で天候中止にする"
+                triggerClassName="whitespace-normal"
                 title={`${slotLabel} ${splitPlanTitle(slot.menuTitle).title} を天候中止にしますか？`}
-                confirmLabel="天候中止にする"
+                confirmLabel="この回を天候中止にする"
                 pendingLabel="処理中…"
               >
                 <ul className="list-disc space-y-1 rounded-lg bg-slate-50 p-3 pl-7">
@@ -386,24 +434,22 @@ export default async function SlotPage({ params, searchParams }: PageProps<'/adm
                           ))}
                         </ul>
                       </li>
-                      <>
-                        {weatherConfirmed.length > 0 && (
-                          <li>予約確定 {weatherConfirmed.length} 件を「天候中止」にします。</li>
-                        )}
-                        {weatherTargets.length > weatherConfirmed.length && (
-                          <li>
-                            未確定の申込 {weatherTargets.length - weatherConfirmed.length}{' '}
-                            件を「取消（区分：天候）」にします。
-                          </li>
-                        )}
-                        {weatherPaid.length > 0 && (
-                          <li>
-                            入金済みの {weatherPaid.length} 件は、入金額の {weatherPercent}%（これから返す額の合計{' '}
-                            {formatYen(refundTotal)}
-                            ）を返金予定として記録します（設定の天候中止の返金率）。違う扱いにする予約は、先に予約ごとに取り消してください。
-                          </li>
-                        )}
-                      </>
+                      {weatherConfirmed.length > 0 && (
+                        <li>予約確定 {weatherConfirmed.length} 件を「天候中止」にします。</li>
+                      )}
+                      {weatherTargets.length > weatherConfirmed.length && (
+                        <li>
+                          未確定の申込 {weatherTargets.length - weatherConfirmed.length}{' '}
+                          件を「取消（区分：天候）」にします。
+                        </li>
+                      )}
+                      {weatherPaid.length > 0 && (
+                        <li>
+                          入金済みの {weatherPaid.length} 件は、入金額の {weatherPercent}%（これから返す額の合計{' '}
+                          {formatYen(refundTotal)}
+                          ）を返金予定として記録します（設定の天候中止の返金率）。違う扱いにする予約は、先に予約ごとに取り消してください。
+                        </li>
+                      )}
                     </>
                   )}
                   <li className="font-semibold text-red-700">元に戻せません（この回の受付も再開できません）。</li>
@@ -414,11 +460,11 @@ export default async function SlotPage({ params, searchParams }: PageProps<'/adm
                 </label>
                 {weatherTargets.length > 0 && (
                   <>
-                    <label className="flex items-start gap-2">
+                    <label className="flex items-start gap-2 pointer-coarse:min-h-11">
                       <input type="checkbox" name="notify" value="on" defaultChecked className="mt-0.5 size-4" />
                       <span>お客様に天候中止のお知らせメールを送る（メールアドレスのある予約だけ）</span>
                     </label>
-                    <label className="flex items-start gap-2">
+                    <label className="flex items-start gap-2 pointer-coarse:min-h-11">
                       <input
                         type="checkbox"
                         name="notifyOperator"

@@ -35,7 +35,6 @@ test('アクティビティからプランを選び、空きを確認して申�
   await page.getByLabel('メールアドレス', { exact: true }).fill('taro@example.com');
   await page.getByLabel('メールアドレス（確認）').fill('taro@example.com');
   await page.getByLabel('電話番号').fill('090-1234-5678');
-  await page.getByLabel('第2希望の日時').fill('翌日の午前');
   await page.getByLabel('ご連絡事項').fill('子供が泳げません');
   await page.getByLabel('参加条件・キャンセル規定・個人情報の取扱いに同意します').check();
   await page.getByRole('button', { name: /この内容で申し込む/ }).click();
@@ -43,7 +42,7 @@ test('アクティビティからプランを選び、空きを確認して申�
   await expect(page.getByRole('heading', { name: 'お申し込みを受け付けました' })).toBeVisible();
   await expect(page.getByText('まだご予約は確定していません')).toBeVisible();
   await expect(page.getByText('予約番号', { exact: true })).toBeVisible();
-  await expect(page.getByText('翌日の午前')).toBeVisible();
+  await expect(page.getByText('子供が泳げません')).toBeVisible();
   await expect(page.getByText('アクアマリン E2E')).toHaveCount(0);
   // 確定前はカレンダーに追加させない
   await expect(page.getByRole('link', { name: 'カレンダーに追加' })).toHaveCount(0);

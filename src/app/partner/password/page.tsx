@@ -1,5 +1,5 @@
 import { requireOperatorForPasswordChange } from '@/modules/auth/guard';
-import { PasswordChangeForm } from './password-change-form';
+import { PasswordChangeForm } from '@/components/backoffice/password-change-form';
 
 export const metadata = { title: 'パスワードの変更' };
 

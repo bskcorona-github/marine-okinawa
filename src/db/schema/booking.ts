@@ -108,7 +108,7 @@ export const bookings = pgTable(
      * 組合が選んだ事業者は、ほかの事業者の回答で自動に置き換えない
      */
     operatorAssignedVia: text().$type<'default' | 'response' | 'staff'>().notNull().default('default'),
-    /** 第 2 希望の日時（お客様の自由入力） */
+    /** 旧：第2希望の日時（新規の申込では受け付けない。既存データ用に列は残す） */
     secondChoice: text(),
     /** お客様からの連絡事項（備考） */
     customerNote: text(),

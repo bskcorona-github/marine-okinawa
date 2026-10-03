@@ -7,6 +7,7 @@ import { dayOfContact, shopContact, type Contact } from '@/modules/shop/contact'
 import { MailTimeoutError, type Mailer } from './mailer';
 import { formatPartyItems } from '@/modules/booking/party';
 import { logWarn } from '@/lib/log';
+import { isFeatureOn } from '@/modules/shop/features';
 
 /** unknown：送信サービスの応答がなく、送れたかどうか分からない */
 export type SendResult = { status: 'sent' | 'failed' | 'skipped' | 'unknown' };
@@ -66,6 +67,14 @@ export async function deliverEmail(
     })
     .returning({ id: notifications.id });
 
+  // 「機能の切り替え」でメールを止めているあいだは、送らずに「送れなかった」として残す（あとで送り直せる）
+  if (!(await isFeatureOn(db, target.shopId, 'mail.send'))) {
+    await db
+      .update(notifications)
+      .set({ status: 'failed', error: 'メールの送信を止めています（機能の切り替え）' })
+      .where(eq(notifications.id, notification.id));
+    return { status: 'failed' };
+  }
   try {
     const { id } = await mailer.send({
       to: message.to,

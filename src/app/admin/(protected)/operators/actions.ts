@@ -6,6 +6,7 @@ import { db } from '@/db';
 import { isUuid } from '@/lib/validation';
 import { invalidState, toFormIssues, type AdminFormState } from '@/lib/zod-ja';
 import { requireAdmin } from '@/modules/auth/guard';
+import { saveWithAutoSlug } from '@/modules/catalog/auto-slug';
 import {
   createOperator,
   newOperatorSchema,
@@ -14,12 +15,19 @@ import {
   updateOperator,
 } from '@/modules/catalog/operator-admin';
 
+/** 事業者を追加する。ID を空欄にしたときは自動で付ける（登録申請の承認と同じ作り方。重複したら作り直す） */
 export async function createOperatorAction(formData: FormData) {
   const admin = await requireAdmin();
-  const parsed = newOperatorSchema.safeParse(Object.fromEntries(formData));
-  if (!parsed.success) redirect('/admin/operators?error=input');
-  const result = await createOperator(db, admin.shopId, parsed.data, admin.userId);
+  const name = String(formData.get('name') ?? '');
+  const slug = String(formData.get('slug') ?? '').trim();
+  const create = async (value: string) => {
+    const parsed = newOperatorSchema.safeParse({ name, slug: value });
+    return parsed.success ? createOperator(db, admin.shopId, parsed.data, admin.userId) : null;
+  };
+  const result = slug ? await create(slug) : await saveWithAutoSlug('operator', create, (r) => r !== null && !r.ok);
+  if (!result) redirect('/admin/operators?error=input');
   if (!result.ok) redirect('/admin/operators?error=slug');
+  revalidatePath('/admin', 'layout');
   redirect(`/admin/operators/${result.operatorId}`);
 }
 

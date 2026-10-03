@@ -8,11 +8,13 @@ import { isUuid } from '@/lib/validation';
 import { requireAdmin } from '@/modules/auth/guard';
 import { listActivitiesForAdmin } from '@/modules/catalog/activities';
 import { getMenuForAdmin, listOperators } from '@/modules/catalog/menus';
+import { getOperatorForAdmin } from '@/modules/catalog/operator-admin';
+import { getScheduleSummary } from '@/modules/schedule/rules';
 import { updateMenuAction, uploadMenuImageAction } from '../actions';
 import { listMenuCandidates } from '@/modules/partner/requests';
 import { countUpcomingBookings, menuHasBookings } from '@/modules/booking/queries';
 import { MenuForm } from '@/components/backoffice/menu-form';
-import { formatDateLabel, localTime } from '@/lib/dates';
+import { formatDateLabel, localDate, localTime } from '@/lib/dates';
 import { ownValue } from '@/lib/own';
 import { getPendingRevision, PLAN_ERROR_LABELS } from '@/modules/catalog/operator-plans';
 import { getShopById } from '@/modules/shop/shops';
@@ -44,6 +46,11 @@ export default async function EditMenuPage({ params, searchParams }: PageProps<'
     getShopById(db, admin.shopId),
   ]);
   if (!menu) notFound();
+  const inReview = menu.reviewStatus === 'pending' || Boolean(revision);
+  const [operator, schedule] = await Promise.all([
+    menu.operatorId ? getOperatorForAdmin(db, admin.shopId, menu.operatorId) : null,
+    inReview ? getScheduleSummary(db, { menuId: menu.id, today: localDate(new Date(), shop.timezone) }) : null,
+  ]);
   const at = (d: Date) => `${formatDateLabel(d, shop.timezone)} ${localTime(d, shop.timezone)}`;
   const reviewedText = ownValue(REVIEWED, reviewed);
   const reviewErrorText = typeof reviewError === 'string' ? ownValue<string>(PLAN_ERROR_LABELS, reviewError) : null;
@@ -63,7 +70,7 @@ export default async function EditMenuPage({ params, searchParams }: PageProps<'
                 rel="noreferrer"
                 className={buttonVariants({ variant: 'outline', size: 'sm' })}
               >
-                公開ページ ↗
+                公開ページを見る ↗<span className="sr-only">（新しいタブで開きます）</span>
               </a>
             )}
             <Link href={`/admin/menus/${menu.id}/schedule`} className={buttonVariants({ size: 'sm' })}>
@@ -84,6 +91,7 @@ export default async function EditMenuPage({ params, searchParams }: PageProps<'
         operatorName={operators.find((o) => o.id === menu.operatorId)?.name ?? null}
         at={at}
         activityName={(activityId) => activities.find((a) => a.id === activityId)?.name ?? '（未設定）'}
+        schedule={schedule}
       />
       <MenuForm
         key={typeof saved === 'string' ? saved : 'initial'}
@@ -94,6 +102,20 @@ export default async function EditMenuPage({ params, searchParams }: PageProps<'
         upcomingBookings={upcomingBookings}
         unitLocked={hasBookings}
         submitLabel="保存"
+        seasonHint={
+          operator ? (
+            <>
+              季節を「繁忙期」「通常期」に分けると、{operator.name}の繁忙期の期間（今の登録：{operator.periods.length}{' '}
+              期間）の日は繁忙期の料金、それ以外の日は通常期の料金になります。期間は、事業者の画面で直せます。
+              <Link
+                href={`/admin/operators/${operator.id}#season-periods`}
+                className="ml-1 inline-flex min-h-9 items-center font-semibold text-sky-800 underline pointer-coarse:min-h-11"
+              >
+                「繁忙期の期間」を開く
+              </Link>
+            </>
+          ) : undefined
+        }
         initial={{
           slug: menu.slug,
           status: menu.status,
@@ -129,6 +151,13 @@ export default async function EditMenuPage({ params, searchParams }: PageProps<'
           candidateIds: candidates.map((c) => c.id),
         }}
       />
+      {inReview && (
+        <p className="text-sm">
+          <a href="#review" className="inline-flex min-h-11 items-center font-semibold text-sky-800 underline">
+            内容を確かめたら、審査の欄（このページの上）へ戻る
+          </a>
+        </p>
+      )}
     </div>
   );
 }

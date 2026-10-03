@@ -1,4 +1,4 @@
-import { and, count, desc, eq } from 'drizzle-orm';
+import { and, count, desc, eq, inArray } from 'drizzle-orm';
 import { createElement } from 'react';
 import { z } from 'zod';
 import type { DbOrTx } from '@/db/client';
@@ -136,13 +136,35 @@ export async function sendInquiryMails(
   return { ack, admin };
 }
 
-export async function listInquiries(db: DbOrTx, params: { shopId: string; status?: InquiryStatus | null }) {
+/** お問い合わせの一覧（新しい順）。status で 1 つの状態、statuses でいくつかの状態（未対応・対応中など）に絞れる */
+export async function listInquiries(
+  db: DbOrTx,
+  params: { shopId: string; status?: InquiryStatus | null; statuses?: InquiryStatus[] },
+) {
   return db
     .select()
     .from(inquiries)
-    .where(and(eq(inquiries.shopId, params.shopId), params.status ? eq(inquiries.status, params.status) : undefined))
+    .where(
+      and(
+        eq(inquiries.shopId, params.shopId),
+        params.status ? eq(inquiries.status, params.status) : undefined,
+        params.statuses ? inArray(inquiries.status, params.statuses) : undefined,
+      ),
+    )
     .orderBy(desc(inquiries.createdAt))
     .limit(200);
+}
+
+/** 対応状況ごとのお問い合わせの数（一覧のタブに出す） */
+export async function countInquiriesByStatus(db: DbOrTx, shopId: string): Promise<Record<InquiryStatus, number>> {
+  const rows = await db
+    .select({ status: inquiries.status, count: count() })
+    .from(inquiries)
+    .where(eq(inquiries.shopId, shopId))
+    .groupBy(inquiries.status);
+  const counts = { new: 0, in_progress: 0, done: 0 } as Record<InquiryStatus, number>;
+  for (const r of rows) counts[r.status] = r.count;
+  return counts;
 }
 
 export async function getInquiry(db: DbOrTx, params: { shopId: string; inquiryId: string }) {

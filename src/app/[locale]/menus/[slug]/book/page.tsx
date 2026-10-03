@@ -19,7 +19,7 @@ import { listPricesForDate } from '@/modules/catalog/prices';
 import { bookingDeadline, remainingSeats, slotLevel } from '@/modules/inventory/availability';
 import { getSlotForMenu } from '@/modules/inventory/queries';
 import { weatherPolicyText } from '@/modules/shop/settings';
-import { cardPaymentsEnabled } from '@/modules/payment/card-payments';
+import { cardPaymentsActive } from '@/modules/payment/card-payments';
 import { getCurrentShop } from '@/modules/shop/shops';
 import { BookingForm } from './booking-form';
 import { BookingTotalSummary, SelectedCourse } from './booking-total';
@@ -74,6 +74,7 @@ export default async function BookPage({ params, searchParams }: PageProps<'/[lo
 
   const shop = await getCurrentShop(db);
   const menu = await getPublishedMenuBySlug(db, { shopId: shop.id, slug, locale });
+  const cardPayment = await cardPaymentsActive(db, shop.id);
   if (!menu) notFound();
   const slot = await getSlotForMenu(db, { menuId: menu.id, slotId: sp.slot });
   if (!slot) notFound();
@@ -185,9 +186,7 @@ export default async function BookPage({ params, searchParams }: PageProps<'/[lo
                   <span className="sr-only">{t('menu.facts.payment')}</span>
                 </dt>
                 <dd className="jp-wrap text-ink/80">
-                  <Phrase>
-                    {t(cardPaymentsEnabled() ? 'booking.paymentSummaryCard' : 'menu.facts.paymentPrepaid')}
-                  </Phrase>
+                  <Phrase>{t(cardPayment ? 'booking.paymentSummaryCard' : 'menu.facts.paymentPrepaid')}</Phrase>
                 </dd>
                 {prices.some((p) => p.season) && (
                   <dd className="text-ink/70">
@@ -244,7 +243,7 @@ export default async function BookPage({ params, searchParams }: PageProps<'/[lo
               priceLabel={priceLabel}
               slotLabel={dateTime}
               changeHref={backHref}
-              cardPayment={cardPaymentsEnabled()}
+              cardPayment={cardPayment}
             />
           ) : paused ? (
             <div className="space-y-4 rounded-3xl bg-white p-6 ring-1 ring-ocean/10" role="status">

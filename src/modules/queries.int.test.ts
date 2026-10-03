@@ -5,6 +5,7 @@ import { getTestDb, resetDb } from '../../tests/helpers/db';
 import { seedMenu, seedShop, seedSlot } from '../../tests/helpers/fixtures';
 import { createBooking } from './booking/create-booking';
 import {
+  countBookings,
   getBookingByAccessToken,
   getBookingDetail,
   getDaySummary,
@@ -163,6 +164,13 @@ describe('queries', () => {
     });
     expect(second).toMatchObject({ hasMore: false, page: 2 });
     expect(second.rows).toHaveLength(1);
+    // 件数は一覧と同じ条件で数える（ページに分けても全体の件数）
+    const count = (extra: Partial<Parameters<typeof countBookings>[1]> = {}) =>
+      countBookings(db, { shopId: ctx.shop.id, timezone: 'Asia/Tokyo', query: '', ...extra });
+    expect(await count()).toBe(3);
+    expect(await count({ date: '2026-10-02' })).toBe(1);
+    expect(await count({ query: '5678' })).toBe(1);
+    expect(await count({ status: 'active' })).toBe(0);
 
     const detail = await getBookingDetail(db, { shopId: ctx.shop.id, bookingId: r1.bookingId });
     expect(detail?.payment).toMatchObject({ method: 'online', status: 'pending' });
@@ -172,6 +180,8 @@ describe('queries', () => {
     const list = await listSlotBookings(db, { shopId: ctx.shop.id, slotId: ctx.slots.a.id });
     expect(list.map((b) => b.contactName)).toEqual(['沖縄 太郎', '那覇 花子']);
     expect(list[0].paymentStatus).toBe('pending');
+    // 名簿に出す人数の内訳
+    expect(list[0].items).toEqual([{ label: '大人', quantity: 1 }]);
   });
 
   it('タイムテーブルと日のサマリ', async () => {

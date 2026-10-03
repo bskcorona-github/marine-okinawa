@@ -1,7 +1,6 @@
-import { AlertTriangle, CalendarDays, ChevronRight, MessageSquareReply, PhoneCall } from 'lucide-react';
+import { AlertTriangle, CalendarDays, ChevronRight, PhoneCall } from 'lucide-react';
 import Link from 'next/link';
 import { Notice, PageHeader, Panel } from '@/components/backoffice/page-header';
-import { REQUEST_STATUS_TONE } from '@/components/backoffice/request-status-tone';
 import { BookingStatusBadge } from '@/components/backoffice/status-badge';
 import { buttonVariants } from '@/components/ui/button';
 import { db } from '@/db';
@@ -10,7 +9,7 @@ import { formatYen } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { requireAdmin } from '@/modules/auth/guard';
 import { listLinkedProviders } from '@/modules/auth/linked-accounts';
-import { enabledSocialProviders, isSocialProvider, SOCIAL_PROVIDER_LABELS } from '@/lib/social-providers';
+import { isSocialProvider, SOCIAL_PROVIDER_LABELS } from '@/lib/social-providers';
 import { QuickSocialLink } from '@/components/backoffice/quick-social-link';
 import { countUnlinkedMailProblems } from '@/modules/audit/queries';
 import { countReceivedSince, getActionCounts, getPeriodSummary, listOpenRequests } from '@/modules/booking/queries';
@@ -19,16 +18,17 @@ import { countPendingPlanReviews } from '@/modules/catalog/operator-plans';
 import { countNewInquiries } from '@/modules/content/inquiries';
 import { listApplications } from '@/modules/partner/applications';
 import { listChangeRequests } from '@/modules/partner/change-requests';
-import { REQUEST_STATUS_LABELS } from '@/modules/partner/requests';
+import { OperatorResponseBadge } from './bookings/operator-response-badge';
 import { expiryState, listExpiringDocuments } from '@/modules/partner/documents';
-import { cardPaymentsEnabled } from '@/modules/payment/card-payments';
+import { cardPaymentsActive } from '@/modules/payment/card-payments';
 import { getShopById } from '@/modules/shop/shops';
+import { activeSocialProviders } from '@/modules/shop/features';
 
 export const metadata = { title: 'ダッシュボード' };
 
 type Tile = { label: string; count: number; href: string; hint: string; urgent?: boolean };
 
-/** 件数のあるタイルをカードで出し、0 件のものは 1 行にまとめる（要対応のものが上に来るように） */
+/** 件数のあるタイルをカードで出し、0 件のものは畳んでまとめる（要対応のものが上に来るように） */
 function TileList({ tiles }: { tiles: Tile[] }) {
   const active = tiles.filter((t) => t.count > 0);
   const empty = tiles.filter((t) => t.count === 0);
@@ -69,18 +69,23 @@ function TileList({ tiles }: { tiles: Tile[] }) {
         </p>
       )}
       {empty.length > 0 && (
-        <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-600">
-          <span>0 件：</span>
-          {empty.map((t) => (
-            <Link
-              key={t.label}
-              href={t.href}
-              className="inline-flex min-h-8 items-center hover:text-slate-900 hover:underline pointer-coarse:min-h-11"
-            >
-              {t.label}
-            </Link>
-          ))}
-        </p>
+        // 0 件の項目は文字が並ぶと読みにくいので畳む（開けば、それぞれの一覧へ移れる）
+        <details className="text-xs text-slate-600">
+          {/* スマホでも押しやすい高さにする（py-3.5 で 44px） */}
+          <summary className="cursor-pointer py-2 pointer-coarse:py-3.5">0 件の項目（{empty.length} 件）を見る</summary>
+          <ul className="flex flex-wrap gap-2">
+            {empty.map((t) => (
+              <li key={t.label}>
+                <Link
+                  href={t.href}
+                  className="inline-flex min-h-8 items-center rounded-full px-2.5 text-slate-700 underline-offset-2 ring-1 ring-slate-200 hover:bg-white hover:underline pointer-coarse:min-h-11"
+                >
+                  {t.label}
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </details>
       )}
     </div>
   );
@@ -90,9 +95,10 @@ export default async function DashboardPage({ searchParams }: PageProps<'/admin'
   const admin = await requireAdmin();
   const sp = await searchParams;
   // まだ LINE・Google をつないでいなければ、ダッシュボードでつなげるようにする
-  const linkable = (await listLinkedProviders(db, admin.userId)).length === 0 ? enabledSocialProviders() : [];
+  const linkable =
+    (await listLinkedProviders(db, admin.userId)).length === 0 ? await activeSocialProviders(db, admin.shopId) : [];
   const shop = await getShopById(db, admin.shopId);
-  const cardPayment = cardPaymentsEnabled();
+  const cardPayment = await cardPaymentsActive(db, admin.shopId);
   const now = new Date();
   const today = localDate(now, shop.timezone);
   const tomorrow = addDays(today, 1);
@@ -144,7 +150,7 @@ export default async function DashboardPage({ searchParams }: PageProps<'/admin'
       label: '事業者の回答あり',
       count: counts.operatorResponded,
       href: bookingsHref({ status: 'operator_responded', sort: 'date' }),
-      hint: '回答を見て、支払案内へ進めるか調整します',
+      hint: '条件付き・受入不可は調整します。受入可なら支払案内は自動で送られます',
       urgent: true,
     },
     {
@@ -186,7 +192,7 @@ export default async function DashboardPage({ searchParams }: PageProps<'/admin'
       hint: '開始済みで、事業者の報告がまだの予約確定です',
     },
     {
-      label: '実績確認待ち',
+      label: '実績確認待ち（催行済み）',
       count: counts.awaitingVerification,
       href: bookingsHref({ status: 'completed', sort: 'date' }),
       hint: '人数・金額を確認して、月次精算の対象にします',
@@ -266,14 +272,29 @@ export default async function DashboardPage({ searchParams }: PageProps<'/admin'
     },
   ];
 
+  // 押すと、その日の確定済みの予約者の一覧（参加日時の順）を開く。回ごとの空きはタイムテーブルで見る
+  const active = { status: 'active', sort: 'date' };
   const days = [
-    { title: '今日', sub: label(today), sum: todaySum, href: `/admin/timetable?date=${today}` },
-    { title: '明日', sub: label(tomorrow), sum: tomorrowSum, href: `/admin/timetable?date=${tomorrow}` },
+    {
+      title: '今日',
+      sub: label(today),
+      sum: todaySum,
+      href: bookingsHref({ date: today, ...active }),
+      timetable: `/admin/timetable?date=${today}`,
+    },
+    {
+      title: '明日',
+      sub: label(tomorrow),
+      sum: tomorrowSum,
+      href: bookingsHref({ date: tomorrow, ...active }),
+      timetable: `/admin/timetable?date=${tomorrow}`,
+    },
     {
       title: '今週（7日間）',
       sub: `${label(today)}〜`,
       sum: weekSum,
-      href: `/admin/timetable?date=${today}&view=week`,
+      href: bookingsHref({ date: today, to: weekEnd, ...active }),
+      timetable: `/admin/timetable?date=${today}&view=week`,
     },
   ];
   const openTotal = counts.requested + counts.reviewing + counts.operatorChecking + counts.awaitingPayment;
@@ -348,8 +369,9 @@ export default async function DashboardPage({ searchParams }: PageProps<'/admin'
               );
               return (
                 <li key={r.id}>
+                  {/* 予約の詳細の「戻る」で、ダッシュボードへ戻れるようにする */}
                   <Link
-                    href={`/admin/bookings/${r.id}`}
+                    href={`/admin/bookings/${r.id}?back=${encodeURIComponent('/admin')}`}
                     className="flex flex-wrap items-start gap-x-4 gap-y-1 py-3 text-sm hover:bg-sky-50/60"
                   >
                     <span className="min-w-0 flex-1">
@@ -374,17 +396,7 @@ export default async function DashboardPage({ searchParams }: PageProps<'/admin'
                                 : `${daysLeft} 日後`}
                         </span>
                         <BookingStatusBadge status={r.status} />
-                        {r.operatorResponded && (
-                          <span
-                            className={cn(
-                              'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold',
-                              REQUEST_STATUS_TONE[r.latestResponse ?? 'accepted'],
-                            )}
-                          >
-                            <MessageSquareReply aria-hidden className="size-3" />
-                            事業者の回答：{REQUEST_STATUS_LABELS[r.latestResponse ?? 'accepted']}
-                          </span>
-                        )}
+                        {r.operatorResponded && <OperatorResponseBadge response={r.latestResponse} />}
                         {overdue && (
                           <span className="inline-flex items-center gap-1 text-xs font-semibold text-red-700">
                             <AlertTriangle aria-hidden className="size-3.5" />
@@ -425,13 +437,19 @@ export default async function DashboardPage({ searchParams }: PageProps<'/admin'
         </h2>
         <ul className="grid gap-2 sm:grid-cols-3 sm:gap-3">
           {days.map((d) => (
-            <li key={d.title}>
+            <li key={d.title} className="flex flex-col gap-1">
               <Link
                 href={d.href}
                 className="block rounded-xl border border-slate-200 bg-white p-3 shadow-sm transition hover:border-sky-300 sm:p-4"
               >
-                <p className="text-xs font-semibold text-slate-700">
-                  {d.title} ・ {d.sub}
+                <p className="flex items-start justify-between gap-1 text-xs font-semibold text-slate-700">
+                  <span>
+                    {d.title} ・ {d.sub}
+                  </span>
+                  <span className="flex items-center text-sky-800">
+                    予約者を見る
+                    <ChevronRight aria-hidden className="size-3.5" />
+                  </span>
                 </p>
                 <p className="mt-1 flex flex-wrap items-baseline gap-x-3 tabular-nums">
                   <span>
@@ -442,13 +460,28 @@ export default async function DashboardPage({ searchParams }: PageProps<'/admin'
                   <span className="text-sm text-slate-800">{formatYen(d.sum.amount)}</span>
                 </p>
               </Link>
+              <Link
+                href={d.timetable}
+                className="inline-flex min-h-8 items-center self-end px-1 text-xs text-sky-800 underline-offset-2 hover:underline pointer-coarse:min-h-11"
+              >
+                タイムテーブルで空きを見る
+              </Link>
             </li>
           ))}
         </ul>
         <p className="text-xs text-slate-600">
           件数・人数・金額は、予約確定〜精算済みの予約（参加日で集計）です。貸切は乗船人数で数えます。
-          <Link href="/admin/reports" className="ml-1 font-semibold text-sky-800 hover:underline">
+          <Link
+            href="/admin/reports"
+            className="ml-1 inline-flex items-center font-semibold text-sky-800 hover:underline pointer-coarse:min-h-11"
+          >
             日報・集計を見る
+          </Link>
+          <Link
+            href="/admin/analytics"
+            className="ml-3 inline-flex items-center font-semibold text-sky-800 hover:underline pointer-coarse:min-h-11"
+          >
+            月ごとの傾向（分析）を見る
           </Link>
         </p>
       </section>

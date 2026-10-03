@@ -1,5 +1,7 @@
+import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { ConfirmDialog } from '@/components/backoffice/confirm-dialog';
+import { PRIMARY_TRIGGER_CLASS } from '@/components/backoffice/field-styles';
 import { Notice, PageHeader, Panel } from '@/components/backoffice/page-header';
 import { SettlementItemsTable } from '@/components/backoffice/settlement-items-table';
 import { buttonVariants } from '@/components/ui/button';
@@ -13,12 +15,14 @@ import { cn } from '@/lib/utils';
 import { isUuid } from '@/lib/validation';
 import { requireAdmin } from '@/modules/auth/guard';
 import {
+  countAwaitingSettlement,
   getSettlement,
   payoutDateOf,
   SETTLEMENT_ERROR_LABELS,
   settlementStatusLabel,
   type SettlementDetail,
 } from '@/modules/settlement/settlements';
+import { getOperatorForAdmin } from '@/modules/catalog/operator-admin';
 import { getShopById } from '@/modules/shop/shops';
 import { confirmSettlementAction, markSettlementPaidAction, unconfirmSettlementAction } from '../actions';
 import { SETTLEMENT_STATUS_TONE } from '@/components/backoffice/settlement-status-tone';
@@ -55,10 +59,31 @@ export default async function SettlementPage({ params, searchParams }: PageProps
     getSettlement(db, { shopId: admin.shopId, id }),
   ]);
   if (!settlement) notFound();
+  const receiving = settlement.payoutAmount < 0;
+  // 振込先（事業者の画面に登録している精算口座。振込を記録するときに見られるように）と、
+  // この事業者の、参加日がこの月まででまだ精算に入れられない予約（下書きを確定する前に知らせる）
+  const [operator, awaiting] = await Promise.all([
+    getOperatorForAdmin(db, admin.shopId, settlement.operatorId),
+    settlement.status === 'draft'
+      ? countAwaitingSettlement(db, {
+          shopId: admin.shopId,
+          period: settlement.period,
+          operatorId: settlement.operatorId,
+        })
+      : null,
+  ]);
+  const awaitingText = awaiting
+    ? [
+        awaiting.awaitingReport > 0 && `催行報告待ち ${awaiting.awaitingReport} 件`,
+        awaiting.awaitingVerification > 0 && `実績確認待ち ${awaiting.awaitingVerification} 件`,
+      ]
+        .filter(Boolean)
+        .join('・')
+    : '';
+  const bankMissing = !receiving && !operator?.bankAccount.trim();
   const period = formatMonthLabel(settlement.period);
   // 確定した精算は、確定したときの支払日（下書きは今の設定から）
   const payout = settlement.payoutOn ?? payoutDateOf(settlement.period, shop.settings.payoutDay);
-  const receiving = settlement.payoutAmount < 0;
   const done = ownValue(DONE, sp.done);
   const error = typeof sp.error === 'string' ? ownValue(SETTLEMENT_ERROR_LABELS, sp.error) : null;
   const today = localDate(new Date(), shop.timezone);
@@ -91,15 +116,26 @@ export default async function SettlementPage({ params, searchParams }: PageProps
       {sp.done === 'changed' && <Notice tone="warning">{CHANGED}</Notice>}
       {error && <Notice tone="error">{error}</Notice>}
 
-      <Panel title="明細">
-        <SettlementItemsTable
-          settlement={settlement}
-          timezone={shop.timezone}
-          bookingHref={(bookingId) => `/admin/bookings/${bookingId}`}
-        />
-      </Panel>
-
-      <Panel title="操作">
+      <Panel
+        title="操作"
+        description={settlement.status === 'paid' ? undefined : '明細（この下）を確かめてから進めてください。'}
+      >
+        {!receiving && settlement.status !== 'paid' && (
+          <div className="mb-4 rounded-lg bg-slate-50 p-3 text-sm">
+            <p className="text-xs text-slate-600">振込先（{settlement.operatorName}の精算口座）</p>
+            {operator?.bankAccount ? (
+              <p className="font-medium whitespace-pre-line">{operator.bankAccount}</p>
+            ) : (
+              <p className="font-semibold text-amber-800">まだ登録されていません。</p>
+            )}
+            <Link
+              href={`/admin/operators/${settlement.operatorId}`}
+              className="inline-flex min-h-9 items-center text-xs text-sky-800 underline pointer-coarse:min-h-11"
+            >
+              事業者の画面で確かめる・直す
+            </Link>
+          </div>
+        )}
         {settlement.status === 'draft' && (
           <div className="space-y-2 text-sm">
             <p>内容を確かめたら確定してください。確定すると事業者画面に明細を出し、計算し直しません。</p>
@@ -107,9 +143,10 @@ export default async function SettlementPage({ params, searchParams }: PageProps
               <SeenFields settlement={settlement} />
               <ConfirmDialog
                 tone="default"
-                triggerLabel="確定する"
+                triggerLabel="この精算を確定する…"
+                triggerClassName={PRIMARY_TRIGGER_CLASS}
                 title="この精算を確定しますか？"
-                confirmLabel="確定する"
+                confirmLabel="精算を確定する"
               >
                 <p>
                   {receiving
@@ -117,6 +154,17 @@ export default async function SettlementPage({ params, searchParams }: PageProps
                     : `事業者へ ${formatYen(settlement.payoutAmount)} を振り込む精算として確定します。`}
                   事業者画面に明細を出します。振込の前なら、確定を取り消せます。
                 </p>
+                {awaitingText && (
+                  <p className="rounded-lg bg-amber-50 px-3 py-2 text-amber-900">
+                    この事業者の、参加日がこの月までで、まだ精算に入っていない予約があります（{awaitingText}
+                    ）。このまま確定すると、それらはあとの月の精算に入ります。
+                  </p>
+                )}
+                {bankMissing && (
+                  <p className="rounded-lg bg-amber-50 px-3 py-2 text-amber-900">
+                    精算口座（振込先）がまだ登録されていません。確定はできますが、振り込む前に事業者の画面で登録してください。
+                  </p>
+                )}
                 <p className="text-xs text-slate-600">
                   確定の前に計算し直し、数字が変わっていたら確定せずにお知らせします。
                 </p>
@@ -140,6 +188,7 @@ export default async function SettlementPage({ params, searchParams }: PageProps
               <ConfirmDialog
                 tone="default"
                 triggerLabel={receiving ? '入金を記録する…' : '振込を記録する…'}
+                triggerClassName={PRIMARY_TRIGGER_CLASS}
                 title={receiving ? '事業者からの入金を記録しますか？' : '事業者への振込を記録しますか？'}
                 confirmLabel={receiving ? '入金を記録する' : '振込を記録する'}
                 pendingLabel="保存中…"
@@ -150,6 +199,11 @@ export default async function SettlementPage({ params, searchParams }: PageProps
                     ? `から組合への入金 ${formatYen(-settlement.payoutAmount)} を記録します。`
                     : `への振込 ${formatYen(settlement.payoutAmount)} を記録します。`}
                 </p>
+                {bankMissing && (
+                  <p className="rounded-lg bg-amber-50 px-3 py-2 text-amber-900">
+                    精算口座（振込先）がまだ登録されていません。振込先を確かめてから記録してください。
+                  </p>
+                )}
                 <p className="font-semibold text-red-700">
                   明細の実績確認済みの予約（{settlement.items.filter((i) => i.bookingStatus === 'verified').length}{' '}
                   件）が「精算済み」になり、元に戻せません。
@@ -161,7 +215,7 @@ export default async function SettlementPage({ params, searchParams }: PageProps
                 tone="default"
                 triggerLabel="確定を取り消す…"
                 title="確定を取り消しますか？"
-                confirmLabel="確定を取り消す"
+                confirmLabel="確定を取り消して下書きに戻す"
                 pendingLabel="保存中…"
               >
                 <p>事業者画面から明細が見えなくなり、下書きに戻ります。計算し直してから、もう一度確定してください。</p>
@@ -185,6 +239,14 @@ export default async function SettlementPage({ params, searchParams }: PageProps
             {settlement.paidNote && `（${settlement.paidNote}）`}。
           </p>
         )}
+      </Panel>
+
+      <Panel title="明細">
+        <SettlementItemsTable
+          settlement={settlement}
+          timezone={shop.timezone}
+          bookingHref={(bookingId) => `/admin/bookings/${bookingId}`}
+        />
       </Panel>
     </div>
   );

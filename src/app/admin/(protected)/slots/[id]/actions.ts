@@ -13,14 +13,14 @@ import { sendOperatorBookingMail } from '@/modules/notification/send-operator-ma
 import { sendQuietly } from '@/modules/notification/send-quietly';
 import { expireOpenCheckout, getCardPayments } from '@/modules/payment/card-payments';
 import { closeSlot, overrideSlotCapacity, reopenSlot, SlotOverrideError } from '@/modules/schedule/slot-overrides';
+import { slotBack } from './back';
 
 const capacitySchema = z.coerce.number().int().min(0).max(500);
 
-/** 操作後も「タイムテーブルへ」の戻り先（週表示・絞り込み）を引き継ぐ */
+/** 操作後も戻り先（タイムテーブルの週表示・絞り込み、または開いた元の予約）を引き継ぐ */
 function slotPage(slotId: string, formData: FormData, query: string) {
-  const back = formData.get('back');
-  const suffix =
-    typeof back === 'string' && back.startsWith('/admin/timetable?') ? `&back=${encodeURIComponent(back)}` : '';
+  const back = slotBack(formData.get('back'));
+  const suffix = back ? `&back=${encodeURIComponent(back)}` : '';
   return `/admin/slots/${slotId}?${query}${suffix}`;
 }
 

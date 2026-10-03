@@ -36,10 +36,11 @@ export default async function SitePagesPage() {
               href={`/ja/${p.slug}`}
               target="_blank"
               rel="noreferrer"
-              className="inline-flex items-center gap-1 text-xs text-sky-800 hover:underline"
+              className="inline-flex min-h-9 items-center gap-1 text-xs text-sky-800 hover:underline pointer-coarse:min-h-11"
             >
-              ページ
+              公開ページを見る
               <ExternalLink aria-hidden className="size-3" />
+              <span className="sr-only">（新しいタブで開きます）</span>
             </a>
           </li>
         ))}

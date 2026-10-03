@@ -60,7 +60,10 @@ function noteOf(
   }
 }
 
-/** 予約の状態の変化と操作の記録を、時刻の順に並べる */
+/** はじめに出す履歴の件数（それより古いものは畳む） */
+const RECENT = 8;
+
+/** 予約の状態の変化と操作の記録を、新しい順に並べる（メールの送信履歴と同じ向き） */
 export function HistoryPanel({
   history,
   at,
@@ -105,21 +108,29 @@ export function HistoryPanel({
         note: noteOf(action, after, { operator: operatorName, request: requestOperatorName }),
       };
     }),
-  ].sort((a, b) => a.at.getTime() - b.at.getTime());
+  ].sort((a, b) => b.at.getTime() - a.at.getTime());
+  const item = (e: (typeof timeline)[number]) => (
+    <li key={e.id} className="border-l-2 border-slate-200 pl-3">
+      <p className="font-semibold text-slate-900">{e.title}</p>
+      <p className="text-xs text-slate-600 tabular-nums">
+        {at(e.at)} ・ {e.who}
+      </p>
+      {e.note && <p className="mt-0.5 whitespace-pre-line text-slate-700">{e.note}</p>}
+    </li>
+  );
+  const older = timeline.slice(RECENT);
 
   return (
-    <Panel title="状態の履歴">
-      <ol className="space-y-3 text-sm">
-        {timeline.map((e) => (
-          <li key={e.id} className="border-l-2 border-slate-200 pl-3">
-            <p className="font-semibold text-slate-900">{e.title}</p>
-            <p className="text-xs text-slate-600 tabular-nums">
-              {at(e.at)} ・ {e.who}
-            </p>
-            {e.note && <p className="mt-0.5 whitespace-pre-line text-slate-700">{e.note}</p>}
-          </li>
-        ))}
-      </ol>
+    <Panel title="状態の履歴" description="新しい順です。">
+      <ol className="space-y-3 text-sm">{timeline.slice(0, RECENT).map(item)}</ol>
+      {older.length > 0 && (
+        <details className="mt-2 text-sm">
+          <summary className="cursor-pointer py-3 font-semibold text-sky-800">
+            古い記録を見る（{older.length} 件）
+          </summary>
+          <ol className="space-y-3">{older.map(item)}</ol>
+        </details>
+      )}
     </Panel>
   );
 }
@@ -135,7 +146,19 @@ export function MailHistoryPanel({
   at: (d: Date) => string;
 }) {
   return (
-    <Panel title="メールの送信履歴">
+    <Panel
+      title="メールの送信履歴"
+      description={
+        <>
+          {mails.length > 0 ? '新しい順です。' : null}
+          届かないときは
+          <a href="#customer-link" className="font-semibold text-sky-800 underline underline-offset-2">
+            お客様への案内ページ
+          </a>
+          からリンクを出して LINE などで渡せます。
+        </>
+      }
+    >
       {mails.length === 0 ? (
         <p className="text-sm text-slate-600">
           {hasEmail ? 'まだメールを送っていません。' : 'メールアドレスがないため、メールは送りません。'}

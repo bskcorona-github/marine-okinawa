@@ -5,6 +5,8 @@ import { logError, logInfo } from '@/lib/log';
 import { syncAllShops } from '@/modules/schedule/sync-slots';
 import { AUTH_EVENT_RETENTION_DAYS, purgeAuthEvents } from '@/modules/security/auth-events';
 import { purgeRateLimitEvents } from '@/modules/security/rate-limit';
+import { isFeatureOn } from '@/modules/shop/features';
+import { getCurrentShop } from '@/modules/shop/shops';
 
 export const maxDuration = 300;
 
@@ -33,7 +35,11 @@ export async function GET(request: Request) {
   const started = Date.now();
   const now = new Date();
   try {
-    const result = await syncAllShops(db, now);
+    // 「機能の切り替え」で毎日の回の自動作成を止めているあいだは、回を作らない（古い記録の削除は続ける）
+    const shop = await getCurrentShop(db);
+    const syncOn = await isFeatureOn(db, shop.id, 'schedule.auto_sync');
+    if (!syncOn) logInfo('cron.sync_slots.paused', {});
+    const result = syncOn ? await syncAllShops(db, now) : { menus: 0, failed: 0 };
     const purged = {
       rateLimit: await purgeRateLimitEvents(db, new Date(now.getTime() - 24 * 60 * 60_000)),
       authEvents: await purgeAuthEvents(db, new Date(now.getTime() - AUTH_EVENT_RETENTION_DAYS * 86_400_000)),

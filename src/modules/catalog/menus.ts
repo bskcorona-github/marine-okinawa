@@ -213,6 +213,8 @@ export async function listMenusForAdmin(db: DbOrTx, shopId: string) {
       operatorName: operators.name,
       activityName: activities.name,
       reviewStatus: menus.reviewStatus,
+      activityId: menus.activityId,
+      updatedAt: menus.updatedAt,
       // 事業者からの変更の申請（審査中）があるか
       pendingRevision: sql<boolean>`exists (select 1 from ${menuRevisions} r where r.menu_id = "menus"."id" and r.status = 'pending')`,
     })

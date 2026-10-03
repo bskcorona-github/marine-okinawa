@@ -94,10 +94,10 @@ export function OperatorRequestsPanel({
           </fieldset>
           <label className="block space-y-1">
             <span className="block font-medium">事業者へのメモ（任意）</span>
-            <Textarea name="note" rows={2} maxLength={500} placeholder="例：第2希望の日時でも可能か教えてください" />
+            <Textarea name="note" rows={2} maxLength={500} placeholder="例：午前の回でも可能か教えてください" />
           </label>
           <p className="text-xs text-slate-600">
-            事業者には、日時・プラン・人数・年齢・ご連絡事項だけを伝えます（お客様の連絡先は予約確定まで伝えません）。
+            事業者には、日時・プラン・人数・年齢・ご連絡事項と、代表者の氏名・電話・メールを伝えます。
           </p>
           <SubmitButton pendingLabel="依頼中…">受入確認を依頼する</SubmitButton>
         </>
@@ -109,7 +109,7 @@ export function OperatorRequestsPanel({
     <section id="operator-requests" className="scroll-mt-6">
       <Panel
         title="事業者への受入確認"
-        description="候補の事業者に、事業者画面とメールで空き・受入の可否を確かめてもらいます。「受入可」の回答があると、組合が実施事業者を選んでいなければ、その事業者を実施事業者にします。"
+        description="候補の事業者に、空き・受入の可否を事業者画面とメールで確かめてもらいます。「受入可」と答えた事業者が実施事業者になり、お客様へ支払案内が送られます（組合が選んでいるときは実施事業者は変わりません）。"
       >
         {requests.length > 0 && (
           <ul className="divide-y divide-slate-100 text-sm">
@@ -145,7 +145,7 @@ export function OperatorRequestsPanel({
                         triggerLabel="取り下げる"
                         triggerClassName="h-8 px-3 text-xs pointer-coarse:min-h-11"
                         title={`「${r.operatorName}」への受入確認を取り下げますか？`}
-                        confirmLabel="取り下げる"
+                        confirmLabel="受入確認を取り下げる"
                         pendingLabel="保存中…"
                       >
                         <p>
@@ -165,10 +165,11 @@ export function OperatorRequestsPanel({
           // 照会済みの事業者があれば、照会のフォームは畳んでおく（回答の一覧を先に見せる）
           (requests.length > 0 ? (
             <details className="mt-3 border-t border-slate-100 pt-3">
+              {/* 文言が長いので折り返す（スマホで 1 行のままだと、画面の幅が広がりダイアログもずれる） */}
               <summary
                 className={cn(
                   buttonVariants({ variant: 'outline' }),
-                  'h-9 cursor-pointer list-none px-3 text-sm [&::-webkit-details-marker]:hidden',
+                  'h-auto min-h-9 cursor-pointer list-none px-3 py-1.5 text-left text-sm whitespace-normal pointer-coarse:h-auto pointer-coarse:min-h-11 [&::-webkit-details-marker]:hidden',
                 )}
               >
                 ほかの事業者にも受入確認を依頼する・依頼を送り直す

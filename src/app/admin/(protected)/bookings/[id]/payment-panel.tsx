@@ -39,7 +39,165 @@ type Props = {
   /** 支払期限を過ぎている */
   overdue: boolean;
   at: (d: Date) => string;
+  /** 返金の操作を「次の操作」に出している（ここには出さず、案内だけにする） */
+  refundInNextActions?: boolean;
+  /** 返金のダイアログに出す、誰のどの予約か（例：沖縄 太郎 様 ・ 10月5日(月) 10:00 ・ 2名 ・ ¥16,000） */
+  summary?: string;
 };
+
+type RefundProps = Pick<
+  Props,
+  'booking' | 'payment' | 'ledger' | 'settlement' | 'backField' | 'today' | 'cardAvailable' | 'summary'
+> & {
+  /** 「次の操作」に出すとき：幅いっぱいの目立つボタンにし、返す額をボタンに書く */
+  primary?: boolean;
+};
+
+/** まだ返していない返金予定額（支払待ちの予約は返金しない）。なければ 0 */
+export function refundLeftOf(status: BookingStatus, payment: PaymentRow | null): number {
+  if (!payment || payment.refundDueAmount === null || status === 'awaiting_payment') return 0;
+  return Math.max(0, payment.refundDueAmount - payment.refundedAmount);
+}
+
+/** 返金の操作を出せるか（返せる残りがあり、支払待ちでない） */
+export function canRefundBooking(status: BookingStatus, payment: PaymentRow | null): payment is PaymentRow {
+  return Boolean(payment) && refundableAmount(payment!) > 0 && status !== 'awaiting_payment';
+}
+
+/**
+ * 返金の操作。カード決済の予約は Stripe からお客様のカードへ返金して記録する。振込などで返金した予約は、
+ * 返金したあとに金額と日付を残す。返金予定額が残っている予約では「次の操作」に出す
+ */
+export function RefundForm({
+  booking: b,
+  payment,
+  ledger,
+  settlement,
+  backField,
+  today,
+  cardAvailable,
+  primary,
+  summary,
+}: RefundProps) {
+  if (!canRefundBooking(b.status, payment)) return null;
+  const date = (d: Date) => formatDateLabel(d, b.timezone);
+  const receipts = ledger?.receipts ?? [];
+  const pendingRefunds = (ledger?.refunds ?? []).filter((r) => r.status === 'pending');
+  // 返せる残りのある入金（カードは入金ごとに返す）
+  const refundableReceipts = receipts.filter((r) => r.amount - r.refunded > 0);
+  const lockedBySettlement = settlement?.status === 'confirmed' && settlement.kind === 'activity';
+  const settlementMonth = settlement ? formatMonthLabel(settlement.period) : '';
+  const anyCard = refundableReceipts.some((r) => r.method === 'card');
+  const allCard = anyCard && refundableReceipts.every((r) => r.method === 'card');
+  // カードの入金しかないのに Stripe の設定がない（振込などの入金もあれば、そちらは記録できる）
+  const cardOnlyWithoutStripe = !cardAvailable && refundableReceipts.length > 0 && allCard;
+  const blockedHintId = `refund-blocked-${b.id}`;
+  const refundBlocked = lockedBySettlement || pendingRefunds.length > 0 || cardOnlyWithoutStripe;
+  const left = refundLeftOf(b.status, payment);
+  const actionLabel = anyCard ? 'カードへ返金する' : '返金を記録する';
+  return (
+    <form action={recordRefundAction.bind(null, b.id)} className="text-sm">
+      {backField}
+      <input type="hidden" name="refundedBefore" value={payment.refundedAmount} />
+      <ConfirmDialog
+        tone={anyCard ? 'danger' : 'default'}
+        disabled={refundBlocked}
+        describedBy={refundBlocked ? blockedHintId : undefined}
+        triggerLabel={primary && left > 0 ? `${actionLabel}（${formatYen(left)}）` : actionLabel}
+        triggerClassName={cn(
+          primary && 'w-full',
+          // カードへの返金は取り消せないので赤のまま。振込などの記録は、次にすることとして目立たせる
+          primary && !anyCard && 'border-sky-700 bg-sky-700 text-white hover:bg-sky-800 hover:text-white',
+        )}
+        title={anyCard ? 'お客様のカードへ返金しますか？' : '返金を記録しますか？'}
+        confirmLabel={actionLabel}
+        pendingLabel={anyCard ? '返金しています…' : '保存中…'}
+      >
+        {/* ほかの確かめのダイアログと同じく、誰の予約かを先に出す */}
+        {summary && <p className="rounded-lg bg-slate-50 p-3">{summary}</p>}
+        {anyCard ? (
+          <p className="rounded-lg border border-red-200 bg-red-50 p-3 text-red-950">
+            カードの入金を返すときは、Stripe
+            からお客様のカードへ返金します（振込などの入金は、返金したあとに記録します）。
+            <strong className="font-semibold">返金は取り消せません。</strong>
+            （入金の合計 {formatYen(payment.amount)}、返金済み {formatYen(payment.refundedAmount)}）
+          </p>
+        ) : (
+          <p>
+            振込などで返金したあとに、金額と日付を残します。記録した返金は取り消せません（入金の合計{' '}
+            {formatYen(payment.amount)}、返金済み {formatYen(payment.refundedAmount)}）。
+          </p>
+        )}
+        {settlement?.status === 'paid' && (
+          <p className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-amber-950">
+            この予約は振込済みの精算（{settlementMonth}
+            ）に入っています。返金すると、次の精算で事業者への支払いから差し引く調整を作ります。
+          </p>
+        )}
+        {refundableReceipts.length > 1 && (
+          <label className="block space-y-1">
+            <span className="block font-medium">返す入金</span>
+            <select name="receiptId" required className={cn(SELECT_CLASS, 'w-full')} defaultValue="">
+              <option value="" disabled>
+                選んでください
+              </option>
+              {refundableReceipts.map((r) => (
+                <option key={r.id} value={r.id}>
+                  {date(r.receivedAt)}・{RECEIPT_METHOD_LABELS[r.method]}・{RECEIPT_PURPOSE_LABELS[r.purpose]}（残り{' '}
+                  {formatYen(r.amount - r.refunded)}）
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
+        {refundableReceipts.length === 1 && <input type="hidden" name="receiptId" value={refundableReceipts[0].id} />}
+        <AmountField
+          name="amount"
+          label="今回の返金額（円）"
+          required
+          expected={refundableAmount(payment)}
+          expectedLabel={payment.refundDueAmount !== null ? '未返金の予定額' : '返金できる残り'}
+          defaultValue={
+            payment.refundDueAmount !== null ? Math.max(0, payment.refundDueAmount - payment.refundedAmount) || '' : ''
+          }
+        />
+        {allCard ? (
+          // カードへの返金は今日の日付で記録する
+          <input type="hidden" name="refundedOn" value={today} />
+        ) : (
+          <label className="block space-y-1">
+            {/* カードと振込などの入金が両方あるときだけ、カードの日付の扱いを書く */}
+            <span className="block">返金日{anyCard && '（カードへの返金は今日の日付で記録します）'}</span>
+            <Input name="refundedOn" type="date" required defaultValue={today} max={today} className="w-44" />
+          </label>
+        )}
+        <label className="block space-y-1">
+          <span className="block">メモ（任意）</span>
+          <Input name="note" maxLength={200} placeholder={anyCard ? '例：取消のため一部返金' : '例：振込で返金'} />
+        </label>
+      </ConfirmDialog>
+      <div id={blockedHintId}>
+        {lockedBySettlement && (
+          <p className="mt-1 text-xs text-slate-600">
+            確定した精算（{settlementMonth}）に入っている予約です。返金するときは、先に
+            <Link href="/admin/settlements" className="mx-1 font-semibold text-sky-800 underline">
+              精算
+            </Link>
+            で確定を取り消してください。
+          </p>
+        )}
+        {pendingRefunds.length > 0 && (
+          <p className="mt-1 text-xs text-slate-600">
+            結果を待っている返金があります。先に「Stripe に確かめる」で結果を確かめてください。
+          </p>
+        )}
+        {cardOnlyWithoutStripe && (
+          <p className="mt-1 text-xs text-slate-600">カード決済（Stripe）の設定がないため、カードへ返金できません。</p>
+        )}
+      </div>
+    </form>
+  );
+}
 
 /** 予約の詳細の「入金・返金」：支払いの状況、入金・返金の記録、返金・追加の入金の操作 */
 export function PaymentPanel({
@@ -52,6 +210,8 @@ export function PaymentPanel({
   cardAvailable,
   overdue,
   at,
+  refundInNextActions,
+  summary,
 }: Props) {
   const date = (d: Date) => formatDateLabel(d, b.timezone);
   const received = isPaymentReceived(payment?.status);
@@ -73,17 +233,7 @@ export function PaymentPanel({
         : PAYMENT_STATUS_LABELS[payment.status];
   const receipts = ledger?.receipts ?? [];
   const refunds = ledger?.refunds ?? [];
-  const pendingRefunds = refunds.filter((r) => r.status === 'pending');
-  // 返せる残りのある入金（カードは入金ごとに返す）
-  const refundableReceipts = receipts.filter((r) => r.amount - r.refunded > 0);
   const lockedBySettlement = settlement?.status === 'confirmed' && settlement.kind === 'activity';
-  const canRefund = payment && refundableAmount(payment) > 0 && b.status !== 'awaiting_payment';
-  const anyCard = refundableReceipts.some((r) => r.method === 'card');
-  // カードの入金しかないのに Stripe の設定がない（振込などの入金もあれば、そちらは記録できる）
-  const cardOnlyWithoutStripe =
-    !cardAvailable && refundableReceipts.length > 0 && refundableReceipts.every((r) => r.method === 'card');
-  const blockedHintId = `refund-blocked-${b.id}`;
-  const refundBlocked = lockedBySettlement || pendingRefunds.length > 0 || cardOnlyWithoutStripe;
   const settlementLink = (
     <Link href="/admin/settlements" className="mx-1 font-semibold text-sky-800 underline">
       精算
@@ -104,7 +254,10 @@ export function PaymentPanel({
         {payment?.dueAt && !received && (
           <div>
             <dt className="text-slate-600">支払期限</dt>
-            <dd className={cn('font-medium tabular-nums', overdue && 'text-red-700')}>{at(payment.dueAt)}</dd>
+            <dd className={cn('font-medium tabular-nums', overdue && 'text-red-700')}>
+              {at(payment.dueAt)}
+              {overdue && <span className="ml-1 text-xs font-semibold">（期限切れ）</span>}
+            </dd>
           </div>
         )}
         {received && payment && (
@@ -130,7 +283,7 @@ export function PaymentPanel({
             <dd className="font-medium tabular-nums">
               {formatYen(payment.refundDueAmount)}
               {payment.refundDueAmount > payment.refundedAmount && (
-                <span className="block text-xs text-amber-800">
+                <span className="block text-xs font-semibold text-amber-800">
                   未返金 {formatYen(payment.refundDueAmount - payment.refundedAmount)}
                 </span>
               )}
@@ -224,108 +377,33 @@ export function PaymentPanel({
         </div>
       )}
 
-      {canRefund && (
-        <form action={recordRefundAction.bind(null, b.id)} className="mt-4 border-t border-slate-100 pt-4 text-sm">
-          {backField}
-          <input type="hidden" name="refundedBefore" value={payment.refundedAmount} />
-          <ConfirmDialog
-            tone={anyCard ? 'danger' : 'default'}
-            disabled={refundBlocked}
-            describedBy={refundBlocked ? blockedHintId : undefined}
-            triggerLabel={anyCard ? '返金する…' : '返金を記録…'}
-            title={anyCard ? '返金しますか？' : '返金を記録しますか？'}
-            confirmLabel={anyCard ? '返金する' : '返金を記録'}
-            pendingLabel={anyCard ? '返金しています…' : '保存中…'}
-          >
-            {anyCard ? (
-              <p className="rounded-lg border border-red-200 bg-red-50 p-3 text-red-950">
-                カードの入金を返すときは、Stripe
-                からお客様のカードへ返金します（振込などの入金は、返金したあとに記録します）。
-                <strong className="font-semibold">返金は取り消せません。</strong>
-                （入金の合計 {formatYen(payment.amount)}、返金済み {formatYen(payment.refundedAmount)}）
-              </p>
-            ) : (
-              <p>
-                振込などで返金したあとに、金額と日付を残します。記録した返金は取り消せません（入金の合計{' '}
-                {formatYen(payment.amount)}、返金済み {formatYen(payment.refundedAmount)}）。
-              </p>
-            )}
-            {settlement?.status === 'paid' && (
-              <p className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-amber-950">
-                この予約は振込済みの精算（{settlementMonth}
-                ）に入っています。返金すると、次の精算で事業者への支払いから差し引く調整を作ります。
-              </p>
-            )}
-            {refundableReceipts.length > 1 && (
-              <label className="block space-y-1">
-                <span className="block font-medium">返す入金</span>
-                <select name="receiptId" required className={cn(SELECT_CLASS, 'w-full')} defaultValue="">
-                  <option value="" disabled>
-                    選んでください
-                  </option>
-                  {refundableReceipts.map((r) => (
-                    <option key={r.id} value={r.id}>
-                      {date(r.receivedAt)}・{RECEIPT_METHOD_LABELS[r.method]}・{RECEIPT_PURPOSE_LABELS[r.purpose]}（残り{' '}
-                      {formatYen(r.amount - r.refunded)}）
-                    </option>
-                  ))}
-                </select>
-              </label>
-            )}
-            {refundableReceipts.length === 1 && (
-              <input type="hidden" name="receiptId" value={refundableReceipts[0].id} />
-            )}
-            <AmountField
-              name="amount"
-              label="今回の返金額（円）"
-              required
-              expected={refundableAmount(payment)}
-              expectedLabel={payment.refundDueAmount !== null ? '未返金の予定額' : '返金できる残り'}
-              defaultValue={
-                payment.refundDueAmount !== null
-                  ? Math.max(0, payment.refundDueAmount - payment.refundedAmount) || ''
-                  : ''
-              }
+      {canRefundBooking(b.status, payment) &&
+        (refundInNextActions ? (
+          <p className="mt-4 border-t border-slate-100 pt-4 text-sm text-slate-700">
+            返金は「次の操作」の返金のボタンから行います。
+          </p>
+        ) : (
+          <div className="mt-4 border-t border-slate-100 pt-4">
+            <RefundForm
+              booking={b}
+              payment={payment}
+              ledger={ledger}
+              settlement={settlement}
+              backField={backField}
+              today={today}
+              cardAvailable={cardAvailable}
+              summary={summary}
             />
-            {anyCard && refundableReceipts.every((r) => r.method === 'card') ? (
-              // カードへの返金は今日の日付で記録する
-              <input type="hidden" name="refundedOn" value={today} />
-            ) : (
-              <label className="block space-y-1">
-                <span className="block">返金日（カードへの返金は今日の日付で記録します）</span>
-                <Input name="refundedOn" type="date" required defaultValue={today} max={today} className="w-44" />
-              </label>
-            )}
-            <label className="block space-y-1">
-              <span className="block">メモ（任意）</span>
-              <Input name="note" maxLength={200} placeholder={anyCard ? '例：取消のため一部返金' : '例：振込で返金'} />
-            </label>
-          </ConfirmDialog>
-          <div id={blockedHintId}>
-            {lockedBySettlement && (
-              <p className="mt-1 text-xs text-slate-600">
-                確定した精算（{settlementMonth}）に入っている予約です。返金するときは、先に{settlementLink}
-                で確定を取り消してください。
-              </p>
-            )}
-            {pendingRefunds.length > 0 && (
-              <p className="mt-1 text-xs text-slate-600">
-                結果を待っている返金があります。先に「Stripe に確かめる」で結果を確かめてください。
-              </p>
-            )}
-            {cardOnlyWithoutStripe && (
-              <p className="mt-1 text-xs text-slate-600">
-                カード決済（Stripe）の設定がないため、カードへ返金できません。
-              </p>
-            )}
           </div>
-        </form>
-      )}
+        ))}
 
       {received && payment && b.status !== 'awaiting_payment' && (
-        <details className="mt-4 border-t border-slate-100 pt-4 text-sm" open={!ended && kept < b.totalAmount}>
-          <summary className="cursor-pointer font-semibold text-sky-800">追加の入金を記録する</summary>
-          <form action={addReceiptAction.bind(null, b.id)} className="mt-3 space-y-3">
+        <details className="mt-3 border-t border-slate-100 pt-1 text-sm" open={!ended && kept < b.totalAmount}>
+          {/* スマホでも押しやすい高さにする（py-3 で 44px） */}
+          <summary className="cursor-pointer py-3 font-semibold text-sky-800">
+            {ended ? 'キャンセル料などの追加の入金を記録する' : '追加の入金を記録する'}
+          </summary>
+          <form action={addReceiptAction.bind(null, b.id)} className="mt-1 space-y-3">
             {backField}
             <p className="text-xs text-slate-600">
               人数が増えた差額などを、振込・現金で受け取ったときに記録します（カードで受け取った分は自動で記録します）。

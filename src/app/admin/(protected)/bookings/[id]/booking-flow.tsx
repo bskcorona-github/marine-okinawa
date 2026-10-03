@@ -1,4 +1,7 @@
+'use client';
+
 import { Check } from 'lucide-react';
+import { useEffect, useRef } from 'react';
 import { cn } from '@/lib/utils';
 import { BOOKING_STATUS_LABELS } from '@/modules/booking/labels';
 import type { BookingStatus } from '@/modules/booking/status';
@@ -21,22 +24,41 @@ const FLOW: BookingStatus[] = [
 export function BookingFlow({
   status,
   visited,
+  refundLeft,
 }: {
   status: BookingStatus;
   /** 履歴に残っている状態。履歴がない古い予約では null（前の段階はすべて済みとして出す） */
   visited: readonly BookingStatus[] | null;
+  /** まだ返していない返金予定額（終わった予約でも返金が残っていれば、終わったように見せない） */
+  refundLeft?: string | null;
 }) {
   const index = FLOW.indexOf(status);
+  const listRef = useRef<HTMLOListElement>(null);
+  // 横に収まらないとき（スマホ）は、今の段階が見える位置まで横に動かす（画面全体は動かさない）
+  useEffect(() => {
+    const list = listRef.current;
+    const current = list?.querySelector<HTMLElement>('[aria-current="step"]');
+    if (!list || !current) return;
+    list.scrollLeft = current.offsetLeft - (list.clientWidth - current.offsetWidth) / 2;
+  }, [status]);
   if (index < 0) {
-    return (
+    return refundLeft ? (
+      <p className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-2 text-sm font-semibold text-amber-950">
+        「{BOOKING_STATUS_LABELS[status]}」の予約です。返金がまだです（未返金 {refundLeft}
+        ）。「次の操作」から返金してください。
+      </p>
+    ) : (
       <p className="rounded-lg border border-slate-300 bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-700">
         この予約は「{BOOKING_STATUS_LABELS[status]}」で終了しています。
       </p>
     );
   }
   return (
+    // relative：読み上げ用の文字（sr-only は absolute）を横スクロールの枠の中に収める。
+    // 外に出ると、スマホで画面の幅が広がって全体が縮み、ダイアログが画面の外にずれる
     <ol
-      className="flex gap-1 overflow-x-auto rounded-xl border border-slate-200 bg-white p-2 text-xs"
+      ref={listRef}
+      className="relative flex gap-1 overflow-x-auto rounded-xl border border-slate-200 bg-white p-2 text-xs"
       aria-label="予約の進み具合"
     >
       {FLOW.map((step, i) => {

@@ -126,6 +126,28 @@ describe('schedule admin', () => {
     expect((await listSlots(menu.id))[0]).toMatchObject({ status: 'open', capacity: 3 });
   });
 
+  it('終わった日の回は、定員の変更・休止・再開を受け付けない（当日の回は受け付ける）', async () => {
+    const { menu, ctx } = await setup();
+    await addScheduleRule(db, ctx, menu.id, {
+      validFrom: '2026-10-01',
+      validTo: '2026-10-01',
+      weekdays: [0, 1, 2, 3, 4, 5, 6],
+      startTime: '09:00',
+      capacity: 6,
+    });
+    const [slot] = await listSlots(menu.id);
+    // 当日（JST 10月1日 23:00）は、開始後でも操作できる
+    const sameDay = { ...ctx, now: new Date('2026-10-01T14:00:00Z') };
+    await closeSlot(db, sameDay, slot.id);
+    // 翌日（JST 10月2日 00:30）からは、終わった日の回として止める
+    const nextDay = { ...ctx, now: new Date('2026-10-01T15:30:00Z') };
+    await expect(reopenSlot(db, nextDay, slot.id)).rejects.toMatchObject({ code: 'DAY_PASSED' });
+    await reopenSlot(db, sameDay, slot.id);
+    await expect(overrideSlotCapacity(db, nextDay, slot.id, 3)).rejects.toMatchObject({ code: 'DAY_PASSED' });
+    await expect(closeSlot(db, nextDay, slot.id)).rejects.toMatchObject({ code: 'DAY_PASSED' });
+    expect((await listSlots(menu.id))[0]).toMatchObject({ status: 'open', capacity: 6 });
+  });
+
   it('終日の休業日で休止になっている回は、回の詳細からは解除できない', async () => {
     const { menu, ctx } = await setup();
     await addScheduleRule(db, ctx, menu.id, {

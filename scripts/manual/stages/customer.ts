@@ -37,7 +37,6 @@ export async function customerBooking(browser: Browser) {
   await page.getByLabel('メールアドレス', { exact: true }).fill(email);
   await page.getByLabel('メールアドレス（確認）').fill(email);
   await page.getByLabel('電話番号').fill('090-2345-6789');
-  await page.getByLabel('第2希望の日時').fill('同じ日の15:00');
   await capture(page, 'customer-booking', 5, { marks: [page.getByRole('group', { name: '代表者の連絡先' })] });
 
   const agree = page.getByRole('checkbox', { name: /同意します/ });

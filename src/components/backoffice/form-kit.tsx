@@ -36,7 +36,7 @@ export function useUnsavedChanges() {
 }
 
 /** 入力エラーの一覧。各行からその入力欄へ移動できる */
-function ErrorSummary({ error, issues }: { error: string | null; issues?: FormIssue[] }) {
+export function ErrorSummary({ error, issues }: { error: string | null; issues?: FormIssue[] }) {
   if (!error) return null;
   return (
     <div role="alert" className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">

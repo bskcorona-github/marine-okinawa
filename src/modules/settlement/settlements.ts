@@ -810,6 +810,62 @@ const settlementColumns = {
 };
 
 /** 月の精算の一覧（組合） */
+/**
+ * 精算を作る前に知らせる、まだ精算に入れられない予約の数（参加日がこの月までで、催行報告待ち・実績確認待ちのもの）。
+ * 数え方は精算を作るとき（rebuildDrafts）と同じ。operatorId を渡すと、その事業者の予約だけを数える。
+ * firstDate は、その中でいちばん早い参加日（予約台帳を同じ範囲で開くリンクに使う。ショップのタイムゾーンの日付）
+ */
+export async function countAwaitingSettlement(
+  db: DbOrTx,
+  params: { shopId: string; period: string; operatorId?: string },
+): Promise<{ awaitingReport: number; awaitingVerification: number; firstDate: string | null }> {
+  const timezone = await shopTimezone(db, params.shopId);
+  const end = periodEnd(params.period, timezone);
+  const rows = await db
+    .select({
+      status: bookings.status,
+      count: sql<number>`count(*)`.mapWith(Number),
+      first: sql<Date>`min(${slots.startsAt})`.mapWith((v: string | Date) => new Date(v)),
+    })
+    .from(bookings)
+    .innerJoin(slots, eq(slots.id, bookings.slotId))
+    .where(
+      and(
+        eq(bookings.shopId, params.shopId),
+        lt(slots.startsAt, end),
+        inArray(bookings.status, ['confirmed', 'completed']),
+        params.operatorId ? eq(bookings.operatorId, params.operatorId) : undefined,
+      ),
+    )
+    .groupBy(bookings.status);
+  const countOf = (status: string) => rows.find((r) => r.status === status)?.count ?? 0;
+  const first = rows.reduce<Date | null>((min, r) => (!min || r.first < min ? r.first : min), null);
+  return {
+    awaitingReport: countOf('confirmed'),
+    awaitingVerification: countOf('completed'),
+    firstDate: first ? localDate(first, timezone) : null,
+  };
+}
+
+/** 精算口座（振込先）をまだ登録していない事業者（確定の前に知らせるため。渡した事業者の中から返す） */
+export async function listOperatorsWithoutBankAccount(
+  db: DbOrTx,
+  params: { shopId: string; operatorIds: string[] },
+): Promise<{ id: string; name: string }[]> {
+  if (params.operatorIds.length === 0) return [];
+  return db
+    .select({ id: operators.id, name: operators.name })
+    .from(operators)
+    .where(
+      and(
+        eq(operators.shopId, params.shopId),
+        inArray(operators.id, params.operatorIds),
+        sql`trim(${operators.bankAccount}) = ''`,
+      ),
+    )
+    .orderBy(asc(operators.sortOrder), asc(operators.name));
+}
+
 export async function listSettlements(db: DbOrTx, params: { shopId: string; period: string }) {
   return db
     .select(settlementColumns)

@@ -24,6 +24,7 @@ export default async function PartnerAccountPage({ searchParams }: PageProps<'/p
       />
       <LoginMethodsSection
         userId={operator.userId}
+        shopId={operator.shopId}
         timezone={shop.timezone}
         path="/partner/account"
         searchParams={await searchParams}

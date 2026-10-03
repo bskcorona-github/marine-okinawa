@@ -61,6 +61,7 @@ export const AUDIT_ACTION_LABELS: Record<string, string> = {
   'settlement.export_csv': '精算の CSV を出力',
   'report.export_csv': '日報の CSV を出力',
   'plan_image.upload': 'プランの写真を追加',
+  'feature.toggle': '機能の切り替え',
 };
 
 export const AUDIT_ACTOR_TYPE_LABELS: Record<AuditActorType, string> = {
@@ -91,6 +92,8 @@ export function auditTargetHref(targetType: string, targetId: string): string | 
       return `/admin/inquiries/${targetId}`;
     case 'operator_application':
       return `/admin/operators/applications/${targetId}`;
+    case 'feature':
+      return `/admin/features#${targetId}`;
     default:
       return null;
   }

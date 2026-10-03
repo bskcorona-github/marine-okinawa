@@ -159,10 +159,13 @@ export async function reviewChangeAction(operatorId: string, formData: FormData)
     note: formData.get('note') ?? '',
   });
   if (!parsed.success) redirect(page(operatorId, 'error=input#change-requests'));
+  // 口座・メール・電話番号が変わる申請は、登録済みの電話番号へ折り返して本人に確かめた印がないと反映しない（判定はサーバー側）
   const result = await reviewChangeRequest(db, {
     shopId: admin.shopId,
+    operatorId,
     requestId: parsed.data.requestId,
     approve: parsed.data.decision === 'approve',
+    verifiedByPhone: formData.get('verifiedByPhone') === 'on',
     note: parsed.data.note,
     actorId: admin.userId,
     now: new Date(),

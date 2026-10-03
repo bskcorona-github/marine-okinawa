@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { PageHeader } from '@/components/backoffice/page-header';
 import { db } from '@/db';
 import { requireAdmin } from '@/modules/auth/guard';
@@ -26,6 +27,17 @@ export default async function NewMenuPage() {
         activities={activities}
         submitLabel="作成して回の設定へ"
         initial={NEW_PLAN_VALUES}
+        seasonHint={
+          <>
+            季節を「繁忙期」「通常期」に分けると、実施事業者ごとに決めた繁忙期の期間の日は繁忙期の料金、それ以外の日は通常期の料金になります。期間は、事業者の画面の「繁忙期の期間」で決めます。
+            <Link
+              href="/admin/operators"
+              className="ml-1 inline-flex min-h-9 items-center font-semibold text-sky-800 underline pointer-coarse:min-h-11"
+            >
+              事業者の一覧を開く
+            </Link>
+          </>
+        }
       />
     </div>
   );

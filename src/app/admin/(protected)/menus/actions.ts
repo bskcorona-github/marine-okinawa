@@ -9,6 +9,7 @@ import type { AdminFormState } from '@/lib/zod-ja';
 import { requireAdmin } from '@/modules/auth/guard';
 import { changedFields } from '@/modules/audit/diff';
 import { writeAuditLog } from '@/modules/audit/log';
+import { autoSlug, saveWithAutoSlug } from '@/modules/catalog/auto-slug';
 import { createMenu, updateMenu } from '@/modules/catalog/menu-admin';
 import { getMenuForAdmin } from '@/modules/catalog/menus';
 import { menuToInput } from '@/modules/catalog/operator-plans';
@@ -21,7 +22,7 @@ import { readUpload } from '@/modules/storage/upload';
 export type MenuFormState = AdminFormState;
 
 const ERROR_LABELS = {
-  SLUG_TAKEN: 'この URL 名（slug）は既に使われています',
+  SLUG_TAKEN: 'このページのアドレスは、ほかのプランで使われています。空欄にすると自動で付けます',
   NOT_FOUND: 'プランが見つかりません',
   OPERATOR_NOT_FOUND: '実施事業者が見つかりません',
   ACTIVITY_NOT_FOUND: 'アクティビティが見つかりません',
@@ -30,12 +31,29 @@ const ERROR_LABELS = {
 
 export async function createMenuAction(_prev: MenuFormState, formData: FormData): Promise<MenuFormState> {
   const admin = await requireAdmin();
+  // ページのアドレス（URL 名）が空欄なら自動で付ける（登録申請の承認と同じ作り方。重複したら作り直す）
+  const auto = !String(formData.get('slug') ?? '').trim();
+  if (auto) formData.set('slug', autoSlug('plan'));
   const parsed = parseMenuForm(formData);
   if (!parsed.success) return menuFormInvalid(parsed.error);
-  // プランと実施候補は一緒に保存する（候補の保存で失敗したら、プランも保存しない）
   // プラン・実施候補・履歴は一緒に保存する（どれかで失敗したら、どれも保存しない）
-  const result = await db.transaction(async (tx) => {
-    const saved = await createMenu(tx, admin.shopId, parsed.data);
+  const create = (slug: string) => createWithCandidates(admin, { ...parsed.data, slug }, formData);
+  const result = auto
+    ? await saveWithAutoSlug('plan', create, (r) => !r.ok && r.error === 'SLUG_TAKEN')
+    : await create(parsed.data.slug);
+  if (!result.ok) return { error: ERROR_LABELS[result.error] };
+  revalidatePath('/', 'layout');
+  redirect(`/admin/menus/${result.menuId}/schedule?created=1`);
+}
+
+/** プラン・実施候補・履歴を一緒に保存する（どれかで失敗したら、どれも保存しない） */
+async function createWithCandidates(
+  admin: { shopId: string; userId: string },
+  input: Parameters<typeof createMenu>[2],
+  formData: FormData,
+) {
+  return db.transaction(async (tx) => {
+    const saved = await createMenu(tx, admin.shopId, input);
     if (saved.ok) {
       const operatorIds = candidateIds(formData);
       await setMenuCandidates(tx, { shopId: admin.shopId, menuId: saved.menuId, operatorIds });
@@ -45,14 +63,11 @@ export async function createMenuAction(_prev: MenuFormState, formData: FormData)
         action: 'menu.create',
         targetType: 'menu',
         targetId: saved.menuId,
-        after: { ...parsed.data, candidateIds: operatorIds },
+        after: { ...input, candidateIds: operatorIds },
       });
     }
     return saved;
   });
-  if (!result.ok) return { error: ERROR_LABELS[result.error] };
-  revalidatePath('/', 'layout');
-  redirect(`/admin/menus/${result.menuId}/schedule?created=1`);
 }
 
 export async function updateMenuAction(
@@ -62,6 +77,12 @@ export async function updateMenuAction(
 ): Promise<MenuFormState> {
   const admin = await requireAdmin();
   if (!isUuid(menuId)) redirect('/admin/menus');
+  // ページのアドレスを空欄にしたときは、今のアドレスのまま（自動で変えると、お客様が控えたリンクが切れるため）
+  if (!String(formData.get('slug') ?? '').trim()) {
+    const current = await getMenuForAdmin(db, admin.shopId, menuId);
+    if (!current) redirect('/admin/menus');
+    formData.set('slug', current.slug);
+  }
   const parsed = parseMenuForm(formData);
   if (!parsed.success) return menuFormInvalid(parsed.error);
   // プラン・実施候補・履歴（変わった項目の前後）は一緒に保存する

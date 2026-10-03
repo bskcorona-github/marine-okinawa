@@ -1,10 +1,13 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { enabledSocialProviders, SOCIAL_PROVIDER_LABELS } from '@/lib/social-providers';
+import { SOCIAL_PROVIDER_LABELS } from '@/lib/social-providers';
 import { requireLoginSetup } from '@/modules/auth/guard';
 import { setInitialPasswordAction } from './actions';
 import { InitialPasswordForm } from './password-form';
+import { activeSocialProviders } from '@/modules/shop/features';
+import { getCurrentShop } from '@/modules/shop/shops';
+import { db } from '@/db';
 
 export const metadata = { title: 'パスワードを決める' };
 
@@ -12,7 +15,7 @@ export const metadata = { title: 'パスワードを決める' };
 export default async function InitialPasswordPage() {
   const me = await requireLoginSetup();
   if (me.hasPassword) redirect('/admin/2fa/setup');
-  const providers = enabledSocialProviders();
+  const providers = await activeSocialProviders(db, (await getCurrentShop(db)).id);
   return (
     <main className="flex min-h-screen items-center justify-center p-4">
       <Card className="w-full max-w-sm">

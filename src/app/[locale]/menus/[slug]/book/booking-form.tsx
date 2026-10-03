@@ -601,16 +601,6 @@ export function BookingForm({
             />
           </Field>
         )}
-        <Field id="secondChoice" label={t('secondChoice')} optional={t('optional')} hint={t('secondChoiceHint')}>
-          <input
-            id="secondChoice"
-            name="secondChoice"
-            maxLength={200}
-            placeholder={t('secondChoicePlaceholder')}
-            aria-describedby="secondChoice-hint"
-            className={inputClass(false)}
-          />
-        </Field>
         <Field id="customerNote" label={t('customerNote')} optional={t('optional')}>
           <textarea
             id="customerNote"

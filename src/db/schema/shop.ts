@@ -1,4 +1,4 @@
-import { integer, jsonb, pgEnum, pgTable, primaryKey, text, uuid } from 'drizzle-orm/pg-core';
+import { boolean, integer, jsonb, pgEnum, pgTable, primaryKey, text, timestamp, uuid } from 'drizzle-orm/pg-core';
 import { timestamps } from './_columns';
 import { user } from './auth';
 
@@ -96,4 +96,25 @@ export const shopMembers = pgTable(
     ...timestamps,
   },
   (t) => [primaryKey({ columns: [t.shopId, t.userId] })],
+);
+
+/**
+ * 機能の切り替え（組合の管理画面の「機能の切り替え」）。行がない機能は初期値のとおり動く。
+ * until を過ぎた切り替えは無いものとして扱う（自動で初期値に戻る）。切り替えは操作の記録にも残す
+ */
+export const featureFlags = pgTable(
+  'feature_flags',
+  {
+    shopId: uuid()
+      .notNull()
+      .references(() => shops.id),
+    /** 機能の名前（modules/shop/features.ts の FEATURES のキー） */
+    key: text().notNull(),
+    enabled: boolean().notNull(),
+    until: timestamp({ withTimezone: true }),
+    reason: text().notNull(),
+    updatedBy: text().references(() => user.id, { onDelete: 'set null' }),
+    updatedAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.shopId, t.key] })],
 );

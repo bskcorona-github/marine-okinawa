@@ -42,8 +42,9 @@ export default async function PartnerPortalLayout({ children }: LayoutProps<'/pa
             className="pointer-events-none absolute inset-y-0 right-0 w-10 bg-gradient-to-l from-[#053a40] to-transparent lg:hidden"
           />
         </nav>
-        <div className="mt-auto hidden space-y-2 border-t border-white/10 pt-4 text-xs text-white/75 lg:block">
-          <p className="truncate" title={operator.email}>
+        {/* メールアドレス・パスワードの変更・ログアウトは縦に並べる（横に詰めると 1 つのリンクに見えるため） */}
+        <div className="mt-auto hidden flex-col items-start gap-2 border-t border-white/10 pt-4 text-xs text-white/75 lg:flex">
+          <p className="max-w-full truncate" title={operator.email}>
             {operator.email}
           </p>
           <Link href="/partner/password" className="inline-flex min-h-9 items-center underline pointer-coarse:min-h-11">

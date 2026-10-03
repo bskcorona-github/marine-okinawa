@@ -241,7 +241,7 @@ export type StatusFilter =
 export const STATUS_GROUP_LABELS: Record<Exclude<StatusFilter, BookingStatus>, string> = {
   open: '未確定の申込（仮受付〜支払待ち）',
   active: '確定済み（予約確定〜精算済み）',
-  in_review: '内容確認中・事業者確認中',
+  in_review: '内容確認中・受入確認中',
   operator_responded: '事業者の回答あり（組合の対応待ち）',
   awaiting_report: '催行報告待ち（開始済みの予約確定）',
   operator_report: '事業者から中止・無断キャンセルの報告',
@@ -362,6 +362,27 @@ const operatorRespondedSql = sql`(${bookingStatusIn(OPEN_REQUEST_STATUSES)} and 
       '-infinity'::timestamptz)
 ))`;
 
+/** いちばん新しい回答の種類（実施事業者の回答を先に。受入可・条件付き・受入不可を色で分けるため） */
+const latestResponseSql = sql<'accepted' | 'conditional' | 'declined' | null>`(
+  select r.status from ${bookingOperatorRequests} r
+  where r.booking_id = ${bookings.id} and r.status in ('accepted', 'conditional', 'declined')
+  order by (r.operator_id = ${bookings.operatorId}) desc nulls last, r.responded_at desc nulls last limit 1)`;
+
+/** 事業者の回答あり（組合の対応待ち）と、いちばん新しい回答の種類（ダッシュボード・予約台帳・予約詳細で同じ判定を使う） */
+const operatorResponseColumns = {
+  operatorResponded: operatorRespondedSql.mapWith(Boolean),
+  latestResponse: latestResponseSql,
+};
+
+/** 予約の詳細の見出しに出す「事業者の回答あり」（ダッシュボード・予約台帳と同じ判定） */
+export async function getOperatorResponse(db: DbOrTx, params: { shopId: string; bookingId: string }) {
+  const [row] = await db
+    .select(operatorResponseColumns)
+    .from(bookings)
+    .where(and(eq(bookings.shopId, params.shopId), eq(bookings.id, params.bookingId)));
+  return row ?? { operatorResponded: false, latestResponse: null };
+}
+
 function statusCondition(status: StatusFilter, now: Date): SQL {
   switch (status) {
     case 'open':
@@ -446,7 +467,7 @@ const searchColumns = {
 
 function searchQuery(db: DbOrTx, params: BookingSearchParams) {
   return db
-    .select(searchColumns)
+    .select({ ...searchColumns, ...operatorResponseColumns })
     .from(bookings)
     .innerJoin(slots, eq(slots.id, bookings.slotId))
     .innerJoin(menus, eq(menus.id, slots.menuId))
@@ -475,6 +496,17 @@ export async function searchBookings(db: DbOrTx, params: BookingSearchParams) {
     .limit(pageSize + 1)
     .offset((page - 1) * pageSize);
   return { rows: rows.slice(0, pageSize), hasMore: rows.length > pageSize, page };
+}
+
+/** 絞り込みに合う予約の件数（予約台帳の「全 N 件」。一覧と同じ条件で数える） */
+export async function countBookings(db: DbOrTx, params: BookingSearchParams): Promise<number> {
+  const [row] = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(bookings)
+    .innerJoin(slots, eq(slots.id, bookings.slotId))
+    .leftJoin(payments, eq(payments.bookingId, bookings.id))
+    .where(and(...searchConditions(params)));
+  return row?.count ?? 0;
 }
 
 /** CSV に出す件数の上限（大きすぎる出力でサーバーを止めないように） */
@@ -527,9 +559,9 @@ export async function exportBookings(db: DbOrTx, params: BookingSearchParams, li
   };
 }
 
-/** 回の予約者一覧（管理画面） */
+/** 回の予約者一覧（管理画面）。名簿に出す人数の内訳（区分ごとの人数）と、申込の内容の有無も返す */
 export async function listSlotBookings(db: DbOrTx, params: { shopId: string; slotId: string }) {
-  return db
+  const rows = await db
     .select({
       id: bookings.id,
       bookingNo: bookings.bookingNo,
@@ -548,11 +580,27 @@ export async function listSlotBookings(db: DbOrTx, params: { shopId: string; slo
       operatorId: bookings.operatorId,
       // メールで知らせられるか（ない予約は電話で伝える）
       hasEmail: sql<boolean>`coalesce(${bookings.contactEmail}, '') <> ''`,
+      customerNote: bookings.customerNote,
+      participantAges: bookings.participantAges,
+      secondChoice: bookings.secondChoice,
     })
     .from(bookings)
     .leftJoin(payments, eq(payments.bookingId, bookings.id))
     .where(and(eq(bookings.shopId, params.shopId), eq(bookings.slotId, params.slotId)))
     .orderBy(asc(bookings.createdAt));
+  const ids = rows.map((r) => r.id);
+  const items = ids.length
+    ? await db
+        .select({ bookingId: bookingItems.bookingId, label: bookingItems.label, quantity: bookingItems.quantity })
+        .from(bookingItems)
+        .where(inArray(bookingItems.bookingId, ids))
+        .orderBy(asc(bookingItems.createdAt))
+    : [];
+  const itemsOf = new Map<string, { label: string; quantity: number }[]>();
+  for (const { bookingId, label, quantity } of items) {
+    itemsOf.set(bookingId, [...(itemsOf.get(bookingId) ?? []), { label, quantity }]);
+  }
+  return rows.map((r) => ({ ...r, items: itemsOf.get(r.id) ?? [] }));
 }
 
 /** 参加人数（名で数えるプランは人数、艇で数える貸切は乗船人数） */
@@ -694,15 +742,7 @@ export async function countReceivedSince(db: DbOrTx, params: { shopId: string; s
 /** 未確定の申込（ダッシュボード用）。参加日の近い順（急ぐものから） */
 export async function listOpenRequests(db: DbOrTx, params: { shopId: string; limit: number }) {
   return db
-    .select({
-      ...searchColumns,
-      operatorResponded: operatorRespondedSql.mapWith(Boolean),
-      // いちばん新しい回答の種類（受入可・条件付き・受入不可を色で分けるため）
-      latestResponse: sql<'accepted' | 'conditional' | 'declined' | null>`(
-        select r.status from ${bookingOperatorRequests} r
-        where r.booking_id = ${bookings.id} and r.status in ('accepted', 'conditional', 'declined')
-        order by (r.operator_id = ${bookings.operatorId}) desc nulls last, r.responded_at desc nulls last limit 1)`,
-    })
+    .select({ ...searchColumns, ...operatorResponseColumns })
     .from(bookings)
     .innerJoin(slots, eq(slots.id, bookings.slotId))
     .innerJoin(menus, eq(menus.id, slots.menuId))

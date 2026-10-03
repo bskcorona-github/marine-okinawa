@@ -7,7 +7,7 @@ import { db } from '@/db';
 import { addDays, formatDateLabel, localDate, localTime, zonedToUtc } from '@/lib/dates';
 import { requireOperator } from '@/modules/auth/guard';
 import { listLinkedProviders } from '@/modules/auth/linked-accounts';
-import { enabledSocialProviders, isSocialProvider, SOCIAL_PROVIDER_LABELS } from '@/lib/social-providers';
+import { isSocialProvider, SOCIAL_PROVIDER_LABELS } from '@/lib/social-providers';
 import { QuickSocialLink } from '@/components/backoffice/quick-social-link';
 import { isOpenRequest } from '@/modules/booking/status';
 import { splitPlanTitle } from '@/modules/catalog/display-title';
@@ -20,6 +20,7 @@ import {
 import { expiryState, listOperatorDocuments } from '@/modules/partner/documents';
 import { listOperatorRequests } from '@/modules/partner/requests';
 import { getShopById } from '@/modules/shop/shops';
+import { activeSocialProviders } from '@/modules/shop/features';
 
 export const metadata = { title: 'ホーム' };
 
@@ -40,7 +41,7 @@ export default async function PartnerHomePage({ searchParams }: PageProps<'/part
   const operator = await requireOperator();
   // まだ LINE・Google をつないでいなければ、ホームでつなげるようにする
   const linked = await listLinkedProviders(db, operator.userId);
-  const linkable = linked.length === 0 ? enabledSocialProviders() : [];
+  const linkable = linked.length === 0 ? await activeSocialProviders(db, operator.shopId) : [];
   const sp = await searchParams;
   const shop = await getShopById(db, operator.shopId);
   const now = new Date();
@@ -62,11 +63,11 @@ export default async function PartnerHomePage({ searchParams }: PageProps<'/part
     }),
   ]);
   const pending = requests.filter((r) => isOpenRequest(r.bookingStatus));
-  const confirmed = upcoming.filter((b) => b.status === 'confirmed');
+  const upcomingVisible = upcoming.filter((b) => b.status === 'confirmed' || b.status === 'awaiting_payment');
   // ホームには今日・明日の予約だけを並べる（当日の準備に使う）
   const dayAfterTomorrow = zonedToUtc(addDays(today, 2), '00:00', shop.timezone);
-  const soon = confirmed.filter((b) => b.startsAt < dayAfterTomorrow);
-  const later = confirmed.length - soon.length;
+  const soon = upcomingVisible.filter((b) => b.startsAt < dayAfterTomorrow);
+  const later = upcomingVisible.length - soon.length;
   const dayOf = (d: Date) => (localDate(d, shop.timezone) === today ? '今日' : '明日');
   const expiring = documents.filter((d) => {
     const state = expiryState(d.expiresOn, today);
@@ -79,7 +80,7 @@ export default async function PartnerHomePage({ searchParams }: PageProps<'/part
     <div className="max-w-4xl space-y-5">
       <PageHeader
         title="ホーム"
-        description={`${shop.name}からの受入確認と、自社で実施する予約です。お客様の連絡先は、予約が確定したあとに表示します。`}
+        description={`${shop.name}からの受入確認と、自社で実施する予約です。`}
       />
       {sp.password === 'changed' && <Notice tone="success">パスワードを変更しました。</Notice>}
       {isSocialProvider(sp.linked) && (
@@ -107,6 +108,7 @@ export default async function PartnerHomePage({ searchParams }: PageProps<'/part
                   partySize={r.partySize}
                   unit={r.capacityUnit}
                   guestCount={r.guestCount}
+                  contactName={r.contactName}
                   menuTitle={r.menuTitle}
                   bookingNo={`依頼 ${at(r.requestedAt)}`}
                   badge={
@@ -210,7 +212,7 @@ export default async function PartnerHomePage({ searchParams }: PageProps<'/part
 
       <Panel title={`今日・明日の予約（${soon.length} 件）`}>
         {soon.length === 0 ? (
-          <p className="text-sm text-slate-600">今日・明日の確定予約はありません。</p>
+          <p className="text-sm text-slate-600">今日・明日の予約はありません。</p>
         ) : (
           <ul className="-mx-4 divide-y divide-slate-100 md:-mx-5">
             {soon.map((b) => (

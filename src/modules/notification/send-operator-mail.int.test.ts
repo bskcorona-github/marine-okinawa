@@ -69,7 +69,7 @@ describe('事業者へのメール', () => {
       shopId: shop.id,
       bookingId,
       operatorIds: [op.id],
-      note: '第2希望でも可能ですか',
+      note: '2名です',
       actorId: null,
       now: NOW,
     });
@@ -81,7 +81,7 @@ describe('事業者へのメール', () => {
     expect(mailer.sent[0].subject).toContain('受入確認のお願い');
     const html = await render(mailer.sent[0].react);
     expect(html).toContain('40歳、8歳');
-    expect(html).toContain('第2希望でも可能ですか');
+    expect(html).toContain('2名です');
     expect(html).toContain(`${APP_URL}/partner/requests/${requestIds[0]}`);
     expect(html).not.toContain('taro@example.com');
     // 電話番号は載せない（id にたまたま 090 が入ることがあるので、番号そのもので確かめる）

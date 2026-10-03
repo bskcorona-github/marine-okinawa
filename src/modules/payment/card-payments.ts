@@ -1,5 +1,5 @@
 import { eq, sql } from 'drizzle-orm';
-import type { Db, Tx } from '@/db/client';
+import type { Db, DbOrTx, Tx } from '@/db/client';
 import { bookings, paymentReceipts, payments } from '@/db/schema';
 import { formatDateTimeLabel } from '@/lib/dates';
 import { getEnv } from '@/lib/env';
@@ -15,6 +15,7 @@ import { splitPlanTitle } from '@/modules/catalog/display-title';
 import { bookingUrl } from '@/modules/notification/send-booking-mail';
 import { addReceipt, lockBookingPayment } from './ledger';
 import { StripeError, stripeProvider, type CardPaymentProvider, type CheckoutSession } from './stripe';
+import { isFeatureOn } from '@/modules/shop/features';
 
 /**
  * カード決済の窓口（Stripe）。返金・支払いのページの無効化にも使うので、秘密鍵だけで作る。
@@ -31,6 +32,11 @@ export function getCardPayments(): CardPaymentProvider | null {
  * 払ったあとに画面を閉じたお客様の決済が記録されないため）
  */
 export const cardPaymentsEnabled = () => Boolean(getEnv().STRIPE_SECRET_KEY && getEnv().STRIPE_WEBHOOK_SECRET);
+
+/** カード決済を使うか（Stripe の鍵があり、「機能の切り替え」で止めていない） */
+export async function cardPaymentsActive(db: DbOrTx, shopId: string): Promise<boolean> {
+  return cardPaymentsEnabled() && (await isFeatureOn(db, shopId, 'payment.card'));
+}
 
 /** Stripe で払える最小の額（円） */
 export const MIN_CARD_AMOUNT = 50;

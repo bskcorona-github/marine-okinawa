@@ -1,10 +1,10 @@
-import { randomUUID } from 'node:crypto';
 import { and, desc, eq } from 'drizzle-orm';
 import { z } from 'zod';
 import { invoiceNumberSchema } from '@/lib/invoice';
 import type { Db, DbOrTx } from '@/db/client';
 import { applicationStatus, operatorApplications, operatorDocuments, operators } from '@/db/schema';
 import { changedFields } from '@/modules/audit/diff';
+import { autoSlug } from '@/modules/catalog/auto-slug';
 import { writeAuditLog } from '@/modules/audit/log';
 import { normalizeEmail } from '@/modules/customer/normalize';
 
@@ -109,7 +109,7 @@ export async function reviewApplication(
 }
 
 /** slug を事業者名から作れないときの代わり（英数字の短い ID） */
-const fallbackSlug = () => `operator-${randomUUID().slice(0, 8)}`;
+const fallbackSlug = () => autoSlug('operator');
 
 /**
  * 登録申請を承認し、事業者として登録する（申請の内容を事業者の情報へ写し、添付の資料を事業者の資料にする）。

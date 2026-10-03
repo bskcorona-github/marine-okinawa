@@ -1,9 +1,12 @@
 import Link from 'next/link';
 import { buttonVariants } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { enabledSocialProviders, SOCIAL_PROVIDER_LABELS } from '@/lib/social-providers';
+import { SOCIAL_PROVIDER_LABELS } from '@/lib/social-providers';
 import { cn } from '@/lib/utils';
 import { inviteVerifyPath, peekInviteToken } from '@/modules/auth/auth-links';
+import { activeSocialProviders } from '@/modules/shop/features';
+import { getCurrentShop } from '@/modules/shop/shops';
+import { db } from '@/db';
 
 export const metadata = { title: 'はじめる' };
 
@@ -14,7 +17,7 @@ export const metadata = { title: 'はじめる' };
 export default async function WelcomePage({ searchParams }: PageProps<'/admin/welcome'>) {
   const { token } = await searchParams;
   const invite = typeof token === 'string' ? await peekInviteToken(token) : null;
-  const providers = enabledSocialProviders();
+  const providers = await activeSocialProviders(db, (await getCurrentShop(db)).id);
   return (
     <main className="flex min-h-screen items-center justify-center p-4">
       <Card className="w-full max-w-sm">
@@ -63,7 +66,7 @@ export default async function WelcomePage({ searchParams }: PageProps<'/admin/we
               <Link href="/admin/forgot-password" className={cn(buttonVariants({ size: 'lg' }), 'w-full')}>
                 ログインの案内をもう一度受け取る
               </Link>
-              <Link href="/admin/login" className="block text-center text-sky-800 underline">
+              <Link href="/admin/login" className="flex min-h-11 items-center justify-center text-sky-800 underline">
                 ログインの画面へ
               </Link>
             </>

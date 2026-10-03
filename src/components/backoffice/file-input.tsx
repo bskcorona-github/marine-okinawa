@@ -43,7 +43,10 @@ export function FileInput({
   function update(list: File[]) {
     setFiles(list);
     const input = ref.current;
-    if (input) input.setCustomValidity(list.some((f) => f.size > MAX_BYTES) ? `${MAX_FILE_MB}MB を超えるファイルは送れません` : '');
+    if (input)
+      input.setCustomValidity(
+        list.some((f) => f.size > MAX_BYTES) ? `${MAX_FILE_MB}MB を超えるファイルは送れません` : '',
+      );
     onChange?.(list.reduce((sum, f) => sum + f.size, 0));
   }
 

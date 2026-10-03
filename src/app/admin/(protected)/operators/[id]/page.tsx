@@ -4,8 +4,9 @@ import { notFound } from 'next/navigation';
 import { ConfirmDialog } from '@/components/backoffice/confirm-dialog';
 import { ExpiryBadge } from '@/components/backoffice/expiry-badge';
 import { FileInput } from '@/components/backoffice/file-input';
-import { SELECT_CLASS } from '@/components/backoffice/field-styles';
+import { PRIMARY_TRIGGER_CLASS, SELECT_CLASS } from '@/components/backoffice/field-styles';
 import { Notice, PageHeader, Panel } from '@/components/backoffice/page-header';
+import { RequiredMark } from '@/components/backoffice/required-mark';
 import { SubmitButton } from '@/components/backoffice/submit-button';
 import { buttonVariants } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -20,7 +21,12 @@ import { requireAdmin } from '@/modules/auth/guard';
 import { getOperatorForAdmin } from '@/modules/catalog/operator-admin';
 import { listOperatorAccounts } from '@/modules/partner/accounts';
 import { countOperatorWorkload } from '@/modules/partner/bookings';
-import { PROFILE_FIELDS, listChangeRequests, type ProfileField } from '@/modules/partner/change-requests';
+import {
+  PROFILE_FIELDS,
+  listChangeRequests,
+  sensitiveChanges,
+  type ProfileField,
+} from '@/modules/partner/change-requests';
 import {
   DOCUMENT_KIND_LABELS,
   RECEIVED_VIA_LABELS,
@@ -57,8 +63,8 @@ function loginStatusOf(a: { methods: string[]; twoFactorEnabled: boolean | null;
 
 const SAVED: Record<string, string> = {
   approved: '登録申請を承認し、事業者として登録しました。',
-  account_disabled: 'アカウントを停止しました。次の操作からログインできなくなります。',
-  account_enabled: 'アカウントを再開しました。',
+  account_disabled: 'このアカウントのログインを止めました。次の操作から事業者画面を使えなくなります。',
+  account_enabled: 'このアカウントのログインを再開しました。',
   document: '資料を登録しました。',
   document_deleted: '資料を削除しました。',
   change_approved: '更新申請を反映しました。',
@@ -71,10 +77,98 @@ const ERRORS: Record<string, string> = {
   FILE_REQUIRED: 'Web で受け取った資料は、ファイルを選んでください（郵送・持参ならファイルなしで登録できます）',
   document_input: '資料の種類・名前・有効期限を確認してください',
   change_done: 'この更新申請は、すでに反映・見送り済みです。画面を開き直してください',
+  change_unverified:
+    '口座・連絡用メールアドレス・電話番号が変わる申請です。登録済みの電話番号へ折り返して本人に確かめてから、確認の欄にチェックを入れて反映してください',
   change_invalid:
     'この更新申請は、内容が今の入力の決まりに合わないため反映できませんでした（電話番号・登録番号の形式など）。事業者に申請し直してもらうか、見送ってください',
   input: '入力内容を確認してください',
 };
+
+type ChangeRequestRow = Awaited<ReturnType<typeof listChangeRequests>>[number];
+
+/**
+ * 確認待ちの更新申請 1 件（変わる項目の前 → 後と、反映・見送り）。口座・連絡用メールアドレス・電話番号が変わるときは、
+ * 登録済みの電話番号へ折り返して本人に確かめた印を付けてから反映する（なりすましの申請で振込先を変えられないように）
+ */
+function PendingChange({
+  request,
+  operator,
+  operatorId,
+  at,
+}: {
+  request: ChangeRequestRow;
+  operator: Partial<Record<ProfileField, unknown>>;
+  operatorId: string;
+  at: (d: Date) => string;
+}) {
+  const payload = (request.payload ?? {}) as Partial<Record<ProfileField, string>>;
+  const fields = Object.keys(payload) as ProfileField[];
+  const sensitive = sensitiveChanges(payload, operator);
+  const phone = String(operator.phone ?? '');
+  const diff = (
+    <dl className="divide-y divide-amber-200/70">
+      {fields.map((field) => (
+        <div key={field} className="grid gap-1 py-2 sm:grid-cols-[9rem_1fr]">
+          <dt className="text-slate-700">
+            {PROFILE_FIELDS[field]}
+            {sensitive.includes(field) && <span className="ml-1 text-xs font-semibold text-red-700">（要確認）</span>}
+          </dt>
+          <dd className="space-y-0.5">
+            <span className="block text-xs text-slate-600 line-through">{String(operator[field] || '（空欄）')}</span>
+            <span className="block font-medium whitespace-pre-line text-slate-900">{payload[field] || '（空欄）'}</span>
+          </dd>
+        </div>
+      ))}
+    </dl>
+  );
+  return (
+    <div className="space-y-3 rounded-lg border border-amber-300 bg-amber-50/60 p-3 text-sm">
+      <p className="font-semibold text-slate-900">申請 {at(request.createdAt)}</p>
+      {diff}
+      {request.note && <p className="text-slate-700">事業者のメモ：{request.note}</p>}
+      <form action={reviewChangeAction.bind(null, operatorId)} className="space-y-2">
+        <input type="hidden" name="requestId" value={request.id} />
+        <label className="block space-y-1">
+          <span className="block font-medium">事業者へのメモ（任意・事業者画面に出ます）</span>
+          <Textarea name="note" rows={2} maxLength={500} />
+        </label>
+        <div className="flex flex-wrap gap-2">
+          <ConfirmDialog
+            tone="default"
+            triggerLabel="反映する…"
+            triggerClassName={PRIMARY_TRIGGER_CLASS}
+            title="登録情報を書き換えますか？"
+            confirmLabel="登録情報に反映する"
+            confirmName="decision"
+            confirmValue="approve"
+            pendingLabel="保存中…"
+          >
+            <p>次のとおり書き換えます。</p>
+            <div className="rounded-lg border border-amber-200 bg-amber-50/60 px-3">{diff}</div>
+            {sensitive.length > 0 && (
+              <div className="space-y-2 rounded-lg border-2 border-red-300 bg-red-50 p-3 text-red-900">
+                <p className="font-semibold">{sensitive.map((f) => PROFILE_FIELDS[f]).join('・')}が変わります。</p>
+                <p>
+                  なりすましの申請でないか、
+                  {phone ? `登録済みの電話番号（${phone}）` : '組合で把握している事業者の電話番号'}
+                  へ組合から折り返して、本人に確かめてから反映してください。申請やメールに書かれた電話番号には掛けないでください。
+                </p>
+                <label className="flex min-h-11 items-center gap-2 font-semibold">
+                  <input type="checkbox" name="verifiedByPhone" required className="size-5" />
+                  登録済みの電話番号へ折り返し、本人に確かめました
+                </label>
+              </div>
+            )}
+          </ConfirmDialog>
+          {/* 見送りは、確認の欄（反映のときだけ必須）を検証しない */}
+          <SubmitButton name="decision" value="reject" variant="outline" formNoValidate pendingLabel="保存中…">
+            見送る（反映しない）
+          </SubmitButton>
+        </div>
+      </form>
+    </div>
+  );
+}
 
 export default async function OperatorPage({ params, searchParams }: PageProps<'/admin/operators/[id]'>) {
   const admin = await requireAdmin();
@@ -154,18 +248,26 @@ export default async function OperatorPage({ params, searchParams }: PageProps<'
           </Notice>
         )}
         {pending.length > 0 && (
-          <Notice tone="warning">
-            事業者から登録情報の更新申請が届いています。
-            <a href="#change-requests" className="ml-1 font-semibold underline">
-              内容を見る
-            </a>
-          </Notice>
+          <section id="change-requests" className="scroll-mt-6">
+            <Panel
+              title={`確認待ちの更新申請（${pending.length} 件）`}
+              description="事業者画面から届いた、登録情報の更新の申請です。反映すると、下の登録情報が書き換わります。"
+              className="border-amber-300"
+            >
+              <div className="space-y-4">
+                {pending.map((c) => (
+                  <PendingChange key={c.id} request={c} operator={op} operatorId={op.id} at={at} />
+                ))}
+              </div>
+            </Panel>
+          </section>
         )}
 
         <nav aria-label="このページの項目" className="flex flex-wrap gap-2 text-sm">
           {[
             { href: '#accounts', label: `アカウント（${accounts.length}）` },
             { href: '#documents', label: `資料（${documents.length}）` },
+            // 確認待ちがあればページの上の枠、なければ下の履歴の枠へ（どちらも change-requests）
             { href: '#change-requests', label: `更新申請${pending.length ? `（確認待ち ${pending.length}）` : ''}` },
           ].map((item) => (
             <a
@@ -207,17 +309,20 @@ export default async function OperatorPage({ params, searchParams }: PageProps<'
             {accounts.length > 0 && (
               <ul className="mb-4 divide-y divide-slate-100 text-sm">
                 {accounts.map((a) => (
-                  <li key={a.userId} className="flex flex-wrap items-center justify-between gap-2 py-2.5">
+                  <li
+                    key={a.userId}
+                    className="flex flex-col gap-2 py-2.5 sm:flex-row sm:items-center sm:justify-between"
+                  >
                     <span className="min-w-0">
                       <span className="block font-medium break-all text-slate-900">{a.email}</span>
                       <span className="text-xs text-slate-600">
                         {a.name} ・ 発行 {at(a.createdAt)} ・ {loginStatusOf(a)}
                       </span>
                     </span>
-                    <span className="flex items-center gap-2">
+                    <span className="flex flex-wrap items-center gap-2">
                       {a.disabledAt && (
                         <span className="rounded-full bg-slate-200 px-2.5 py-0.5 text-xs font-semibold text-slate-700">
-                          停止中
+                          ログイン停止中
                         </span>
                       )}
                       {!a.disabledAt && (
@@ -231,19 +336,22 @@ export default async function OperatorPage({ params, searchParams }: PageProps<'
                         <input type="hidden" name="userId" value={a.userId} />
                         {a.disabledAt ? (
                           <SubmitButton variant="outline" className="h-8 px-3 text-xs" pendingLabel="保存中…">
-                            再開する
+                            ログインを再開する
                           </SubmitButton>
                         ) : (
                           <>
                             <input type="hidden" name="disabled" value="on" />
                             <ConfirmDialog
-                              triggerLabel="停止する"
+                              triggerLabel="ログインを止める…"
                               triggerClassName="h-8 px-3 text-xs"
-                              title="このアカウントを停止しますか？"
-                              confirmLabel="停止する"
+                              title="このアカウントのログインを止めますか？"
+                              confirmLabel="ログインを止める"
                               pendingLabel="保存中…"
                             >
-                              <p>{a.email} は、次の操作から事業者画面を使えなくなります。あとで再開できます。</p>
+                              <p>
+                                {a.email}{' '}
+                                は、次の操作から事業者画面を使えなくなります。あとで再開できます（事業者の登録状態は変わりません）。
+                              </p>
                             </ConfirmDialog>
                           </>
                         )}
@@ -253,6 +361,7 @@ export default async function OperatorPage({ params, searchParams }: PageProps<'
                 ))}
               </ul>
             )}
+            <h3 className="mb-2 text-sm font-semibold text-slate-900">担当者を追加（招待のメールを送る）</h3>
             <AccountIssueForm action={issueAccountAction.bind(null, op.id)} />
           </Panel>
         </section>
@@ -269,9 +378,9 @@ export default async function OperatorPage({ params, searchParams }: PageProps<'
                 {documents.map((d) => {
                   const state = expiryState(d.expiresOn, today);
                   return (
-                    <li key={d.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 py-2.5">
+                    <li key={d.id} className="flex flex-col gap-2 py-2.5 sm:flex-row sm:items-center sm:gap-3">
                       <span className="min-w-0 flex-1">
-                        <span className="block font-medium text-slate-900">{d.title}</span>
+                        <span className="block font-medium break-words text-slate-900">{d.title}</span>
                         <span className="text-xs text-slate-600">
                           {DOCUMENT_KIND_LABELS[d.kind]} ・ {RECEIVED_VIA_LABELS[d.receivedVia]} ・ 登録{' '}
                           {at(d.createdAt)}
@@ -279,30 +388,32 @@ export default async function OperatorPage({ params, searchParams }: PageProps<'
                         </span>
                         {d.note && <span className="block text-xs text-slate-700">{d.note}</span>}
                       </span>
-                      <ExpiryBadge state={state} />
-                      {d.hasFile && (
-                        <a
-                          href={`/admin/documents/${d.id}/file`}
-                          className="inline-flex min-h-9 items-center gap-1 text-xs font-semibold text-sky-800 hover:underline"
-                        >
-                          <Download aria-hidden className="size-3.5" />
-                          ダウンロード
-                        </a>
-                      )}
-                      <form action={deleteDocumentAction.bind(null, op.id)}>
-                        <input type="hidden" name="documentId" value={d.id} />
-                        <ConfirmDialog
-                          triggerLabel="削除"
-                          triggerClassName="h-8 px-3 text-xs"
-                          title={`「${d.title}」を削除しますか？`}
-                          confirmLabel="削除する"
-                          pendingLabel="削除中…"
-                        >
-                          <p>
-                            ファイルも消え、元に戻せません。更新した資料を登録したあとに、古い資料を消すときに使います。
-                          </p>
-                        </ConfirmDialog>
-                      </form>
+                      <span className="flex flex-wrap items-center gap-2">
+                        <ExpiryBadge state={state} />
+                        {d.hasFile && (
+                          <a
+                            href={`/admin/documents/${d.id}/file`}
+                            className="inline-flex min-h-9 items-center gap-1 px-1 text-xs font-semibold text-sky-800 hover:underline pointer-coarse:min-h-11"
+                          >
+                            <Download aria-hidden className="size-3.5" />
+                            ダウンロード
+                          </a>
+                        )}
+                        <form action={deleteDocumentAction.bind(null, op.id)}>
+                          <input type="hidden" name="documentId" value={d.id} />
+                          <ConfirmDialog
+                            triggerLabel="削除"
+                            triggerClassName="h-8 px-3 text-xs"
+                            title={`「${d.title}」を削除しますか？`}
+                            confirmLabel="資料を削除する"
+                            pendingLabel="削除中…"
+                          >
+                            <p>
+                              ファイルも消え、元に戻せません。更新した資料を登録したあとに、古い資料を消すときに使います。
+                            </p>
+                          </ConfirmDialog>
+                        </form>
+                      </span>
                     </li>
                   );
                 })}
@@ -312,7 +423,9 @@ export default async function OperatorPage({ params, searchParams }: PageProps<'
               className="rounded-lg border border-slate-200 p-3 text-sm"
               open={Boolean(error && sp.error !== 'change_done' && sp.error !== 'change_invalid')}
             >
-              <summary className="cursor-pointer font-semibold text-sky-800">資料を登録する</summary>
+              <summary className="cursor-pointer py-2 font-semibold text-sky-800 pointer-coarse:py-3">
+                資料を登録する
+              </summary>
               <form action={addDocumentAction.bind(null, op.id)} className="mt-3 grid gap-3 sm:grid-cols-2">
                 <label className="space-y-1">
                   <span className="block font-medium">種類</span>
@@ -326,7 +439,8 @@ export default async function OperatorPage({ params, searchParams }: PageProps<'
                 </label>
                 <label className="space-y-1">
                   <span className="block font-medium">
-                    資料の名前<span className="ml-1 text-xs text-red-700">（必須）</span>
+                    資料の名前
+                    <RequiredMark />
                   </span>
                   <Input name="title" required maxLength={100} placeholder="例：賠償責任保険 証券（2026 年度）" />
                 </label>
@@ -340,7 +454,7 @@ export default async function OperatorPage({ params, searchParams }: PageProps<'
                     {Object.entries(RECEIVED_VIA_LABELS).map(([value, label]) => (
                       <label
                         key={value}
-                        className="flex min-h-9 items-center gap-1.5 rounded-lg border border-slate-200 px-2.5 has-checked:border-sky-600 has-checked:bg-sky-50"
+                        className="flex min-h-9 items-center gap-1.5 rounded-lg border border-slate-200 px-2.5 has-checked:border-sky-600 has-checked:bg-sky-50 pointer-coarse:min-h-11"
                       >
                         <input type="radio" name="receivedVia" value={value} defaultChecked={value === 'upload'} />
                         {label}
@@ -366,53 +480,23 @@ export default async function OperatorPage({ params, searchParams }: PageProps<'
           </Panel>
         </section>
 
-        <section id="change-requests" className="scroll-mt-6">
+        <section id={pending.length ? 'change-history' : 'change-requests'} className="scroll-mt-6">
           <Panel
-            title="登録情報の更新申請"
-            description="事業者画面から届いた申請です。反映すると、上の登録情報が書き換わります。"
+            title="登録情報の更新申請の履歴"
+            description="事業者画面から届いた申請のうち、反映・見送りが済んだものです（新しい 5 件）。"
           >
+            {pending.length > 0 && (
+              <p className="text-sm text-slate-600">
+                確認待ちの申請は、
+                <a href="#change-requests" className="font-semibold text-sky-800 underline">
+                  このページの上
+                </a>
+                にあります。
+              </p>
+            )}
             {pending.length === 0 && history.length === 0 && (
               <p className="text-sm text-slate-600">更新申請はありません。</p>
             )}
-            {pending.map((c) => {
-              const payload = (c.payload ?? {}) as Partial<Record<ProfileField, string>>;
-              return (
-                <div key={c.id} className="space-y-3 rounded-lg border border-amber-300 bg-amber-50/60 p-3 text-sm">
-                  <p className="font-semibold text-slate-900">確認待ち（申請 {at(c.createdAt)}）</p>
-                  <dl className="divide-y divide-amber-200/70">
-                    {(Object.keys(payload) as ProfileField[]).map((field) => (
-                      <div key={field} className="grid gap-1 py-2 sm:grid-cols-[9rem_1fr]">
-                        <dt className="text-slate-700">{PROFILE_FIELDS[field]}</dt>
-                        <dd className="space-y-0.5">
-                          <span className="block text-xs text-slate-600 line-through">
-                            {String(op[field] || '（空欄）')}
-                          </span>
-                          <span className="block font-medium whitespace-pre-line text-slate-900">
-                            {payload[field] || '（空欄）'}
-                          </span>
-                        </dd>
-                      </div>
-                    ))}
-                  </dl>
-                  {c.note && <p className="text-slate-700">事業者のメモ：{c.note}</p>}
-                  <form action={reviewChangeAction.bind(null, op.id)} className="space-y-2">
-                    <input type="hidden" name="requestId" value={c.id} />
-                    <label className="block space-y-1">
-                      <span className="block font-medium">事業者へのメモ（任意）</span>
-                      <Textarea name="note" rows={2} maxLength={500} />
-                    </label>
-                    <div className="flex flex-wrap gap-2">
-                      <SubmitButton name="decision" value="approve" pendingLabel="保存中…">
-                        反映する
-                      </SubmitButton>
-                      <SubmitButton name="decision" value="reject" variant="outline" pendingLabel="保存中…">
-                        見送る
-                      </SubmitButton>
-                    </div>
-                  </form>
-                </div>
-              );
-            })}
             {history.length > 0 && (
               <ul className="mt-3 divide-y divide-slate-100 text-sm">
                 {history.map((c) => (

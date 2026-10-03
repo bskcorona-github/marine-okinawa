@@ -70,7 +70,7 @@ export async function findBookingId(page: Page, bookingNo: string): Promise<stri
 }
 
 /**
- * 事業者の回答を確かめ、支払案内を送り、入金を確かめて確定する。
+ * 事業者の受入可のあとに支払待ちになっている予約を開き、入金を確かめて確定する。
  * あいだに、お客様の予約確認ページ（支払いの案内・確定・当日の案内・領収書）を撮る
  */
 export async function adminPayment(browser: Browser) {
@@ -79,17 +79,12 @@ export async function adminPayment(browser: Browser) {
   await page.goto(adminBookingUrl!);
   await capture(page, 'admin-new-request', 4, { marks: [panel(page, '事業者への受入確認')] });
 
-  const send = page.getByRole('button', { name: '支払案内を送る' });
-  await capture(page, 'admin-payment', 1, { marks: [send] });
-  await send.click();
-  const dialog = page.getByRole('dialog');
-  const sendInDialog = dialog.getByRole('button', { name: '支払案内を送る' });
-  await sendInDialog.waitFor();
-  await capture(page, 'admin-payment', 2, { marks: [sendInDialog] });
-  await sendInDialog.click();
-  const awaiting = page.getByText('支払待ちにしました。').first();
-  await awaiting.waitFor();
-  await capture(page, 'admin-payment', 3, { marks: [awaiting, panel(page, '入金・返金')], labels: ['3', '3'] });
+  const awaitingHeading = page.getByRole('heading', { level: 1 }).filter({ hasText: '支払待ち' });
+  await awaitingHeading.waitFor();
+  await capture(page, 'admin-payment', 1, { marks: [awaitingHeading] });
+  const paymentPanel = panel(page, '入金・返金');
+  await capture(page, 'admin-payment', 2, { marks: [paymentPanel] });
+  await capture(page, 'admin-payment', 3, { marks: [paymentPanel] });
 
   const customer = await newPage(browser, 'mobile');
   await customer.goto(bookingUrl!);
@@ -100,6 +95,7 @@ export async function adminPayment(browser: Browser) {
   const confirm = page.getByRole('button', { name: '入金を確認して確定する' });
   await capture(page, 'admin-payment', 4, { marks: [confirm] });
   await confirm.click();
+  const dialog = page.getByRole('dialog');
   const amount = dialog.getByLabel('入金額（円）');
   await amount.waitFor();
   const confirmInDialog = dialog.getByRole('button', { name: '入金を確認して確定する' });
@@ -199,14 +195,16 @@ export async function adminCancelRefund(browser: Browser) {
   const { phoneBookingUrl } = loadState();
   const page = await adminPage(browser);
   await page.goto(phoneBookingUrl!);
-  const cancel = page.getByRole('button', { name: '取り消す', exact: true });
+  // 取消・天候中止は「予約をやめるとき」に畳んである
+  await page.getByText(/^予約をやめるとき/).click();
+  const cancel = page.getByRole('button', { name: '予約を取り消す', exact: true });
   await capture(page, 'admin-cancel-refund', 1, { marks: [cancel] });
   await cancel.click();
   const dialog = page.getByRole('dialog');
   await dialog.locator('select[name="cancelCategory"]').selectOption('customer');
   const due = dialog.getByLabel('返金予定額（円・必須）');
   await due.waitFor();
-  const confirm = dialog.getByRole('button', { name: '取り消す', exact: true });
+  const confirm = dialog.getByRole('button', { name: '予約を取り消す', exact: true });
   await capture(page, 'admin-cancel-refund', 2, {
     marks: [dialog.locator('select[name="cancelCategory"]'), due, confirm],
     labels: ['2-1', '2-2', '2-3'],
@@ -214,13 +212,14 @@ export async function adminCancelRefund(browser: Browser) {
   });
   await confirm.click();
   await page.getByText('予約を取り消しました。').first().waitFor();
-  await capture(page, 'admin-cancel-refund', 3, { marks: [panel(page, '入金・返金')] });
-  const record = page.getByRole('button', { name: '返金を記録…' });
+  // 返金が残っている予約は、「次の操作」に返金のボタンが出る
+  await capture(page, 'admin-cancel-refund', 3, { marks: [panel(page, '次の操作')] });
+  const record = page.getByRole('button', { name: /^返金を記録する/ });
   await capture(page, 'admin-cancel-refund', 4, { marks: [record] });
   await record.click();
   const amount = dialog.getByLabel('今回の返金額（円）');
   await amount.waitFor();
-  const save = dialog.getByRole('button', { name: '返金を記録', exact: true });
+  const save = dialog.getByRole('button', { name: '返金を記録する', exact: true });
   await capture(page, 'admin-cancel-refund', 5, {
     marks: [amount, dialog.locator('input[name="refundedOn"]'), save],
     labels: ['5-1', '5-1', '5-2'],
@@ -333,8 +332,8 @@ export async function adminPlanReview(browser: Browser) {
   await page.waitForURL(/\/admin\/menus\/[0-9a-f-]{36}/);
   const review = panel(page, '公開の申請');
   await capture(page, 'admin-plan-review', 2, { marks: [review] });
-  await review.getByRole('button', { name: '承認して公開する' }).click();
-  const confirm = page.getByRole('dialog').getByRole('button', { name: '公開する', exact: true });
+  await review.getByRole('button', { name: /^承認して公開する/ }).click();
+  const confirm = page.getByRole('dialog').getByRole('button', { name: 'プランを公開する', exact: true });
   await confirm.waitFor();
   await capture(page, 'admin-plan-review', 3, { marks: [confirm] });
   await confirm.click();
@@ -362,9 +361,9 @@ export async function adminPlanEdit(browser: Browser) {
   await schedule.click();
   await page.waitForURL(/\/schedule/);
   await capture(page, 'admin-plan-edit', 4, {
-    marks: [panel(page, '定期の回（ルール）'), panel(page, /^例外/)],
+    marks: [panel(page, '毎週の回（ルール）'), panel(page, /^特定の日の変更/)],
     labels: ['4-1', '4-2'],
-    focus: page.getByRole('button', { name: 'ルールを追加' }),
+    focus: page.getByRole('button', { name: '毎週の回を追加' }),
   });
   await page.context().close();
 }
@@ -401,7 +400,7 @@ export async function adminSettlement(browser: Browser) {
   const period = `${last.getUTCFullYear()}-${String(last.getUTCMonth() + 1).padStart(2, '0')}`;
   await page.goto(`${BASE}/admin/settlements?period=${period}`);
   await capture(page, 'admin-settlement', 1, {
-    marks: [page.getByLabel('精算の月'), page.getByRole('button', { name: '表示' })],
+    marks: [page.getByLabel('月を選ぶ'), page.getByRole('button', { name: 'この月を見る' })],
   });
   const create = page.getByRole('button', { name: /この月の精算を作る|作り直す/ });
   await capture(page, 'admin-settlement', 2, { marks: [create] });
@@ -461,10 +460,7 @@ export async function adminInquiry(browser: Browser) {
   await page.waitForURL(/saved=1/);
   await page.goto(`${BASE}/admin/inquiries?status=done`);
   await capture(page, 'admin-inquiry', 4, {
-    marks: [
-      page.getByRole('link', { name: '対応済み', exact: true }),
-      page.getByRole('link', { name: /宜野湾 一郎/ }).first(),
-    ],
+    marks: [page.getByRole('link', { name: /^対応済み/ }), page.getByRole('link', { name: /宜野湾 一郎/ }).first()],
   });
   await page.context().close();
 }

@@ -4,7 +4,8 @@ import { useEffect, useRef } from 'react';
 
 /**
  * 置いた <form> の select・チェックボックスが変わったら、その場で送信する（絞り込みの「表示」ボタンを省く）。
- * 日付の入力欄は、入力途中で送信されないよう対象外にする。
+ * 日付の入力欄は、入力途中で送信されないよう対象外にする。data-no-auto-submit を付けた欄（表示の切り替え用の
+ * チェックボックスなど）も対象外にする。
  */
 export function SubmitOnChange() {
   const ref = useRef<HTMLSpanElement>(null);
@@ -13,6 +14,7 @@ export function SubmitOnChange() {
     if (!form) return;
     const onChange = (event: Event) => {
       const target = event.target as HTMLInputElement | HTMLSelectElement;
+      if (target.hasAttribute('data-no-auto-submit')) return;
       if (target.tagName === 'SELECT' || (target instanceof HTMLInputElement && target.type === 'checkbox')) {
         form.requestSubmit();
       }

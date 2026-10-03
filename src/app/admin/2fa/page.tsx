@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState, type FormEvent } from 'react';
 import { Button } from '@/components/ui/button';
@@ -44,10 +45,16 @@ export default function TwoFactorVerifyPage() {
             <div className="space-y-1">
               <Label htmlFor="code">{useBackup ? 'バックアップコード' : '認証アプリの 6 桁のコード'}</Label>
               <Input
+                // 切り替えたら入れ直す（桁数・入力の種類が変わるため）
+                key={useBackup ? 'backup' : 'totp'}
                 id="code"
                 name="code"
                 inputMode={useBackup ? 'text' : 'numeric'}
                 autoComplete="one-time-code"
+                pattern={useBackup ? undefined : '[0-9]{6}'}
+                maxLength={useBackup ? 40 : 6}
+                title={useBackup ? undefined : '6 桁の数字'}
+                autoFocus
                 required
               />
             </div>
@@ -57,12 +64,27 @@ export default function TwoFactorVerifyPage() {
               </p>
             )}
             <Button type="submit" className="w-full" disabled={!hydrated || pending}>
-              確認
+              {pending ? '確認しています…' : '確認'}
             </Button>
-            <button type="button" className="text-sm text-slate-600 underline" onClick={() => setUseBackup((v) => !v)}>
+            <button
+              type="button"
+              className="inline-flex min-h-11 items-center text-sm text-slate-600 underline"
+              onClick={() => {
+                setUseBackup((v) => !v);
+                setError(null);
+              }}
+            >
               {useBackup ? '認証アプリのコードを使う' : 'バックアップコードを使う'}
             </button>
           </form>
+          <div className="mt-3 space-y-2 border-t border-slate-100 pt-3 text-xs leading-relaxed text-slate-600">
+            <p>
+              スマホをなくした・機種を変えたときは、設定のときに控えた「バックアップコード」で入れます。控えがないときは、組合の担当者へご連絡ください（認証アプリの設定を消して、招待を送り直します）。
+            </p>
+            <Link href="/admin/login" className="inline-flex min-h-11 items-center text-sm text-sky-800 underline">
+              ログインの画面へ戻る
+            </Link>
+          </div>
         </CardContent>
       </Card>
     </main>

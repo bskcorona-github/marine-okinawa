@@ -38,6 +38,7 @@ test.describe.serial('管理画面', () => {
     await page.getByRole('button', { name: 'QR コードを表示' }).click();
     totpSecret = (await page.getByTestId('totp-secret').textContent()) ?? '';
     expect(totpSecret).not.toBe('');
+    await page.getByLabel('バックアップコードを控えました').check();
     await page.getByLabel('認証アプリの 6 桁のコード').fill(await generate({ secret: totpSecret }));
     await page.getByRole('button', { name: '設定を完了する' }).click();
     await expect(page.getByRole('heading', { name: 'ダッシュボード' })).toBeVisible();
@@ -65,15 +66,17 @@ test.describe.serial('管理画面', () => {
     await expect(page.getByTestId('reserved')).toHaveText(String(before + 1));
 
     await page.getByRole('link', { name: /電話 次郎 様/ }).click();
-    await page.getByRole('button', { name: '取り消す' }).click();
-    const dialog = page.getByRole('dialog', { name: '「取消」にしますか？' });
+    // 取消・天候中止は「予約をやめるとき」に畳んである（押し間違えないように）
+    await page.getByText(/^予約をやめるとき/).click();
+    await page.getByRole('button', { name: '予約を取り消す' }).click();
+    const dialog = page.getByRole('dialog', { name: 'この予約を取り消しますか？' });
     await expect(dialog.getByText('1名分の枠が回に戻ります。')).toBeVisible();
     await dialog.getByLabel('取消の区分（必須）').selectOption('customer');
     await dialog.getByLabel(/取消の理由/).fill('お客様から電話で連絡');
-    await dialog.getByRole('button', { name: '取り消す' }).click();
+    await dialog.getByRole('button', { name: '予約を取り消す' }).click();
     await expect(page.getByText('予約を取り消しました。枠を回に戻しました。')).toBeVisible();
     await expect(page.getByText('お客様から電話で連絡').first()).toBeVisible();
-    await expect(page.getByRole('button', { name: '取り消す' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: '予約を取り消す' })).toHaveCount(0);
 
     await page.getByRole('link', { name: 'この回を見る' }).click();
     await expect(page.getByTestId('reserved')).toHaveText(String(before));
@@ -120,7 +123,7 @@ test.describe.serial('管理画面', () => {
     await page.getByRole('link', { name: /申込 花子 様/ }).click();
     await expect(page.getByRole('heading', { level: 1 })).toContainText('仮受付');
     await page.getByRole('button', { name: '支払案内を送る' }).click();
-    const payDialog = page.getByRole('dialog', { name: '「支払待ち」にしますか？' });
+    const payDialog = page.getByRole('dialog', { name: '支払案内を送りますか？' });
     // 事業者確認中を通らないときは、電話などで受入を確かめたことを残す
     await expect(payDialog.getByText('テスト銀行 普通 0000000')).toBeVisible();
     await payDialog.getByLabel(/に受入を確認しました（電話など）/).check();
@@ -130,7 +133,7 @@ test.describe.serial('管理画面', () => {
 
     // 入金を確認して確定する（入金額は料金が入っている）
     await page.getByRole('button', { name: '入金を確認して確定する' }).click();
-    const confirmDialog = page.getByRole('dialog', { name: '「予約確定」にしますか？' });
+    const confirmDialog = page.getByRole('dialog', { name: '予約を確定しますか？' });
     await expect(confirmDialog.getByLabel('入金額（円）')).toHaveValue('10000');
     await confirmDialog.getByLabel('入金のメモ（振込名義など・任意）').fill('シンセイ ハナコ');
     await confirmDialog.getByRole('button', { name: '入金を確認して確定する' }).click();

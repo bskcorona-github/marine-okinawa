@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { DetailList } from '@/components/backoffice/detail-list';
 import { Notice, PageHeader, Panel } from '@/components/backoffice/page-header';
+import { PartnerContactPanel } from '@/components/partner/contact-panel';
 import { db } from '@/db';
 import { formatDateLabel, localTime } from '@/lib/dates';
 import { isUuid } from '@/lib/validation';
@@ -53,8 +54,8 @@ export default async function PartnerRequestPage({ params, searchParams }: PageP
     ['人数', peopleLabel],
     ...(request.guestCount ? [['乗船人数', `${request.guestCount}名`] as [string, string]] : []),
     ...(request.participantAges ? [['参加者の年齢', request.participantAges] as [string, string]] : []),
-    ...(request.secondChoice ? [['第2希望', request.secondChoice] as [string, string]] : []),
     ...(request.customerNote ? [['お客様からの連絡事項', request.customerNote] as [string, string]] : []),
+    ...(request.meetingPoint ? [['集合場所', request.meetingPoint] as [string, string]] : []),
     ['依頼日時', at(request.requestedAt)],
   ];
 
@@ -75,28 +76,26 @@ export default async function PartnerRequestPage({ params, searchParams }: PageP
               確定した内容：{at(request.startsAt)} ・ {peopleLabel}
             </span>
             <Link href={`/partner/bookings/${request.bookingId}`} className="mt-1 inline-block font-semibold underline">
-              予約の詳細（代表者の連絡先）を見る
+              予約の詳細を見る
             </Link>
           </Notice>
         )}
         {awaitingForMe && (
           <Notice tone="info">
-            {sp.answered ? '回答しました。お客様へ支払案内を送りました。' : 'お客様の支払待ちです。'}
-            入金を確認したら、予約確定のお知らせが届きます（回答は変えられません。変更は組合へご連絡ください）。
+            <span className="block">
+              {sp.answered ? '回答しました。お客様へ支払案内を送りました。' : 'お客様の支払待ちです。'}
+              入金を確認したら、予約確定のお知らせが届きます（回答は変えられません。変更は組合へご連絡ください）。
+            </span>
+            <Link href={`/partner/bookings/${request.bookingId}`} className="mt-1 inline-block font-semibold underline">
+              予約の詳細を見る
+            </Link>
           </Notice>
         )}
         {closed && <Notice tone="info">{closedReason}受付を終了したため、受け入れの準備は不要です。</Notice>}
 
-        <Panel
-          title="受入確認の内容"
-          description={
-            confirmedForMe
-              ? 'お客様の氏名・連絡先は、予約の詳細で見られます。'
-              : closed
-                ? undefined
-                : 'お客様の氏名・連絡先は、予約が確定したあとに表示します。'
-          }
-        >
+        <PartnerContactPanel name={request.contactName} phone={request.contactPhone} email={request.contactEmail} />
+
+        <Panel title="受入確認の内容">
           <DetailList rows={rows} />
           {request.requestNote && (
             <p className="mt-3 rounded-lg bg-sky-50 p-3 text-sm whitespace-pre-line text-sky-950">

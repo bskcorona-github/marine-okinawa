@@ -8,7 +8,7 @@ import { addBookingAccessToken } from '@/modules/booking/access-token';
 import { getBookingSummaryById, type BookingSummary } from '@/modules/booking/queries';
 import { mailKindForStatus, type BookingMailKind } from '@/modules/booking/status';
 import { splitPlanTitle } from '@/modules/catalog/display-title';
-import { cardPaymentsEnabled } from '@/modules/payment/card-payments';
+import { cardPaymentsActive } from '@/modules/payment/card-payments';
 import { BookingEmail } from './booking-email';
 import {
   dayOfContactLine,
@@ -39,7 +39,7 @@ export function bookingUrl(appUrl: string, locale: string, accessToken: string):
 
 type Row = { label: string; value: string | null | undefined };
 
-function content(booking: BookingSummary, kind: BookingMailKind) {
+function content(booking: BookingSummary, kind: BookingMailKind, cardPayment: boolean) {
   // 多言語に対応するときに booking.locale のメッセージに切り替える
   const t = createTranslator({ locale: 'ja', messages, namespace: 'email' });
   const title = splitPlanTitle(booking.menuTitle).title;
@@ -82,7 +82,7 @@ function content(booking: BookingSummary, kind: BookingMailKind) {
         rows: [
           ...base,
           { label: priceLabel, value: formatYen(booking.totalAmount) },
-          // 第 2 希望・年齢・ご連絡事項は載せない（確かめていないアドレスへ、入力された文を組合の名前で送らないように。
+          // 年齢・ご連絡事項は載せない（確かめていないアドレスへ、入力された文を組合の名前で送らないように。
           // 予約確認ページで見られる）
           { label: t('requested.replyGuide'), value: booking.settings.replyGuide || null },
           contact,
@@ -111,7 +111,7 @@ function content(booking: BookingSummary, kind: BookingMailKind) {
             title: t('paymentRequest.howTitle'),
             // カード決済（Stripe）が使えるときは、予約確認ページのボタンからカードで払ってもらう
             body:
-              cardPaymentsEnabled() && booking.paymentMethod === 'online'
+              cardPayment && booking.paymentMethod === 'online'
                 ? t('paymentRequest.howCard')
                 : booking.settings.paymentInstructions || t('paymentRequest.howEmpty'),
           },
@@ -182,7 +182,7 @@ export async function sendBookingMail(
   const booking = await getBookingSummaryById(db, params.bookingId);
   if (!booking?.contactEmail) return { status: 'skipped' };
   const t = createTranslator({ locale: 'ja', messages, namespace: 'email.common' });
-  const mail = content(booking, params.kind);
+  const mail = content(booking, params.kind, await cardPaymentsActive(db, booking.shopId));
   const token = mail.withLink ? (params.accessToken ?? (await addBookingAccessToken(db, booking.id))) : null;
 
   return deliverBookingEmail(db, mailer, booking, {

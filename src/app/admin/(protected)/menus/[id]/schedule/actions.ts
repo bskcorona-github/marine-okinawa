@@ -9,6 +9,7 @@ import {
   runAddRule,
   runDeleteException,
   runDeleteRule,
+  runUpdateAllRuleCapacity,
   runUpdateRuleCapacity,
   type ScheduleActionContext,
 } from '@/modules/schedule/schedule-actions';
@@ -32,6 +33,11 @@ export async function addRuleAction(menuId: string, formData: FormData) {
 
 export async function updateRuleCapacityAction(menuId: string, ruleId: string, formData: FormData) {
   done(await runUpdateRuleCapacity(await context(menuId, ruleId), menuId, ruleId, formData));
+}
+
+/** すべてのルールの定員をまとめて変える */
+export async function updateAllRuleCapacityAction(menuId: string, formData: FormData) {
+  done(await runUpdateAllRuleCapacity(await context(menuId), menuId, formData));
 }
 
 export async function deleteRuleAction(menuId: string, ruleId: string) {

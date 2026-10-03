@@ -9,9 +9,11 @@ import { recordExternalRefund, refundPayment } from '../payment/refunds';
 import {
   buildSettlements,
   confirmSettlement,
+  countAwaitingSettlement,
   getOperatorSettlement,
   getSettlement,
   listOperatorSettlements,
+  listOperatorsWithoutBankAccount,
   listSettlements,
   markSettlementPaid,
   payoutDateOf,
@@ -340,6 +342,33 @@ describe('月次精算', () => {
       .insert(paymentRefunds)
       .values({ shopId: shop.id, paymentId: payment.id, amount: 1000, refundedAt: NOV, status: 'pending' });
     await expect(confirm(row.id)).rejects.toMatchObject({ code: 'REFUND_PENDING' });
+  });
+
+  it('確定の前に知らせる：まだ精算に入れられない予約の数といちばん早い参加日、振込先のない事業者', async () => {
+    const { shop, a, b, book, change } = await setup();
+    await book({ quantity: 1, method: 'online' });
+    const done = await book({ quantity: 1, method: 'online' });
+    await change(done, 'completed');
+    expect(await countAwaitingSettlement(db, { shopId: shop.id, period: '2026-10' })).toEqual({
+      awaitingReport: 1,
+      awaitingVerification: 1,
+      firstDate: '2026-10-05',
+    });
+    // 事業者ごと（b の予約はない）と、参加日より前の月
+    expect(await countAwaitingSettlement(db, { shopId: shop.id, period: '2026-10', operatorId: b.id })).toEqual({
+      awaitingReport: 0,
+      awaitingVerification: 0,
+      firstDate: null,
+    });
+    expect(await countAwaitingSettlement(db, { shopId: shop.id, period: '2026-09' })).toMatchObject({
+      awaitingReport: 0,
+      firstDate: null,
+    });
+    await db.update(operators).set({ bankAccount: '〇〇銀行 普通 1234567' }).where(eq(operators.id, b.id));
+    expect(await listOperatorsWithoutBankAccount(db, { shopId: shop.id, operatorIds: [a.id, b.id] })).toEqual([
+      { id: a.id, name: 'ココマリン' },
+    ]);
+    expect(await listOperatorsWithoutBankAccount(db, { shopId: shop.id, operatorIds: [] })).toEqual([]);
   });
 
   it('支払日は、締めた翌月の指定の日（0 は末日）', () => {

@@ -6,6 +6,7 @@ import { SubmitOnChange } from '@/components/backoffice/submit-on-change';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { db } from '@/db';
 import { addDays, formatDateLabel, localDate, zonedToUtc } from '@/lib/dates';
+import { formatYen } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { isDateString, isUuid } from '@/lib/validation';
 import { requireAdmin } from '@/modules/auth/guard';
@@ -22,8 +23,11 @@ type Slot = TimetableRow['slots'][number];
 
 type CellProps = { slot: Slot; back: string; unit: string; thresholds: LowStockThresholds; now: number };
 
-const slotLabel = (slot: Slot, unit: string, started: boolean) =>
-  `${slot.time} ${occupancyText(slot, unit)}（予約 ${slot.reservedCount} / 定員 ${slot.capacity}${slot.pendingCount > 0 ? `・うち未確定 ${slot.pendingCount}` : ''}）${started ? '・開始済み' : ''}`;
+const slotLabel = (slot: Slot, unit: string, started: boolean, busy: boolean) =>
+  `${slot.time} ${occupancyText(slot, unit)}${busy ? '（残りわずか）' : ''}（予約 ${slot.reservedCount} / 定員 ${slot.capacity}${slot.pendingCount > 0 ? `・うち未確定 ${slot.pendingCount}` : ''}）${started ? '・開始済み' : ''}`;
+
+/** 「残りわずか」は色だけでなく文字でも伝える（「予約あり」と同じ「残り N名」の書き方になるため） */
+const BusyMark = () => <span className="ml-0.5 text-[11px] font-semibold">わずか</span>;
 
 /** PC の日表示のセル：残り枠を大きく、予約数 / 定員を小さく出す */
 function SlotCell({ slot, back, unit, thresholds, now }: CellProps) {
@@ -40,9 +44,12 @@ function SlotCell({ slot, back, unit, thresholds, now }: CellProps) {
         started ? 'border-dashed border-slate-300 bg-slate-50 text-slate-500' : TONE_STYLE[tone].cell,
       )}
       data-slot-id={slot.id}
-      aria-label={slotLabel(slot, unit, started)}
+      aria-label={slotLabel(slot, unit, started, tone === 'busy' && !started)}
     >
-      <span className={cn('block text-sm', started ? 'font-medium' : 'font-bold')}>{occupancyText(slot, unit)}</span>
+      <span className={cn('block text-sm', started ? 'font-medium' : 'font-bold')}>
+        {occupancyText(slot, unit)}
+        {tone === 'busy' && !started && <BusyMark />}
+      </span>
       {started && <span className="block text-[11px] font-semibold whitespace-nowrap">開始済み</span>}
       {tone !== 'closed' && tone !== 'closedBooked' && (
         <>
@@ -73,13 +80,16 @@ function SlotChip({ slot, back, unit, thresholds, now }: CellProps) {
         started ? 'border-dashed border-slate-300 bg-slate-50 text-slate-500' : TONE_STYLE[tone].cell,
       )}
       data-slot-id={slot.id}
-      aria-label={slotLabel(slot, unit, started)}
+      aria-label={slotLabel(slot, unit, started, tone === 'busy' && !started)}
     >
       <span className="text-xs font-semibold whitespace-nowrap">
         {slot.time}
         {started && '・開始済み'}
       </span>
-      <span className={cn('text-sm', started ? 'font-medium' : 'font-bold')}>{occupancyText(slot, unit)}</span>
+      <span className={cn('text-sm', started ? 'font-medium' : 'font-bold')}>
+        {occupancyText(slot, unit)}
+        {tone === 'busy' && !started && <BusyMark />}
+      </span>
       {tone !== 'closed' && tone !== 'closedBooked' && (
         <span className="text-[11px]">
           {slot.reservedCount}/{slot.capacity}
@@ -167,6 +177,8 @@ export default async function TimetablePage({ searchParams }: PageProps<'/admin/
                 <Users aria-hidden className="size-4" />
                 {summary.participants} 名
               </span>
+              {/* ダッシュボードの「確定済みの予約」と同じく、金額も出す */}
+              <span className="text-sm text-slate-700 tabular-nums">{formatYen(summary.amount)}</span>
             </p>
           </Link>
         ))}
@@ -175,7 +187,9 @@ export default async function TimetablePage({ searchParams }: PageProps<'/admin/
             <p className="text-xs font-semibold text-sky-900">表示中の日 ・ {shortLabel(date)}</p>
             <p className="mt-1 text-2xl font-bold text-sky-950">
               {selectedSummary.bookings} <span className="text-sm font-normal">件</span>{' '}
-              <span className="text-sm font-normal">/ {selectedSummary.participants} 名</span>
+              <span className="text-sm font-normal">
+                / {selectedSummary.participants} 名 / {formatYen(selectedSummary.amount)}
+              </span>
             </p>
           </div>
         )}
@@ -215,7 +229,7 @@ export default async function TimetablePage({ searchParams }: PageProps<'/admin/
                 href={link({ view: v })}
                 aria-current={view === v ? 'true' : undefined}
                 className={cn(
-                  'inline-flex min-h-8 items-center rounded-md px-4 pointer-coarse:min-h-10',
+                  'inline-flex min-h-8 items-center rounded-md px-4 pointer-coarse:min-h-11',
                   view === v
                     ? 'bg-white font-semibold text-slate-900 shadow-sm'
                     : 'text-slate-600 hover:text-slate-900',
@@ -268,9 +282,17 @@ export default async function TimetablePage({ searchParams }: PageProps<'/admin/
           してください。
         </p>
       ) : rows.length === 0 ? (
-        <p className="rounded-xl border border-slate-200 bg-white p-8 text-center text-slate-600">
-          {bookedOnly ? 'この期間に予約の入っている回はありません' : 'この期間の回はありません'}
-        </p>
+        <div className="space-y-2 rounded-xl border border-slate-200 bg-white p-8 text-center text-slate-600">
+          <p>{bookedOnly ? 'この期間に予約の入っている回はありません。' : 'この期間の回はありません。'}</p>
+          {(bookedOnly || operatorId) && (
+            <Link
+              href={`/admin/timetable?${new URLSearchParams({ date, view })}`}
+              className="inline-flex min-h-11 items-center text-sm font-semibold text-sky-800 underline-offset-2 hover:underline"
+            >
+              絞り込みを外して、すべての回を見る
+            </Link>
+          )}
+        </div>
       ) : (
         <>
           {/* スマホ：日付ごとに、メニューのカードと時刻のチップを並べる（週表示は日付のチップで移動する） */}
@@ -302,6 +324,12 @@ export default async function TimetablePage({ searchParams }: PageProps<'/admin/
                 .filter((r) => r.slots.length > 0);
               return (
                 <section key={d} id={`day-${d}`} aria-labelledby={`day-${d}-title`} className="scroll-mt-16 space-y-2">
+                  {/* 日表示でも見出しを置く（プランのカードの見出し h3 の上に、日付の h2 が来るように） */}
+                  {view === 'day' && (
+                    <h2 id={`day-${d}-title`} className="sr-only">
+                      {label(d)} の回
+                    </h2>
+                  )}
                   {view === 'week' && (
                     <h2
                       id={`day-${d}-title`}
@@ -325,7 +353,7 @@ export default async function TimetablePage({ searchParams }: PageProps<'/admin/
                           <h3 className="line-clamp-2 text-sm font-semibold text-slate-900" title={row.title}>
                             {splitPlanTitle(row.title).title}
                             {row.archived && (
-                              <span className="ml-1 text-xs font-normal text-slate-500">（アーカイブ）</span>
+                              <span className="ml-1 text-xs font-normal text-slate-500">（掲載終了）</span>
                             )}
                           </h3>
                           <div className="mt-2 grid grid-cols-3 gap-1.5 min-[420px]:grid-cols-4">
@@ -371,7 +399,20 @@ export default async function TimetablePage({ searchParams }: PageProps<'/admin/
           </div>
 
           {/* PC：日は「メニュー × 時刻」、週は「メニュー × 日付」の表 */}
-          <div className="hidden max-h-[calc(100dvh-8rem)] overflow-auto rounded-xl border border-slate-200 bg-white shadow-sm md:block">
+          {view === 'day' && times.length > 0 && (
+            <p className="hidden text-xs text-slate-600 md:block">
+              この日の回は {times[0]}〜{times[times.length - 1]}{' '}
+              です（表に収まらないときは、横に動かすと続きが見られます）。
+            </p>
+          )}
+          <div
+            className="hidden max-h-[calc(100dvh-8rem)] overflow-auto rounded-xl border border-slate-200 bg-white shadow-sm md:block"
+            // 横に続きがあるときだけ、右端に影を出す（右端まで動かすと、白い帯が影を隠す）
+            style={{
+              background:
+                'linear-gradient(to left, white 30%, rgb(255 255 255 / 0)) right / 2.5rem 100% no-repeat local, linear-gradient(to left, rgb(15 23 42 / 0.14), rgb(15 23 42 / 0)) right / 1rem 100% no-repeat scroll, white',
+            }}
+          >
             <table className="w-full min-w-max border-separate border-spacing-0 text-sm">
               <thead>
                 <tr>
@@ -405,17 +446,17 @@ export default async function TimetablePage({ searchParams }: PageProps<'/admin/
               <tbody>
                 {rows.map((row) => (
                   <tr key={row.menuId} className={cn(view === 'week' && 'align-top')}>
-                    <th className="sticky left-0 z-10 w-56 max-w-56 border-b border-slate-100 bg-white p-3 text-left font-medium text-slate-900">
+                    <th className="sticky left-0 z-10 w-44 max-w-44 border-b border-slate-100 bg-white p-3 text-left font-medium text-slate-900">
                       <span className="line-clamp-2" title={row.title}>
                         {splitPlanTitle(row.title).title}
                       </span>
-                      {row.archived && <span className="text-xs font-normal text-slate-500">アーカイブ済み</span>}
+                      {row.archived && <span className="text-xs font-normal text-slate-500">掲載終了</span>}
                     </th>
                     {view === 'day'
                       ? times.map((t) => {
                           const slot = row.slots.find((s) => s.time === t);
                           return (
-                            <td key={t} className="min-w-24 border-b border-slate-100 p-1.5">
+                            <td key={t} className="min-w-21 border-b border-slate-100 p-1.5">
                               {slot ? (
                                 <SlotCell
                                   slot={slot}

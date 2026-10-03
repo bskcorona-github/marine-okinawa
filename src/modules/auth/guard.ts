@@ -8,8 +8,19 @@ import { account, operatorMembers, operators, shopMembers } from '@/db/schema';
 import { isSocialProvider } from '@/lib/social-providers';
 import { auth } from '@/lib/auth';
 import { evaluateAccess, HOME_OF, type Role } from './access';
+import { isFeatureOn } from '@/modules/shop/features';
 
-export type AdminContext = { userId: string; email: string; shopId: string; role: 'admin' };
+export type AdminContext = {
+  userId: string;
+  email: string;
+  shopId: string;
+  role: 'admin';
+  /**
+   * 「機能の切り替え」で 2 要素認証を止めていなくても入れる人か（認証アプリを設定済み、または LINE・Google だけ）。
+   * 守りに関わる機能を止められるのはこの人だけ（止めたおかげで入れている人が、止め続けられないように）
+   */
+  strongAuth: boolean;
+};
 export type OperatorContext = { userId: string; email: string; shopId: string; operatorId: string; role: 'operator' };
 
 /** ログイン中の利用者と、その種類（組合の管理者か、停止されていない事業者アカウントか） */
@@ -78,12 +89,18 @@ const loadState = cache(async () => {
 
 async function requireRole(required: Role) {
   const state = await loadState();
+  // 「機能の切り替え」：事業者画面を止めているあいだは、事業者は入れない
+  if (required === 'operator' && state.role === 'operator' && state.shopId) {
+    if (!(await isFeatureOn(db, state.shopId, 'partner.portal'))) redirect('/admin/login?reason=partner_paused');
+  }
+  const twoFactorRequired = state.shopId ? await isFeatureOn(db, state.shopId, 'auth.two_factor_required') : true;
   const access = evaluateAccess({
     hasSession: Boolean(state.session),
     role: state.role,
     twoFactorEnabled: Boolean(state.session?.user.twoFactorEnabled),
     hasSocialLogin: state.hasSocialLogin,
     hasPassword: state.hasPassword,
+    twoFactorRequired,
     required,
   });
   // ログインはできているが、組合の管理者でも有効な事業者アカウントでもない（停止中など）
@@ -97,7 +114,23 @@ async function requireRole(required: Role) {
 /** 管理画面のページ・Server Action の先頭で必ず呼ぶ（組合の管理者だけ） */
 export async function requireAdmin(): Promise<AdminContext> {
   const state = await requireRole('admin');
-  return { userId: state.session.user.id, email: state.session.user.email, shopId: state.shopId, role: 'admin' };
+  const strongAuth =
+    evaluateAccess({
+      hasSession: true,
+      role: 'admin',
+      twoFactorEnabled: Boolean(state.session.user.twoFactorEnabled),
+      hasSocialLogin: state.hasSocialLogin,
+      hasPassword: state.hasPassword,
+      twoFactorRequired: true,
+      required: 'admin',
+    }) === 'ok';
+  return {
+    userId: state.session.user.id,
+    email: state.session.user.email,
+    shopId: state.shopId,
+    role: 'admin',
+    strongAuth,
+  };
 }
 
 /**

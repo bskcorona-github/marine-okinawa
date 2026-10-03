@@ -81,7 +81,7 @@ describe('evaluateAccess', () => {
     ).toBe('ok');
   });
 
-  it('LINE・Google をつないだ人は認証アプリなしで入れる。何も決めていない人は、ログインの方法を決める画面へ', () => {
+  it('LINE・Google だけの人は認証アプリなしで入れる。何も決めていない人は、ログインの方法を決める画面へ', () => {
     const base = {
       hasSession: true,
       role: 'operator' as const,
@@ -91,5 +91,24 @@ describe('evaluateAccess', () => {
     expect(evaluateAccess({ ...base, hasSocialLogin: true, hasPassword: false })).toBe('ok');
     expect(evaluateAccess({ ...base, hasSocialLogin: false, hasPassword: false })).toBe('setup_login');
     expect(evaluateAccess({ ...base, hasSocialLogin: false, hasPassword: true })).toBe('setup_2fa');
+  });
+
+  it('パスワードもある人は、LINE・Google をつないでいても認証アプリが要る（2 要素認証を止めていたあいだにつないでも、戻ったら求める）', () => {
+    const base = { hasSession: true, role: 'admin' as const, twoFactorEnabled: false, required: 'admin' as const };
+    expect(evaluateAccess({ ...base, hasSocialLogin: true, hasPassword: true })).toBe('setup_2fa');
+    expect(evaluateAccess({ ...base, hasSocialLogin: true, hasPassword: true, twoFactorRequired: false })).toBe('ok');
+    expect(evaluateAccess({ ...base, hasSocialLogin: true, hasPassword: true, twoFactorEnabled: true })).toBe('ok');
+  });
+
+  it('「機能の切り替え」で 2 要素認証を止めているあいだは、パスワードの人も認証アプリなしで入れる', () => {
+    const base = { hasSession: true, role: 'admin' as const, twoFactorEnabled: false, required: 'admin' as const };
+    expect(evaluateAccess({ ...base, hasSocialLogin: false, hasPassword: true, twoFactorRequired: false })).toBe('ok');
+    expect(evaluateAccess({ ...base, hasSocialLogin: false, hasPassword: true, twoFactorRequired: true })).toBe(
+      'setup_2fa',
+    );
+    // ログインの方法をまだ決めていない人は、止めていても決める画面へ
+    expect(evaluateAccess({ ...base, hasSocialLogin: false, hasPassword: false, twoFactorRequired: false })).toBe(
+      'setup_login',
+    );
   });
 });

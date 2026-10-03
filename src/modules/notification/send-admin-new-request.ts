@@ -36,7 +36,6 @@ export async function sendAdminNewRequest(
     { label: t('common.bookingNo'), value: booking.bookingNo },
     { label: t('common.menu'), value: title },
     { label: t('common.dateTime'), value: `${date} ${time}` },
-    { label: t('common.secondChoice'), value: booking.secondChoice },
     { label: t(isPerPerson(booking.capacityUnit) ? 'common.people' : 'common.course'), value: people },
     {
       label: t('common.guestCount'),

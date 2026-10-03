@@ -47,7 +47,9 @@ export type BookingErrorCode =
   /** カードへの返金を送ったが、結果がまだ分からない */
   | 'REFUND_PENDING'
   /** 入金日・返金日が今日より後、または古すぎる */
-  | 'INVALID_DATE';
+  | 'INVALID_DATE'
+  /** 終わった日（今日より前）の回への操作（一括の天候中止・手動予約） */
+  | 'SLOT_DAY_PASSED';
 
 export class BookingError extends Error {
   constructor(readonly code: BookingErrorCode) {

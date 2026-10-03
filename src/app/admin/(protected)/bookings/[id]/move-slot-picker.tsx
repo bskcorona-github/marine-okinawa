@@ -74,7 +74,7 @@ export function MoveSlotPicker({
       </label>
       <ConfirmDialog
         tone="default"
-        triggerLabel="この回へ移す…"
+        triggerLabel="この回へ移す"
         disabled={!selected}
         describedBy={!selected ? hintId : undefined}
         title="選んだ回へ日時を変更しますか？"

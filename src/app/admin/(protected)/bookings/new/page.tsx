@@ -18,7 +18,9 @@ import { SEASON_LABELS } from '@/modules/catalog/season';
 import { remainingSeats } from '@/modules/inventory/availability';
 import { getSlotForAdmin, listSlotsForDate } from '@/modules/inventory/queries';
 import { getShopById } from '@/modules/shop/shops';
-import { cardPaymentsEnabled } from '@/modules/payment/card-payments';
+import { isPastSlotDay } from '@/modules/schedule/slot-day';
+import { getInquiry } from '@/modules/content/inquiries';
+import { cardPaymentsActive } from '@/modules/payment/card-payments';
 import { occupancyText, occupancyTone, TONE_STYLE } from '@/components/backoffice/occupancy';
 import { ManualBookingForm } from './manual-booking-form';
 
@@ -28,6 +30,14 @@ export default async function ManualBookingPage({ searchParams }: PageProps<'/ad
   const admin = await requireAdmin();
   const sp = await searchParams;
   const shop = await getShopById(db, admin.shopId);
+  // お問い合わせから開いたとき（?inquiry=）は、その方の連絡先を入力欄に入れる（URL にはお問い合わせの番号だけを載せる）
+  const inquiry = isUuid(sp.inquiry) ? await getInquiry(db, { shopId: shop.id, inquiryId: sp.inquiry }) : null;
+  const withInquiry = (href: string) => (inquiry ? `${href}&inquiry=${inquiry.id}` : href);
+  const inquiryNotice = inquiry && (
+    <Notice tone="info" className="max-w-xl">
+      お問い合わせ（{inquiry.name} 様）の連絡先を、お客様の欄に入れています。
+    </Notice>
+  );
 
   // 回が決まっていれば入力フォーム
   if (isUuid(sp.slot)) {
@@ -44,9 +54,10 @@ export default async function ManualBookingPage({ searchParams }: PageProps<'/ad
       return (
         <div className="space-y-4">
           <PageHeader
-            back={{ href: `/admin/bookings/new?menu=${slot.menuId}&date=${date}`, label: '回を選び直す' }}
+            back={{ href: withInquiry(`/admin/bookings/new?menu=${slot.menuId}&date=${date}`), label: '回を選び直す' }}
             title="手動予約"
           />
+          {inquiryNotice}
           <div className="max-w-xl rounded-xl border border-sky-200 bg-sky-50 p-4 text-sm text-sky-950">
             <p className="font-semibold">{splitPlanTitle(slot.menuTitle).title}</p>
             <dl className="mt-2 grid gap-1.5">
@@ -75,29 +86,43 @@ export default async function ManualBookingPage({ searchParams }: PageProps<'/ad
               </div>
             </dl>
           </div>
-          {slot.startsAt.getTime() <= new Date().getTime() && (
+          {isPastSlotDay(slot.startsAt, new Date(), shop.timezone) ? (
+            // 終わった日の回には登録しない（サーバーでも止める）
             <Notice tone="warning" className="max-w-xl">
-              この回はすでに開始しています。当日の飛び込みなどを記録する場合だけ登録してください。
+              終わった日の回のため、手動予約はできません。上の「回を選び直す」から、今日以降の回を選んでください。
             </Notice>
+          ) : (
+            <>
+              {slot.startsAt.getTime() <= new Date().getTime() && (
+                <Notice tone="warning" className="max-w-xl">
+                  この回はすでに開始しています。当日の飛び込みなどを記録する場合だけ登録してください。
+                </Notice>
+              )}
+              <ManualBookingForm
+                slotId={slot.id}
+                prices={prices}
+                unit={slot.capacityUnit}
+                includedGuests={slot.includedGuests}
+                extraGuestPrice={slot.extraGuestPrice}
+                maxGuests={slot.maxGuests}
+                minPartySize={slot.minPartySize}
+                remaining={remaining}
+                isFull={slot.reservedCount >= slot.capacity}
+                requireAges={slot.requireAges}
+                today={localDate(new Date(), shop.timezone)}
+                operators={operators.filter((o) => o.status !== 'suspended').map((o) => ({ id: o.id, name: o.name }))}
+                defaultOperatorId={
+                  operators.some((o) => o.id === slot.operatorId && o.status !== 'suspended') ? slot.operatorId : null
+                }
+                hasPaymentInstructions={
+                  Boolean(shop.settings.paymentInstructions) || (await cardPaymentsActive(db, shop.id))
+                }
+                initialCustomer={
+                  inquiry ? { name: inquiry.name, phone: inquiry.phone ?? '', email: inquiry.email } : undefined
+                }
+              />
+            </>
           )}
-          <ManualBookingForm
-            slotId={slot.id}
-            prices={prices}
-            unit={slot.capacityUnit}
-            includedGuests={slot.includedGuests}
-            extraGuestPrice={slot.extraGuestPrice}
-            maxGuests={slot.maxGuests}
-            minPartySize={slot.minPartySize}
-            remaining={remaining}
-            isFull={slot.reservedCount >= slot.capacity}
-            requireAges={slot.requireAges}
-            today={localDate(new Date(), shop.timezone)}
-            operators={operators.filter((o) => o.status !== 'suspended').map((o) => ({ id: o.id, name: o.name }))}
-            defaultOperatorId={
-              operators.some((o) => o.id === slot.operatorId && o.status !== 'suspended') ? slot.operatorId : null
-            }
-            hasPaymentInstructions={Boolean(shop.settings.paymentInstructions) || cardPaymentsEnabled()}
-          />
         </div>
       );
     }
@@ -108,15 +133,18 @@ export default async function ManualBookingPage({ searchParams }: PageProps<'/ad
   const now = new Date();
   const today = localDate(now, shop.timezone);
   const date = isDateString(sp.date) ? sp.date : today;
+  // 終わった日（今日より前）の回は、選べないように出す（登録はサーバーでも止める）
+  const pastDate = date < today;
   const slots = menuId ? await listSlotsForDate(db, { menuId, date, timezone: shop.timezone }) : [];
   const unit = menus.find((m) => m.id === menuId)?.capacityUnit ?? '名';
   // 事業者ごとにまとめる（一覧の並びは事業者の表示順）
   const groups = new Map<string, typeof menus>();
   for (const m of menus) {
-    const key = m.operatorName ?? 'ショップ直営';
+    const key = m.operatorName ?? '組合直営';
     groups.set(key, [...(groups.get(key) ?? []), m]);
   }
-  const dateLink = (d: string) => `/admin/bookings/new?${new URLSearchParams({ menu: menuId ?? '', date: d })}`;
+  const dateLink = (d: string) =>
+    withInquiry(`/admin/bookings/new?${new URLSearchParams({ menu: menuId ?? '', date: d })}`);
 
   return (
     <div className="space-y-4">
@@ -124,11 +152,13 @@ export default async function ManualBookingPage({ searchParams }: PageProps<'/ad
         title="手動予約"
         description="電話・LINE・店頭で受けた予約を登録します。プランと日付を選んでください。"
       />
+      {inquiryNotice}
       <form
         action="/admin/bookings/new"
         className="grid gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:grid-cols-[minmax(0,1fr)_auto_auto] sm:items-end"
       >
         <SubmitOnChange />
+        {inquiry && <input type="hidden" name="inquiry" value={inquiry.id} />}
         <label className="min-w-0 space-y-1 text-sm">
           <span className="block font-medium">プラン</span>
           <select name="menu" defaultValue={menuId} className={cn(SELECT_CLASS, 'w-full')}>
@@ -178,9 +208,14 @@ export default async function ManualBookingPage({ searchParams }: PageProps<'/ad
           <CalendarDays aria-hidden className="size-4" />
           {formatDateLabel(zonedToUtc(date, '12:00', shop.timezone), shop.timezone)} の回
         </h2>
+        {pastDate && slots.length > 0 && (
+          <p className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-950">
+            終わった日の回には、手動予約はできません。上の「今日」「明日」や日付で、今日以降の日を選んでください。
+          </p>
+        )}
         {slots.length === 0 ? (
           <p className="rounded-xl border border-dashed border-slate-300 bg-white p-6 text-center text-sm text-slate-600">
-            この日の回はありません。
+            この日にこのプランの回はありません。上の「明日」「あさって」や日付で、別の日を選んでください。
           </p>
         ) : (
           <ul className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
@@ -196,6 +231,8 @@ export default async function ManualBookingPage({ searchParams }: PageProps<'/ad
                   </span>
                   <span className="block text-sm font-semibold">
                     {s.status === 'open' ? occupancyText(s, unit) : SLOT_STATUS_LABELS[s.status]}
+                    {/* 色だけでなく文字でも「残りわずか」を伝える */}
+                    {tone === 'busy' && <span className="ml-1 text-xs">（わずか）</span>}
                   </span>
                   <span className="block text-xs tabular-nums">
                     予約 {s.reservedCount} / 定員 {s.capacity}
@@ -204,9 +241,9 @@ export default async function ManualBookingPage({ searchParams }: PageProps<'/ad
               );
               return (
                 <li key={s.id}>
-                  {s.status === 'open' ? (
+                  {s.status === 'open' && !pastDate ? (
                     <Link
-                      href={`/admin/bookings/new?slot=${s.id}`}
+                      href={withInquiry(`/admin/bookings/new?slot=${s.id}`)}
                       className={cn(
                         'block min-h-11 rounded-xl border p-3 transition hover:ring-2 hover:ring-sky-400',
                         TONE_STYLE[tone].cell,

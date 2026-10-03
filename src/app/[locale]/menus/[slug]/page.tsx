@@ -36,7 +36,7 @@ import { splitPlanTitle } from '@/modules/catalog/display-title';
 import { getPublishedMenuBySlug, listPublishedMenus, type PublishedMenu } from '@/modules/catalog/menus';
 import { pricesForSeason, seasonOf } from '@/modules/catalog/season';
 import { getDaySlots, getFirstBookableDate, getMonthAvailability } from '@/modules/inventory/queries';
-import { cardPaymentsEnabled } from '@/modules/payment/card-payments';
+import { cardPaymentsActive } from '@/modules/payment/card-payments';
 import { getScheduleSummary } from '@/modules/schedule/rules';
 import { SLOT_HORIZON_DAYS } from '@/modules/schedule/sync-slots';
 import { shopContact } from '@/modules/shop/contact';
@@ -278,7 +278,7 @@ export default async function MenuPage({ params, searchParams }: PageProps<'/[lo
   });
   // キャンセル料は設定の率から作る（料率と文面がずれないように）。そのあとに共通・プランごとの規定
   // お支払いはカードだけ（Stripe が設定されているとき）。申し込む前に分かるように伝える
-  const cardPayment = cardPaymentsEnabled();
+  const cardPayment = await cardPaymentsActive(db, shop.id);
   const policies = [
     { heading: t('cancellationRates.title'), text: cancellationRateLines(shop.settings).join('\n') },
     { heading: t('menu.cancellationCommon'), text: shop.settings.commonCancellationPolicy },

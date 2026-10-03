@@ -6,9 +6,11 @@ import { z } from 'zod';
 import { db } from '@/db';
 import { bookingStatus } from '@/db/schema';
 import { isPastDateWithin, zonedToUtc } from '@/lib/dates';
+import { getEnv } from '@/lib/env';
 import { isDateString, isUuid, yenSchema } from '@/lib/validation';
 import { requireAdmin } from '@/modules/auth/guard';
 import { changeBookingItems } from '@/modules/booking/change-items';
+import { issueCustomerPageLink } from '@/modules/booking/customer-page-link';
 import { changeBookingSlot } from '@/modules/booking/change-slot';
 import { assignOperator, changeBookingStatus, updateAdminNote } from '@/modules/booking/change-status';
 import { BookingError } from '@/modules/booking/errors';
@@ -19,7 +21,7 @@ import { mailKindForStatus, sendBookingMail } from '@/modules/notification/send-
 import { sendOperatorBookingMail, sendOperatorRequestMail } from '@/modules/notification/send-operator-mail';
 import { sendQuietly } from '@/modules/notification/send-quietly';
 import { requestOperatorAcceptance, withdrawRequest } from '@/modules/partner/requests';
-import { cardPaymentsEnabled, expireOpenCheckout, getCardPayments } from '@/modules/payment/card-payments';
+import { cardPaymentsActive, expireOpenCheckout, getCardPayments } from '@/modules/payment/card-payments';
 import { recordAdditionalReceipt } from '@/modules/payment/receipts';
 import { refundPayment, retryPendingRefund } from '@/modules/payment/refunds';
 import { getShopById } from '@/modules/shop/shops';
@@ -139,6 +141,7 @@ export async function changeStatusAction(bookingId: string, formData: FormData) 
         ? '（実施事業者の受入は電話などで確認済み）'
         : '';
   const note = [input.note, checked].filter(Boolean).join(' ');
+  const cardPayment = await cardPaymentsActive(db, admin.shopId);
   const result = await run(bookingId, back, () =>
     changeBookingStatus(db, {
       shopId: admin.shopId,
@@ -160,7 +163,7 @@ export async function changeStatusAction(bookingId: string, formData: FormData) 
       operatorAgreement: input.operatorChecked === 'conditional' ? input.operatorAgreement : undefined,
       // 組合の画面からの操作では、実施事業者の確認をサーバーでも確かめる
       operatorCheck: { confirmed: Boolean(input.operatorChecked) },
-      cardPayment: cardPaymentsEnabled(),
+      cardPayment,
       cancel:
         input.to === 'cancelled' || input.to === 'weather_cancelled'
           ? {
@@ -338,7 +341,7 @@ const moveSchema = z.object({
   notify: z.enum(['on']).optional(),
 });
 
-/** 日時を変える（第 2 希望への振替など）。お客様には今の状態のメールを新しい日時で送り直せる */
+/** 日時を変える。お客様には今の状態のメールを新しい日時で送り直せる */
 export async function changeSlotAction(bookingId: string, formData: FormData) {
   const admin = await guard(bookingId);
   const back = listBack(formData);
@@ -391,6 +394,36 @@ export async function resendMailAction(bookingId: string, formData: FormData) {
   if (result.status === 'not_available') redirect(detailPage(bookingId, 'error=NO_MAIL_FOR_STATUS', back));
   const kind = 'kind' in result ? result.kind : 'booking';
   redirect(detailPage(bookingId, `resent=${kind}&mail=${result.status}`, back));
+}
+
+export type CustomerPageLinkState = { error: string | null; url?: string };
+
+/**
+ * お客様の予約確認ページ（支払案内・カード決済）のリンクを出す。画面に出すため redirect せず返す。
+ * メールに載せたトークンは復元できないので、新しいトークンを足す
+ */
+export async function issueCustomerPageLinkAction(
+  bookingId: string,
+  _prev: CustomerPageLinkState,
+  _formData: FormData,
+): Promise<CustomerPageLinkState> {
+  const admin = await requireAdmin();
+  if (!isUuid(bookingId)) return { error: '予約が見つかりません' };
+  try {
+    const { url } = await issueCustomerPageLink(db, {
+      shopId: admin.shopId,
+      bookingId,
+      actorId: admin.userId,
+      appUrl: getEnv().APP_URL,
+    });
+    revalidatePath(`/admin/bookings/${bookingId}`);
+    return { error: null, url };
+  } catch (error) {
+    if (error instanceof BookingError && error.code === 'BOOKING_NOT_FOUND') {
+      return { error: '予約が見つかりません' };
+    }
+    throw error;
+  }
 }
 
 /**

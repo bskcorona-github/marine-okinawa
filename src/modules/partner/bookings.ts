@@ -21,10 +21,10 @@ import { DEFAULT_LOCALE } from '@/lib/locale';
 import { isPerPerson } from '@/modules/catalog/capacity-unit';
 
 /**
- * 事業者に見せる予約：自社に割り当てられ、予約確定した以降のもの。取消・天候中止は、一度確定した予約だけ
+ * 事業者に見せる予約：自社に割り当てられ、支払待ち以降のもの。取消・天候中止は、一度確定した予約だけ
  * （確定前に取り消した申込は、照会していない初期値の事業者に見せない）
  */
-const operatorVisibleSql = sql`(${bookingStatusIn([...CONFIRMED_STATUSES, 'no_show'])} or ${cancelledAfterConfirmSql})`;
+const operatorVisibleSql = sql`(${bookingStatusIn(['awaiting_payment', ...CONFIRMED_STATUSES, 'no_show'])} or ${cancelledAfterConfirmSql})`;
 
 /** 当日の連絡が要らなくなった予約（催行の報告のあと・無断キャンセル・開始の翌日以降）。電話を出さない */
 const contactOverSql = (now: Date) =>
@@ -39,7 +39,7 @@ export const REPORT_RESULT_LABELS: Record<ReportResult, string> = {
 };
 
 /**
- * 事業者向けの予約の項目。催行に要る情報だけ（代表者の氏名と電話は当日の連絡のため。メールアドレスは出さない）。
+ * 事業者向けの予約の項目。催行に要る情報と代表者の氏名・電話・メール。
  * 取消の理由・組合メモ・金額の内訳・入金の状況は出さない
  */
 function selectOperatorBookings(db: DbOrTx, where: SQL | undefined, now: Date) {
@@ -59,6 +59,9 @@ function selectOperatorBookings(db: DbOrTx, where: SQL | undefined, now: Date) {
       contactPhone: sql<
         string | null
       >`case when ${bookings.status} in ('cancelled', 'weather_cancelled') or ${contactOverSql(now)} then null else ${bookings.contactPhone} end`,
+      contactEmail: sql<
+        string | null
+      >`case when ${bookings.status} in ('cancelled', 'weather_cancelled') then null else ${bookings.contactEmail} end`,
       shopId: bookings.shopId,
       totalAmount: bookings.totalAmount,
       paymentMethod: bookings.paymentMethod,
@@ -87,7 +90,7 @@ function selectOperatorBookings(db: DbOrTx, where: SQL | undefined, now: Date) {
     .where(where);
 }
 
-/** 事業者の予約一覧（自社に割り当てられた、予約確定以降のものだけ）。from〜to（開始日時）で絞る */
+/** 事業者の予約一覧（自社に割り当てられた、支払待ち以降のもの）。from〜to（開始日時）で絞る */
 export async function listOperatorBookings(
   db: DbOrTx,
   params: { operatorId: string; now: Date; from?: Date; to?: Date; order?: 'asc' | 'desc'; limit?: number },
@@ -222,7 +225,7 @@ export async function listRecentChanges(db: DbOrTx, params: { operatorId: string
     .limit(20);
 }
 
-/** 事業者の予約 1 件と明細（自社に割り当てられた予約確定以降のものだけ。それ以外は null） */
+/** 事業者の予約 1 件と明細（自社に割り当てられた支払待ち以降のものだけ。それ以外は null） */
 export async function getOperatorBooking(db: DbOrTx, params: { operatorId: string; bookingId: string; now: Date }) {
   const [row] = await selectOperatorBookings(
     db,

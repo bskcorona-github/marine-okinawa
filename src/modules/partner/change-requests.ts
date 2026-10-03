@@ -42,6 +42,28 @@ export const profileSchema = z.object({
 
 export type OperatorProfile = z.infer<typeof profileSchema>;
 
+/**
+ * 変わると、お金の振込先・連絡の宛先・本人に確かめる電話番号が変わる項目（なりすましで書き換えられないよう、
+ * 反映の前に登録済みの電話番号へ折り返して本人に確かめてもらう。電話番号も含めるのは、先に番号だけ書き換えてから
+ * 口座を変える申請を出され、折り返しの電話がなりすましの人につながるのを防ぐため）
+ */
+export const SENSITIVE_PROFILE_FIELDS = [
+  'bankAccount',
+  'email',
+  'phone',
+  'emergencyPhone',
+] as const satisfies readonly ProfileField[];
+
+/** 更新申請のうち、今の登録内容から実際に変わる「慎重に扱う項目」（口座・連絡用メールアドレス・電話番号） */
+export function sensitiveChanges(
+  payload: Partial<Record<ProfileField, unknown>>,
+  current: Partial<Record<ProfileField, unknown>>,
+): ProfileField[] {
+  return SENSITIVE_PROFILE_FIELDS.filter(
+    (field) => field in payload && String(payload[field] ?? '').trim() !== String(current[field] ?? '').trim(),
+  );
+}
+
 /** 今の登録内容（事業者画面の更新申請の初期値） */
 export async function getOperatorProfile(db: DbOrTx, operatorId: string): Promise<OperatorProfile | null> {
   const [row] = await db.select().from(operators).where(eq(operators.id, operatorId));
@@ -131,8 +153,19 @@ export async function listChangeRequests(
  */
 export async function reviewChangeRequest(
   db: Db,
-  input: { shopId: string; requestId: string; approve: boolean; note: string; actorId: string | null; now: Date },
-): Promise<'ok' | 'done' | 'invalid'> {
+  input: {
+    shopId: string;
+    /** 申請を出した事業者（画面で開いている事業者の申請だけを扱う） */
+    operatorId: string;
+    requestId: string;
+    approve: boolean;
+    /** 登録済みの電話番号へ折り返して本人に確かめた（慎重に扱う項目が変わる申請の反映に必須） */
+    verifiedByPhone: boolean;
+    note: string;
+    actorId: string | null;
+    now: Date;
+  },
+): Promise<'ok' | 'done' | 'invalid' | 'unverified'> {
   return db.transaction(async (tx) => {
     const [request] = await tx
       .select()
@@ -141,6 +174,7 @@ export async function reviewChangeRequest(
         and(
           eq(operatorChangeRequests.id, input.requestId),
           eq(operatorChangeRequests.shopId, input.shopId),
+          eq(operatorChangeRequests.operatorId, input.operatorId),
           eq(operatorChangeRequests.status, 'pending'),
         ),
       )
@@ -151,6 +185,8 @@ export async function reviewChangeRequest(
       // 申請の内容をもう一度検証してから反映する（申請の後で入力の条件を変えても、壊れた値を入れない）
       const [current] = await tx.select().from(operators).where(eq(operators.id, request.operatorId)).for('update');
       const before = Object.fromEntries((Object.keys(PROFILE_FIELDS) as ProfileField[]).map((k) => [k, current[k]]));
+      // 口座・メール・電話番号が変わるときは、折り返して確かめた印がないと反映しない（行をロックした今の値で判定する）
+      if (sensitiveChanges(request.payload, before).length > 0 && !input.verifiedByPhone) return 'unverified';
       const merged = profileSchema.safeParse({ ...before, ...request.payload });
       if (!merged.success) {
         logWarn('operator.change_request.invalid', { requestId: request.id, operatorId: request.operatorId });

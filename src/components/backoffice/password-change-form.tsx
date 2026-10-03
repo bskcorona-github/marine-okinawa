@@ -14,8 +14,21 @@ import { useHydrated } from '@/lib/use-hydrated';
 /** パスワードの長さの下限（認証の設定と同じ） */
 const MIN_LENGTH = 12;
 
-/** 自分のパスワードに変える（ほかの端末のログインは切る） */
-export function PasswordChangeForm({ email, required }: { email: string; required: boolean }) {
+/**
+ * 自分のパスワードに変える（ほかの端末のログインは切る）。事業者画面（仮パスワードのときは必須）と、組合の「ログイン方法」で使う。
+ * doneHref：変えたあとに開く画面。backHref：変えずに戻る先（null なら出さない）
+ */
+export function PasswordChangeForm({
+  email,
+  required,
+  doneHref = '/partner?password=changed',
+  backHref = '/partner',
+}: {
+  email: string;
+  required: boolean;
+  doneHref?: string;
+  backHref?: string | null;
+}) {
   const router = useRouter();
   const hydrated = useHydrated();
   const [error, setError] = useState<string | null>(null);
@@ -46,7 +59,7 @@ export function PasswordChangeForm({ email, required }: { email: string; require
       );
       return;
     }
-    router.replace('/partner?password=changed');
+    router.replace(doneHref);
     router.refresh();
   }
 
@@ -103,8 +116,8 @@ export function PasswordChangeForm({ email, required }: { email: string; require
           <Button type="submit" className="w-full" disabled={!hydrated || pending}>
             {pending ? '変更中…' : 'パスワードを変更する'}
           </Button>
-          {!required && (
-            <Link href="/partner" className="block text-center text-sm text-sky-800 underline">
+          {!required && backHref && (
+            <Link href={backHref} className="block text-center text-sm text-sky-800 underline">
               変えずにもどる
             </Link>
           )}

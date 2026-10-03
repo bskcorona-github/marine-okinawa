@@ -192,7 +192,8 @@ async function processRequest(page: Page, browser: Browser, options: BrowserCont
   await page.getByRole('dialog').getByRole('button', { name: '入金を確認して確定する' }).click();
   await page.getByText('入金を記録し、予約を確定しました。').waitFor();
   await shot(page, 'admin-desktop-05f-booking-confirmed');
-  await page.getByRole('button', { name: '取り消す' }).click();
+  await page.getByText(/^予約をやめるとき/).click();
+  await page.getByRole('button', { name: '予約を取り消す' }).click();
   await shot(page, 'admin-desktop-05g-dialog-cancel', false);
   await page.keyboard.press('Escape');
   await customer.goto(url);

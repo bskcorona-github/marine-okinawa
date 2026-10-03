@@ -47,7 +47,8 @@ export class PlanError extends Error {
   }
 }
 
-export const PLAN_ERROR_LABELS: Record<PlanErrorCode, string> = {
+export const PLAN_ERROR_LABELS: Record<PlanErrorCode | 'PAUSED', string> = {
+  PAUSED: 'ただいま、プランの登録・変更を止めています。組合へお問い合わせください。',
   NOT_FOUND: 'プランが見つかりません。',
   LOCKED: 'このプランは掲載を終えているため、変えられません。組合へご連絡ください。',
   NOT_DRAFT: '公開の申請は、まだ公開していないプランだけできます。',

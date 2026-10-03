@@ -3,13 +3,13 @@ import { notFound } from 'next/navigation';
 import { DetailList } from '@/components/backoffice/detail-list';
 import { Notice, PageHeader, Panel } from '@/components/backoffice/page-header';
 import { BookingStatusBadge } from '@/components/backoffice/status-badge';
+import { PartnerContactPanel } from '@/components/partner/contact-panel';
 import { db } from '@/db';
 import { formatDateLabel, localTime } from '@/lib/dates';
 import { formatYen } from '@/lib/format';
 import { isUuid } from '@/lib/validation';
 import { requireOperator } from '@/modules/auth/guard';
 import { splitPlanTitle } from '@/modules/catalog/display-title';
-import { formatPhoneForDisplay } from '@/modules/customer/normalize';
 import { REPORT_RESULT_LABELS, getOperatorBooking, type ReportResult } from '@/modules/partner/bookings';
 import { REQUEST_STATUS_LABELS } from '@/modules/partner/requests';
 import { telHref } from '@/modules/shop/contact';
@@ -40,7 +40,6 @@ export default async function PartnerBookingPage({ params, searchParams }: PageP
   const started = booking.startsAt <= new Date();
   const canReport = booking.status === 'confirmed' && started;
   const report = booking.reportResult as ReportResult | null;
-  const phone = booking.contactPhone ? formatPhoneForDisplay(booking.contactPhone) : null;
   const rows: [string, string][] = [
     ['予約番号', booking.bookingNo],
     ['日時', at(booking.startsAt)],
@@ -55,7 +54,9 @@ export default async function PartnerBookingPage({ params, searchParams }: PageP
       'お支払い',
       booking.paymentMethod === 'onsite'
         ? `現地払い ${formatYen(booking.totalAmount)}（当日お客様から受け取り）`
-        : '事前払い（組合で受け取り済み）',
+        : booking.status === 'awaiting_payment'
+          ? `事前払い ${formatYen(booking.totalAmount)}（支払待ち）`
+          : '事前払い（組合で受け取り済み）',
     ],
   ];
 
@@ -82,20 +83,7 @@ export default async function PartnerBookingPage({ params, searchParams }: PageP
           </Notice>
         )}
 
-        {booking.contactName && (
-          <Panel title="代表者" description="当日の連絡のためにだけ使ってください。">
-            <p className="text-base font-semibold text-slate-900">{booking.contactName} 様</p>
-            {phone && (
-              <a
-                href={telHref(booking.contactPhone!)}
-                className="mt-2 inline-flex min-h-11 items-center gap-2 rounded-lg border border-slate-200 px-3 font-semibold text-sky-800 tabular-nums hover:bg-sky-50"
-              >
-                <Phone aria-hidden className="size-4" />
-                {phone}
-              </a>
-            )}
-          </Panel>
-        )}
+        <PartnerContactPanel name={booking.contactName} phone={booking.contactPhone} email={booking.contactEmail} />
 
         <Panel title="予約の内容">
           <DetailList rows={rows} />

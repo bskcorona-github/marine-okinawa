@@ -4,6 +4,7 @@ import { startTransition, useActionState, useState, type FormEvent } from 'react
 import { SELECT_CLASS } from '@/components/backoffice/field-styles';
 import { StickySaveBar, useUnsavedChanges } from '@/components/backoffice/form-kit';
 import { Panel } from '@/components/backoffice/page-header';
+import { RequiredMark } from '@/components/backoffice/required-mark';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
@@ -33,11 +34,24 @@ type Props = {
   workload?: { upcoming: number; openRequests: number };
 };
 
-function Field({ id, label, hint, children }: { id: string; label: string; hint?: string; children: React.ReactNode }) {
+function Field({
+  id,
+  label,
+  hint,
+  required,
+  children,
+}: {
+  id: string;
+  label: string;
+  hint?: string;
+  required?: boolean;
+  children: React.ReactNode;
+}) {
   return (
     <div className="space-y-1">
       <label htmlFor={id} className="block font-medium">
         {label}
+        {required && <RequiredMark />}
       </label>
       {children}
       {hint && <p className="text-xs text-slate-600">{hint}</p>}
@@ -62,7 +76,7 @@ export function OperatorForm({ action, initial, workload }: Props) {
     <form method="post" onSubmit={onSubmit} onChange={markDirty} className="space-y-4 text-sm">
       <Panel title="基本情報">
         <div className="grid gap-4 sm:grid-cols-2">
-          <Field id="name" label="事業者名">
+          <Field id="name" label="事業者名" required>
             <Input id="name" name="name" defaultValue={initial.name} required />
           </Field>
           <Field
@@ -154,7 +168,7 @@ export function OperatorForm({ action, initial, workload }: Props) {
               id="invoiceNumber"
               name="invoiceNumber"
               defaultValue={initial.invoiceNumber}
-              placeholder="T1234567890123"
+              placeholder="例：T1234567890123"
               pattern="T\d{13}"
               className="tabular-nums"
             />
@@ -170,11 +184,12 @@ export function OperatorForm({ action, initial, workload }: Props) {
       <Panel>
         {/* 期間が多いとページの大半を占めるため、畳んでおく（閉じていても保存の対象） */}
         <details>
-          <summary className="cursor-pointer font-semibold text-slate-900">
+          <summary className="cursor-pointer py-2.5 font-semibold text-slate-900 pointer-coarse:py-3">
             繁忙期の期間（{initial.periods.length} 期間）
             <span className="ml-2 text-xs font-normal text-slate-600">開いて編集</span>
           </summary>
-          <div className="mt-4">
+          {/* プランの編集の「繁忙期の期間」のリンクの飛び先（閉じていても、飛ぶと開く） */}
+          <div id="season-periods" className="mt-4 scroll-mt-6">
             <SeasonPeriodsEditor initial={initial.periods} onChange={markDirty} />
           </div>
         </details>

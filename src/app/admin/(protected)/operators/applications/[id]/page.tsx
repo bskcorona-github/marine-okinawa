@@ -1,7 +1,11 @@
+import type { ReactNode } from 'react';
 import { Download } from 'lucide-react';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
+import { ConfirmDialog } from '@/components/backoffice/confirm-dialog';
 import { DetailList } from '@/components/backoffice/detail-list';
+import { formatPhoneForDisplay } from '@/modules/customer/normalize';
+import { PRIMARY_TRIGGER_CLASS } from '@/components/backoffice/field-styles';
 import { Notice, PageHeader, Panel } from '@/components/backoffice/page-header';
 import { SubmitButton } from '@/components/backoffice/submit-button';
 import { Input } from '@/components/ui/input';
@@ -49,14 +53,29 @@ export default async function ApplicationPage({
   const saved = ownValue(SAVED, sp.saved);
   const error = ownValue(ERRORS, sp.error);
   const open = app.status === 'new' || app.status === 'reviewing';
-  const rows: [string, string][] = [
+  // 電話番号は国内の書き方（098-…）で出し、押すと電話・メールを開けるようにする
+  const contactLink = 'inline-flex min-h-9 items-center text-sky-800 underline pointer-coarse:min-h-11';
+  const phoneLink = (value: string) =>
+    value ? (
+      <a href={`tel:${value}`} className={contactLink}>
+        {formatPhoneForDisplay(value)}
+      </a>
+    ) : (
+      ''
+    );
+  const rows: [string, ReactNode][] = [
     ['事業者名', app.companyName],
     ['所在地', app.address],
     ['代表者', app.representative],
     ['担当者', app.contactName],
-    ['電話', app.phone],
-    ['メール', app.email],
-    ['緊急連絡先', app.emergencyPhone],
+    ['電話', phoneLink(app.phone)],
+    [
+      'メール',
+      <a key="email" href={`mailto:${app.email}`} className={contactLink}>
+        {app.email}
+      </a>,
+    ],
+    ['緊急連絡先', phoneLink(app.emergencyPhone)],
     ['インボイスの登録番号', app.invoiceNumber],
     ['申請日時', at(app.createdAt)],
     ['同意', `プライバシーポリシーに同意（${at(app.consentedAt)}）`],
@@ -141,38 +160,71 @@ export default async function ApplicationPage({
 
         {open ? (
           <Panel title="審査">
-            <form action={reviewApplicationAction.bind(null, app.id)} className="space-y-3 text-sm">
+            <form action={reviewApplicationAction.bind(null, app.id)} className="space-y-4 text-sm">
               <label className="block space-y-1">
-                <span className="block font-medium">
-                  事業者の ID（承認するとき・半角英小文字・数字・ハイフン。空欄なら自動）
-                </span>
-                <Input
-                  name="slug"
-                  maxLength={60}
-                  pattern="[a-z0-9]+(-[a-z0-9]+)*"
-                  placeholder="例：aquamarine"
-                  className="max-w-xs"
-                />
-              </label>
-              <label className="block space-y-1">
-                <span className="block font-medium">審査のメモ（組合用）</span>
+                <span className="block font-medium">審査のメモ（組合用・申請者には送りません）</span>
                 <Textarea name="note" rows={3} maxLength={1000} defaultValue={app.reviewNote} />
               </label>
-              <div className="flex flex-wrap gap-2">
-                <SubmitButton name="decision" value="approve" pendingLabel="登録中…">
-                  承認して登録し、招待のメールを送る
-                </SubmitButton>
+              <div className="flex flex-wrap items-center gap-2">
+                <ConfirmDialog
+                  tone="default"
+                  triggerLabel="承認して登録する…"
+                  triggerClassName={PRIMARY_TRIGGER_CLASS}
+                  title={`${app.companyName}を事業者として登録しますか？`}
+                  confirmLabel="登録して招待のメールを送る"
+                  confirmName="decision"
+                  confirmValue="approve"
+                  pendingLabel="登録中…"
+                >
+                  <ul className="list-disc space-y-1 pl-5">
+                    <li>事業者として登録し、申請の内容と添付の資料を引き継ぎます。</li>
+                    <li>
+                      担当者（{app.contactName}・{app.email}
+                      ）に、事業者画面の招待のメールを送ります。送ったメールは取り消せません。
+                    </li>
+                  </ul>
+                  <details className="rounded-lg border border-slate-200 p-3">
+                    <summary className="cursor-pointer font-medium text-slate-700">
+                      詳しい設定（ふだんは変えなくて大丈夫）
+                    </summary>
+                    <label className="mt-2 block space-y-1">
+                      <span className="block font-medium">
+                        事業者の ID（半角英小文字・数字・ハイフン。空欄なら自動）
+                      </span>
+                      <Input
+                        name="slug"
+                        maxLength={60}
+                        pattern="[a-z0-9]+(-[a-z0-9]+)*"
+                        placeholder="例：aquamarine"
+                        className="max-w-xs"
+                      />
+                    </label>
+                  </details>
+                </ConfirmDialog>
                 {app.status === 'new' && (
                   <SubmitButton name="decision" value="reviewing" variant="outline" pendingLabel="保存中…">
-                    確認中にする
+                    確認中にする（メモを保存）
                   </SubmitButton>
                 )}
-                <SubmitButton name="decision" value="rejected" variant="outline" pendingLabel="保存中…">
-                  見送る
-                </SubmitButton>
+                <span className="ml-auto">
+                  <ConfirmDialog
+                    triggerLabel="見送る…"
+                    title={`${app.companyName}の申請を見送りますか？`}
+                    confirmLabel="見送りのメールを送る"
+                    confirmName="decision"
+                    confirmValue="rejected"
+                    pendingLabel="送っています…"
+                  >
+                    <p>
+                      申請者（{app.contactName}・{app.email}
+                      ）に、見送りの結果をメールで知らせます。送ったメールは取り消せません。
+                    </p>
+                    <p className="text-slate-600">審査のメモは送りません。</p>
+                  </ConfirmDialog>
+                </span>
               </div>
               <p className="text-xs text-slate-600">
-                承認すると事業者として登録し、申請の担当者に事業者画面の招待のメールを送ります。見送ると、申請者に結果をメールで知らせます（審査のメモは送りません）。
+                承認・見送りは、押したあとの確認の画面で内容を確かめてから決まります。「確認中にする」は、メモを残して申請を確認中にするだけです（メールは送りません）。
               </p>
             </form>
           </Panel>

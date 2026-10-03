@@ -51,6 +51,7 @@ export default async function PartnerRequestsPage() {
                   <span className="line-clamp-2 block text-slate-700">
                     {splitPlanTitle(r.menuTitle).title} ・ {r.partySize}
                     {r.capacityUnit}
+                    {r.contactName ? ` ・ ${r.contactName} 様` : ''}
                   </span>
                   <span className="block text-[13px] text-slate-600">
                     {r.bookingNo} ・ 依頼 {at(r.requestedAt)}

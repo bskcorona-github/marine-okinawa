@@ -48,7 +48,7 @@ export default async function PartnerSettlementPage({ params }: PageProps<'/part
         description={description}
       />
       <Panel title="明細">
-        <SettlementItemsTable settlement={settlement} timezone={shop.timezone} />
+        <SettlementItemsTable settlement={settlement} timezone={shop.timezone} viewer="operator" />
       </Panel>
       {shop.settings.receiptModel === 'agent' ? (
         // 組合がお客様の代金を事業者の代理で受け取る形：組合の手数料の請求書（インボイス）を兼ねる

@@ -22,6 +22,7 @@ async function setUp2fa(page: Page, password: string) {
   await page.getByRole('button', { name: 'QR コードを表示' }).click();
   const secret = ((await page.getByTestId('totp-secret').textContent()) ?? '').trim();
   expect(secret).not.toBe('');
+  await page.getByLabel('バックアップコードを控えました').check();
   await page.getByLabel('認証アプリの 6 桁のコード').fill(await generate({ secret }));
   await page.getByRole('button', { name: '設定を完了する' }).click();
   return secret;
@@ -136,13 +137,15 @@ test.describe.serial('事業者画面', () => {
     await expect(page.getByText('1 社へ受入確認を依頼しました。')).toBeVisible();
     await expect(page.getByRole('heading', { level: 1 })).toContainText('受入確認中');
 
-    // 事業者：照会には、お客様の氏名・連絡先を出さない
+    // 事業者：照会でも、お客様の氏名・電話・メールとプランが見える
     const operator = await operatorPage(browser);
     await expect(operator.getByText('回答待ちの受入確認（1 件）')).toBeVisible();
     await operator.getByRole('link', { name: /回答する/ }).click();
     await expect(operator.getByText('組合からのメモ：2 名です')).toBeVisible();
-    await expect(operator.getByText('照会 花子')).toHaveCount(0);
-    await expect(operator.getByText('090-5555-6666')).toHaveCount(0);
+    await expect(operator.getByRole('heading', { name: '代表者' })).toBeVisible();
+    await expect(operator.getByText('照会 花子 様')).toBeVisible();
+    await expect(operator.getByRole('link', { name: /090-5555-6666/ })).toBeVisible();
+    await expect(operator.getByRole('link', { name: 'inquiry-flow@example.com' })).toBeVisible();
     await operator.getByRole('radio', { name: /受入可/ }).check();
     await operator.getByRole('button', { name: '回答する' }).click();
     await expect(operator.getByText('回答しました。')).toBeVisible();
@@ -153,18 +156,18 @@ test.describe.serial('事業者画面', () => {
     await expect(page.getByText('受入可', { exact: true })).toBeVisible();
     await expect(page.getByRole('heading', { level: 1 })).toContainText('支払待ち');
     await page.getByRole('button', { name: '入金を確認して確定する' }).click();
-    const confirmDialog = page.getByRole('dialog', { name: '「予約確定」にしますか？' });
+    const confirmDialog = page.getByRole('dialog', { name: '予約を確定しますか？' });
     await expect(confirmDialog.getByLabel('実施事業者に予約確定をメールで知らせる')).toBeChecked();
     await confirmDialog.getByRole('button', { name: '入金を確認して確定する' }).click();
     await expect(page.getByText('入金を記録し、予約を確定しました。')).toBeVisible();
     await expect(page.getByText('実施事業者にもメールで知らせました。')).toBeVisible();
 
-    // 事業者：確定した予約では、代表者の氏名と電話が見える（メールアドレスは出さない）
+    // 事業者：確定した予約では、代表者の氏名・電話・メールが見える
     await operator.goto('/partner/bookings');
     await operator.getByRole('link', { name: /照会 花子 様/ }).click();
     await expect(operator.getByRole('heading', { name: '代表者' })).toBeVisible();
     await expect(operator.getByRole('link', { name: /090-5555-6666/ })).toBeVisible();
-    await expect(operator.getByText('inquiry-flow@example.com')).toHaveCount(0);
+    await expect(operator.getByRole('link', { name: 'inquiry-flow@example.com' })).toBeVisible();
     await operator.context().close();
   });
 
@@ -190,8 +193,10 @@ test.describe.serial('事業者画面', () => {
     await page.getByRole('link', { name: /他社 花子 様/ }).click();
     await page.waitForURL(/\/admin\/bookings\/[0-9a-f-]{36}/);
     const otherId = new URL(page.url()).pathname.split('/').pop()!;
-    const response = await operator.goto(`/partner/bookings/${otherId}`);
-    expect(response?.status()).toBe(404);
+    // 画面を移るあいだの表示（loading.tsx）があるため、ページは 200 で流し始めてから「見つかりません」に替わる
+    await operator.goto(`/partner/bookings/${otherId}`);
+    await expect(operator.getByRole('heading', { name: 'ページが見つかりません' })).toBeVisible();
+    await expect(operator.getByText('他社 花子')).toHaveCount(0);
     await operator.context().close();
   });
   test('事業者がプランを登録して公開を申請し、組合が承認するとサイトに出る', async ({ page, browser }) => {
@@ -211,7 +216,7 @@ test.describe.serial('事業者画面', () => {
     // 開催時間（毎日 9:00・定員 6 名）を登録する
     await operator.getByLabel('開始時刻').fill('09:00');
     await operator.getByLabel(/^定員/).first().fill('6');
-    await operator.getByRole('button', { name: 'ルールを追加' }).click();
+    await operator.getByRole('button', { name: '毎週の回を追加' }).click();
     await expect(operator.getByText('保存し、今後 180 日分の回に反映しました。')).toBeVisible();
 
     await operator.getByRole('link', { name: 'プランの編集へ' }).click();
@@ -224,7 +229,7 @@ test.describe.serial('事業者画面', () => {
     await page.getByRole('link', { name: title }).click();
     await expect(page.getByRole('heading', { name: '公開の申請' })).toBeVisible();
     await page.getByRole('button', { name: '承認して公開する' }).click();
-    await page.getByRole('dialog').getByRole('button', { name: '公開する' }).click();
+    await page.getByRole('dialog').getByRole('button', { name: 'プランを公開する' }).click();
     await expect(page.getByText('公開を承認し、プランを公開しました。')).toBeVisible();
     const publicHref = await page.getByRole('link', { name: /公開ページ/ }).getAttribute('href');
 
@@ -252,8 +257,8 @@ test.describe.serial('事業者画面', () => {
     await expect(page.getByText(/の精算を計算しました/)).toBeVisible();
     await page.getByRole('link', { name: 'アクアマリン E2E' }).click();
     await expect(page.getByRole('heading', { name: '明細' })).toBeVisible();
-    await page.getByRole('button', { name: '確定する' }).click();
-    await page.getByRole('dialog').getByRole('button', { name: '確定する' }).click();
+    await page.getByRole('button', { name: 'この精算を確定する' }).click();
+    await page.getByRole('dialog').getByRole('button', { name: '精算を確定する' }).click();
     await expect(page.getByText('精算を確定しました。')).toBeVisible();
 
     const operator = await operatorPage(browser);

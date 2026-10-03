@@ -40,9 +40,9 @@ export function parseMenuForm(
 /** プランの項目名（入力エラーの表示と、変更の申請の差分に使う） */
 export const MENU_FIELD_LABELS: Record<string, string> = {
   title: 'プラン名',
-  slug: 'URL 名',
+  slug: 'ページのアドレス（URL 名）',
   status: '公開状態',
-  category: 'カテゴリ',
+  category: '種類（アイコン・色）',
   durationMin: '所要時間',
   minAge: '対象年齢',
   maxPartySize: '1 予約の最大人数',

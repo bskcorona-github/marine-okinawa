@@ -129,3 +129,40 @@ export async function saveActivity(
     throw error;
   }
 }
+
+/**
+ * 並び順を 1 つ上（up）・下（down）へ動かす。動かしたあと、全体の並び順を 0 から順に付け直す
+ * （同じ数が並んでいても、画面の順どおりにそろうように）。端より先へは動かさない（false）
+ */
+export async function moveActivity(
+  db: Db,
+  params: { shopId: string; activityId: string; direction: 'up' | 'down'; actorId?: string | null },
+): Promise<boolean> {
+  return db.transaction(async (tx) => {
+    const rows = await tx
+      .select({ id: activities.id, sortOrder: activities.sortOrder })
+      .from(activities)
+      .where(eq(activities.shopId, params.shopId))
+      .orderBy(asc(activities.sortOrder), asc(activities.name))
+      .for('update');
+    const index = rows.findIndex((r) => r.id === params.activityId);
+    const target = params.direction === 'up' ? index - 1 : index + 1;
+    if (index < 0 || target < 0 || target >= rows.length) return false;
+    const before = rows[index].sortOrder;
+    [rows[index], rows[target]] = [rows[target], rows[index]];
+    for (const [order, row] of rows.entries()) {
+      if (row.sortOrder !== order)
+        await tx.update(activities).set({ sortOrder: order }).where(eq(activities.id, row.id));
+    }
+    await writeAuditLog(tx, {
+      shopId: params.shopId,
+      actorId: params.actorId ?? null,
+      action: 'activity.update',
+      targetType: 'activity',
+      targetId: params.activityId,
+      before: { sortOrder: before },
+      after: { sortOrder: target },
+    });
+    return true;
+  });
+}
