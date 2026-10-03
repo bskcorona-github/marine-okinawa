@@ -1,0 +1,11 @@
+# CLI でデプロイするときに送らないもの（作業用・手元の保存先・秘密の値）
+.tmp
+.storage
+.next
+.env*
+!.env.example
+test-results
+playwright-report
+.agents
+.claude
+skills-lock.json
