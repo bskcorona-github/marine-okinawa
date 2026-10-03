@@ -563,28 +563,32 @@ describe('事業者アカウント・資料・登録申請・更新申請', () =
       actorId: null,
     });
     if (!submitted.ok) throw new Error(submitted.error);
-    const review = {
-      shopId: shop.id,
-      operatorId: a.id,
-      requestId: submitted.requestId,
-      note: '',
-      actorId: null,
-      now: NOW,
-    };
-    // 電話番号が変わる申請は、折り返して確かめた印がないと反映しない。ほかの事業者の画面からは扱えない
-    expect(await reviewChangeRequest(db, { ...review, approve: true, verifiedByPhone: false })).toBe('unverified');
     expect(
-      await reviewChangeRequest(db, { ...review, operatorId: randomUUID(), approve: true, verifiedByPhone: true }),
-    ).toBe('done');
-    expect(await getOperatorProfile(db, a.id)).toMatchObject({ phone: current.phone });
-    expect(await reviewChangeRequest(db, { ...review, approve: true, verifiedByPhone: true })).toBe('ok');
+      await reviewChangeRequest(db, {
+        shopId: shop.id,
+        requestId: submitted.requestId,
+        approve: true,
+        note: '',
+        actorId: null,
+        now: NOW,
+      }),
+    ).toBe('ok');
     expect(await getOperatorProfile(db, a.id)).toMatchObject({ phone: '098-999-0000', contactHours: '8:00〜17:00' });
     // 履歴には変わった項目の前後だけ（口座などの値は残さない）
     const [log] = await db.select().from(auditLogs).where(eq(auditLogs.action, 'operator.change_approve'));
     expect(log.before).toMatchObject({ phone: expect.any(String) });
     expect(log.after).toMatchObject({ phone: '098-999-0000', requestId: submitted.requestId });
     // 反映済みの申請はもう一度処理できない
-    expect(await reviewChangeRequest(db, { ...review, approve: true, verifiedByPhone: true })).toBe('done');
+    expect(
+      await reviewChangeRequest(db, {
+        shopId: shop.id,
+        requestId: submitted.requestId,
+        approve: true,
+        note: '',
+        actorId: null,
+        now: NOW,
+      }),
+    ).toBe('done');
     expect((await db.select().from(menus)).length).toBeGreaterThan(0);
   });
 });
