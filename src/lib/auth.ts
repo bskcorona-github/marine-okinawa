@@ -1,3 +1,4 @@
+import { eq } from 'drizzle-orm';
 import { betterAuth } from 'better-auth';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 import { createAuthMiddleware, getSessionFromCtx, isAPIError } from 'better-auth/api';
@@ -6,7 +7,16 @@ import { twoFactor } from 'better-auth/plugins';
 import { db } from '@/db';
 import * as schema from '@/db/schema';
 import { markPasswordChanged } from '@/modules/partner/accounts';
-import { authEventOf, recordAuthEvent } from '@/modules/security/auth-events';
+import { authEventOf, recordAuthEvent, socialEventOf } from '@/modules/security/auth-events';
+import { isSocialProvider, socialProvidersFromEnv } from './social-providers';
+
+/** つながりを外す操作の、外す前に控えた方法（アカウントの行の id → google・line） */
+const unlinkingProviders = new Map<string, string>();
+const takeUnlinkingProvider = (accountId: string) => {
+  const provider = unlinkingProviders.get(accountId) ?? null;
+  unlinkingProviders.delete(accountId);
+  return provider;
+};
 
 /**
  * 管理者用の認証。段階1ではお客様ログインはなく、管理者はシードスクリプトでのみ作成する。
@@ -16,6 +26,22 @@ export const auth = betterAuth({
   appName: 'Marine Okinawa',
   database: drizzleAdapter(db, { provider: 'pg', schema }),
   emailAndPassword: { enabled: true, disableSignUp: true, minPasswordLength: 12 },
+  // Google・LINE でのログイン（鍵を設定したものだけ）。新しいアカウントは作らず、本人がつないだアカウントでだけ入れる
+  socialProviders: socialProvidersFromEnv(),
+  account: {
+    accountLinking: {
+      enabled: true,
+      // つなぐのは、パスワードと 2 要素認証でログインしている本人だけ（Google・LINE のメールアドレスとは比べない。
+      // LINE はメールアドレスを返さないことがあり、組合が作ったアカウントのアドレスとも違うことがあるため）
+      trustedProviders: ['google', 'line'],
+      allowDifferentEmails: true,
+      // 同じメールアドレスの Google アカウントでも、つないでいなければ入れない（勝手につながないように）
+      disableImplicitLinking: true,
+      updateUserInfoOnLink: false,
+    },
+  },
+  // Google・LINE でのログインに失敗したときは、ログインの画面に理由（?error=…）を付けて戻す
+  onAPIError: { errorURL: '/admin/login' },
   // パスワードと 2 要素認証の総当たり対策。サーバーレスでは各インスタンスのメモリが別になるため、回数は DB に記録する
   rateLimit: {
     enabled: process.env.NODE_ENV === 'production',
@@ -30,10 +56,6 @@ export const auth = betterAuth({
   // アカウントは組合が作り、仮パスワードの再発行も組合が行う（パスワードの変更は、ログインしている本人だけ）
   disabledPaths: [
     '/sign-up/email',
-    '/sign-in/social',
-    '/callback/:id',
-    '/link-social',
-    '/unlink-account',
     '/list-accounts',
     '/account-info',
     '/get-access-token',
@@ -63,6 +85,18 @@ export const auth = betterAuth({
   hooks: {
     // ログアウトは、セッションが消える前に記録する（あとからは誰のログアウトか分からない）
     before: createAuthMiddleware(async (ctx) => {
+      // つながりを外す前に、どの方法（Google・LINE）かを控える（外したあとは行が消えて分からない）
+      if (ctx.path === '/unlink-account') {
+        const accountId = (ctx.body as { accountId?: unknown })?.accountId;
+        if (typeof accountId === 'string') {
+          const [row] = await db
+            .select({ providerId: schema.account.providerId })
+            .from(schema.account)
+            .where(eq(schema.account.id, accountId));
+          if (row) unlinkingProviders.set(accountId, row.providerId);
+        }
+        return;
+      }
       if (ctx.path !== '/sign-out') return;
       const session = await getSessionFromCtx(ctx).catch(() => null);
       if (!session) return;
@@ -76,6 +110,36 @@ export const auth = betterAuth({
     }),
     after: createAuthMiddleware(async (ctx) => {
       const returned = ctx.context.returned;
+      // Google・LINE から戻ってきたとき・つながりを外したとき（どの方法かも残す）
+      if (ctx.path === '/callback/:id' || ctx.path === '/unlink-account') {
+        const accountId = (ctx.body as { accountId?: unknown })?.accountId;
+        const provider =
+          ctx.path === '/unlink-account'
+            ? typeof accountId === 'string'
+              ? takeUnlinkingProvider(accountId)
+              : null
+            : ctx.params?.id;
+        const location =
+          returned && typeof returned === 'object' && 'headers' in returned && returned.headers instanceof Headers
+            ? returned.headers.get('location')
+            : null;
+        const event = isSocialProvider(provider)
+          ? socialEventOf(ctx.path, provider, {
+              newSession: Boolean(ctx.context.newSession),
+              failed: ctx.path === '/unlink-account' ? isAPIError(returned) : /[?&]error=/.test(location ?? ''),
+            })
+          : null;
+        if (event) {
+          await recordAuthEvent(db, {
+            event,
+            userId: ctx.context.newSession?.user.id ?? ctx.context.session?.user.id ?? null,
+            email: null,
+            headers: ctx.headers ?? null,
+            secret: ctx.context.secret,
+          });
+        }
+        return;
+      }
       const failed = isAPIError(returned);
       const twoFactorRedirect = Boolean(
         returned && typeof returned === 'object' && 'twoFactorRedirect' in returned && returned.twoFactorRedirect,

@@ -6,6 +6,7 @@ import {
   ClipboardList,
   FileText,
   Home,
+  KeyRound,
   LayoutList,
   MessageSquareReply,
   type LucideIcon,
@@ -23,6 +24,7 @@ const NAV: { href: string; label: string; icon: LucideIcon; exact?: boolean }[] 
   { href: '/partner/settlements', label: '精算', icon: Banknote },
   { href: '/partner/profile', label: '登録情報', icon: Building2 },
   { href: '/partner/documents', label: '資料', icon: FileText },
+  { href: '/partner/account', label: 'ログイン方法', icon: KeyRound },
 ];
 
 /** 事業者画面のメニュー（スマホでは横にスクロール、PC では縦に並べる） */

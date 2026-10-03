@@ -45,6 +45,9 @@ export default async function ProtectedAdminLayout({ children }: LayoutProps<'/a
           <p className="truncate" title={admin.email}>
             {admin.email}
           </p>
+          <Link href="/admin/account" className="block hover:text-white">
+            ログイン方法（Google・LINE）
+          </Link>
           <SignOutButton />
         </div>
       </aside>

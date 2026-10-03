@@ -3,6 +3,7 @@ import { and, desc, eq, gt, lt, sql } from 'drizzle-orm';
 import type { Db, DbOrTx } from '@/db/client';
 import { authEvents, operatorMembers, shopMembers, user } from '@/db/schema';
 import { logError } from '@/lib/log';
+import { SOCIAL_PROVIDER_LABELS, SOCIAL_PROVIDERS, type SocialProviderId } from '@/lib/social-providers';
 import { clientIp } from './rate-limit';
 
 export type AuthEventName =
@@ -14,7 +15,24 @@ export type AuthEventName =
   | 'two_factor.verified'
   | 'two_factor.failed'
   | 'backup_code.used'
-  | 'password.changed';
+  | 'password.changed'
+  | `social.sign_in.${SocialProviderId}`
+  | `social.linked.${SocialProviderId}`
+  | `social.unlinked.${SocialProviderId}`
+  | `social.failed.${SocialProviderId}`;
+
+/** Google・LINE でのログイン・つなぐ・外すの記録の名前と表示 */
+const SOCIAL_EVENT_LABELS = Object.fromEntries(
+  SOCIAL_PROVIDERS.flatMap((p) => {
+    const name = SOCIAL_PROVIDER_LABELS[p];
+    return [
+      [`social.sign_in.${p}`, `${name}でログイン`],
+      [`social.linked.${p}`, `${name}をつないだ`],
+      [`social.unlinked.${p}`, `${name}のつながりを外した`],
+      [`social.failed.${p}`, `${name}でのログイン・つなぐ操作の失敗`],
+    ];
+  }),
+) as Record<Extract<AuthEventName, `social.${string}`>, string>;
 
 export const AUTH_EVENT_LABELS: Record<AuthEventName, string> = {
   'sign_in.success': 'ログイン',
@@ -26,7 +44,23 @@ export const AUTH_EVENT_LABELS: Record<AuthEventName, string> = {
   'two_factor.failed': '2 段階認証の失敗',
   'backup_code.used': 'バックアップコードでログイン',
   'password.changed': 'パスワードを変更',
+  ...SOCIAL_EVENT_LABELS,
 };
+
+/**
+ * Google・LINE から戻ってきたとき（/callback/:id）・つながりを外したとき（/unlink-account）に残す出来事。
+ * 戻ってきてセッションができた：ログイン。できず、エラーもない：つないだ（つなぐ操作はログイン中に行う）
+ */
+export function socialEventOf(
+  path: string,
+  provider: SocialProviderId,
+  result: { newSession: boolean; failed: boolean },
+): AuthEventName | null {
+  if (path === '/unlink-account') return result.failed ? null : `social.unlinked.${provider}`;
+  if (path !== '/callback/:id') return null;
+  if (result.failed) return `social.failed.${provider}`;
+  return result.newSession ? `social.sign_in.${provider}` : `social.linked.${provider}`;
+}
 
 /**
  * 認証の API の結果から、残す出来事を決める（残さないものは null）。

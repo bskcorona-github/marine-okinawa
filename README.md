@@ -130,4 +130,5 @@ E2E_DATABASE_URL=postgres://postgres:postgres@localhost:5433/marine_e2e
 - `APP_URL`（本番 URL）は必須。未設定だとメールのリンクが作れない
 - Web 申込は同じ IP から 10 分間に 5 件まで、お問い合わせは 10 分間に 3 件まで、事業者の登録申請は 1 時間に 3 件まで（`x-forwarded-for` を使う）
 - 写真・資料の保存先は Vercel Blob の非公開のストア（`BLOB_READ_WRITE_TOKEN`。プロジェクトにストアをつなぐと入る）。鍵がない開発環境ではディスク（`STORAGE_DIR`）に保存し、Vercel の上で鍵がなければ保存しない
+- Google・LINE でのログイン（任意）：`GOOGLE_CLIENT_ID`・`GOOGLE_CLIENT_SECRET`、`LINE_CLIENT_ID`・`LINE_CLIENT_SECRET` を入れると、ログインの画面にボタンが出る。戻り先は `https://<本番の URL>/api/auth/callback/google`・`/api/auth/callback/line`。Google・LINE から新しいアカウントは作らない。パスワードと 2 要素認証でログインした本人が「ログイン方法」（`/admin/account`・`/partner/account`）でつないだアカウントだけで入れる（そのときは認証アプリのコードを聞かない）
 - Vercel の関数は 1 回の送信の本文が 4.5MB までなので、写真・資料は 1 回 4MB まで（写真は 1 枚ずつ送る。登録申請の添付は合計 4MB まで）

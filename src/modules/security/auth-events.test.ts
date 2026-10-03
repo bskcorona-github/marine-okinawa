@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { authEventOf, hashEmail } from './auth-events';
+import { AUTH_EVENT_LABELS, authEventOf, hashEmail, socialEventOf } from './auth-events';
 
 describe('認証の出来事', () => {
   it('ログイン・2 段階認証の結果から、残す出来事を決める', () => {
@@ -22,5 +22,23 @@ describe('認証の出来事', () => {
     expect(hashEmail(' Admin@Example.com ', 'secret')).toBe(hashEmail('admin@example.com', 'secret'));
     expect(hashEmail('admin@example.com', 'secret')).not.toBe(hashEmail('admin@example.com', 'other'));
     expect(hashEmail('admin@example.com', 'secret')).not.toContain('admin');
+  });
+});
+
+describe('Google・LINE でのログインの出来事', () => {
+  it('戻ってきてセッションができたらログイン、できなければつないだ、エラーなら失敗。外したら外した', () => {
+    expect(socialEventOf('/callback/:id', 'google', { newSession: true, failed: false })).toBe('social.sign_in.google');
+    expect(socialEventOf('/callback/:id', 'line', { newSession: false, failed: false })).toBe('social.linked.line');
+    expect(socialEventOf('/callback/:id', 'line', { newSession: false, failed: true })).toBe('social.failed.line');
+    expect(socialEventOf('/unlink-account', 'google', { newSession: false, failed: false })).toBe(
+      'social.unlinked.google',
+    );
+    expect(socialEventOf('/unlink-account', 'google', { newSession: false, failed: true })).toBeNull();
+    expect(socialEventOf('/sign-in/email', 'google', { newSession: true, failed: false })).toBeNull();
+  });
+
+  it('操作の記録の画面に出す名前がある', () => {
+    expect(AUTH_EVENT_LABELS['social.sign_in.line']).toBe('LINEでログイン');
+    expect(AUTH_EVENT_LABELS['social.linked.google']).toBe('Googleをつないだ');
   });
 });

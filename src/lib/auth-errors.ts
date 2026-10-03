@@ -3,6 +3,26 @@ type AuthClientError = { status?: number; code?: string; message?: string } | nu
 
 export type AuthErrorContext = 'sign_in' | 'two_factor' | 'backup_code' | 'enable';
 
+/**
+ * Google・LINE でのログイン・つなぐ操作が失敗して戻ってきたとき（?error=…）の案内。
+ * つないでいないアカウントで入ろうとした（新しいアカウントは作らない）ときは、つなぎ方を案内する
+ */
+export function socialErrorMessage(code: string | undefined): string | null {
+  if (!code) return null;
+  switch (code) {
+    case 'signup_disabled':
+    case 'account_not_linked':
+    case 'user_not_found':
+      return 'この Google・LINE のアカウントは、まだつながっていません。メールアドレスとパスワードでログインし、「ログイン方法」でつないでから使ってください';
+    case 'account_already_linked_to_different_user':
+      return 'この Google・LINE のアカウントは、ほかのアカウントにつながっています。つなぐのは 1 つのアカウントだけです';
+    case 'access_denied':
+      return 'Google・LINE でのログインを取り消しました';
+    default:
+      return 'Google・LINE でのログインに失敗しました。少し待ってから、もう一度お試しください';
+  }
+}
+
 const WRONG: Record<AuthErrorContext, string> = {
   sign_in: 'メールアドレスまたはパスワードが違います',
   two_factor: 'コードが正しくありません。認証アプリの最新のコードを入力してください',

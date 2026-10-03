@@ -8,12 +8,24 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { authClient } from '@/lib/auth-client';
 import { authErrorMessage } from '@/lib/auth-errors';
+import { SOCIAL_PROVIDER_LABELS, type SocialProviderId } from '@/lib/social-providers';
 import { useHydrated } from '@/lib/use-hydrated';
 
-/** noAccess：ログインはできたが、停止中などで使えないアカウントだった（理由を出す） */
-export function LoginForm({ noAccess }: { noAccess: boolean }) {
+/**
+ * noAccess：ログインはできたが、停止中などで使えないアカウントだった（理由を出す）。
+ * socialProviders：使える Google・LINE でのログイン。socialError：Google・LINE から失敗して戻ってきたときの案内
+ */
+export function LoginForm({
+  noAccess,
+  socialProviders,
+  socialError,
+}: {
+  noAccess: boolean;
+  socialProviders: SocialProviderId[];
+  socialError: string | null;
+}) {
   const router = useRouter();
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(socialError);
   const [pending, setPending] = useState(false);
   const hydrated = useHydrated();
 
@@ -36,6 +48,21 @@ export function LoginForm({ noAccess }: { noAccess: boolean }) {
     if (data && !('twoFactorRedirect' in data && data.twoFactorRedirect)) {
       router.replace('/admin');
       router.refresh();
+    }
+  }
+
+  /** Google・LINE の画面へ移る（つないだアカウントなら、そのまま管理画面・事業者画面に入る） */
+  async function onSocial(provider: SocialProviderId) {
+    setPending(true);
+    setError(null);
+    const { error } = await authClient.signIn.social({
+      provider,
+      callbackURL: '/admin',
+      errorCallbackURL: '/admin/login',
+    });
+    if (error) {
+      setPending(false);
+      setError(authErrorMessage(error, 'sign_in'));
     }
   }
 
@@ -69,6 +96,23 @@ export function LoginForm({ noAccess }: { noAccess: boolean }) {
               ログイン
             </Button>
           </form>
+          {socialProviders.length > 0 && (
+            <div className="mt-5 space-y-2 border-t border-slate-100 pt-4">
+              <p className="text-xs text-slate-600">「ログイン方法」でつないだアカウントで入れます</p>
+              {socialProviders.map((provider) => (
+                <Button
+                  key={provider}
+                  type="button"
+                  variant="outline"
+                  className="w-full"
+                  disabled={pending || !hydrated}
+                  onClick={() => onSocial(provider)}
+                >
+                  {SOCIAL_PROVIDER_LABELS[provider]} でログイン
+                </Button>
+              ))}
+            </div>
+          )}
           <p className="mt-4 text-xs leading-relaxed text-slate-600">
             組合の職員・実施事業者の方のログイン画面です。パスワードを忘れたとき・認証アプリを使えなくなったときは、組合の担当者へご連絡ください。
           </p>
