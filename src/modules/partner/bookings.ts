@@ -9,16 +9,19 @@ import {
   menus,
   menuTranslations,
   operators,
+  payments,
   shops,
   slots,
 } from '@/db/schema';
 import { writeAuditLog } from '@/modules/audit/log';
 import { changeBookingStatus } from '@/modules/booking/change-status';
 import { BookingError } from '@/modules/booking/errors';
+import { weatherRefundDue, WEATHER_TARGET_STATUSES } from '@/modules/booking/weather-cancel-slot';
 import { CONFIRMED_STATUSES, OPEN_REQUEST_STATUSES } from '@/modules/booking/status';
 import { bookingStatusIn, cancelledAfterConfirmSql } from '@/modules/booking/status-sql';
 import { DEFAULT_LOCALE } from '@/lib/locale';
 import { isPerPerson } from '@/modules/catalog/capacity-unit';
+import { resolveSettings } from '@/modules/shop/settings';
 
 /**
  * 事業者に見せる予約：自社に割り当てられ、支払待ち以降のもの。取消・天候中止は、一度確定した予約だけ
@@ -260,6 +263,83 @@ export async function getOperatorBooking(db: DbOrTx, params: { operatorId: strin
 }
 
 export type OperatorBooking = NonNullable<Awaited<ReturnType<typeof getOperatorBooking>>>;
+
+/**
+ * 事業者が自社の予約を天候中止にする（確定は天候中止、支払待ちは取消・区分は天候）。
+ * 返金予定額は設定の天候中止の返金率。同じ回に残る予約がなければ、回も天候中止にして新しい申込を止める
+ */
+export async function weatherCancelOperatorBooking(
+  db: Db,
+  input: { operatorId: string; bookingId: string; note: string; actorId: string | null; now: Date },
+) {
+  const booking = await getOperatorBooking(db, {
+    operatorId: input.operatorId,
+    bookingId: input.bookingId,
+    now: input.now,
+  });
+  if (!booking) throw new BookingError('BOOKING_NOT_FOUND');
+  if (booking.status !== 'confirmed' && booking.status !== 'awaiting_payment') {
+    throw new BookingError('INVALID_TRANSITION');
+  }
+  const note = input.note.trim() || '天候・海況のため中止';
+  const to = booking.status === 'confirmed' ? 'weather_cancelled' : 'cancelled';
+  return db.transaction(async (tx) => {
+    const [extra] = await tx
+      .select({
+        slotId: bookings.slotId,
+        policySnapshot: bookings.policySnapshot,
+        timezone: shops.timezone,
+        settings: shops.settings,
+        slotStatus: slots.status,
+      })
+      .from(bookings)
+      .innerJoin(slots, eq(slots.id, bookings.slotId))
+      .innerJoin(shops, eq(shops.id, bookings.shopId))
+      .where(eq(bookings.id, booking.id));
+    if (!extra) throw new BookingError('BOOKING_NOT_FOUND');
+    const [payment] = await tx.select().from(payments).where(eq(payments.bookingId, booking.id));
+    const settings = resolveSettings(extra.settings);
+    const refundDueAmount = weatherRefundDue(
+      {
+        status: booking.status,
+        paymentStatus: payment?.status ?? null,
+        paymentAmount: payment?.amount ?? null,
+        refundedAmount: payment?.refundedAmount ?? null,
+        totalAmount: booking.totalAmount,
+        policySnapshot: extra.policySnapshot,
+      },
+      { settings, startsAt: booking.startsAt, now: input.now, timezone: extra.timezone },
+    );
+    const result = await changeBookingStatus(tx, {
+      shopId: booking.shopId,
+      bookingId: booking.id,
+      to,
+      actor: { type: 'operator', id: input.actorId },
+      note,
+      now: input.now,
+      refundDueAmount,
+      cancel: { category: 'weather' },
+    });
+    const remaining = await tx
+      .select({ id: bookings.id })
+      .from(bookings)
+      .where(and(eq(bookings.slotId, extra.slotId), inArray(bookings.status, [...WEATHER_TARGET_STATUSES])));
+    let slotClosed = false;
+    if (remaining.length === 0 && extra.slotStatus !== 'weather_cancelled') {
+      await tx.update(slots).set({ status: 'weather_cancelled' }).where(eq(slots.id, extra.slotId));
+      await writeAuditLog(tx, {
+        shopId: booking.shopId,
+        actorId: input.actorId,
+        action: 'slot.weather_cancel',
+        targetType: 'slot',
+        targetId: extra.slotId,
+        after: { status: 'weather_cancelled', via: 'operator' },
+      });
+      slotClosed = true;
+    }
+    return { shopId: booking.shopId, from: result.from, to: result.to, mail: result.mail, slotClosed };
+  });
+}
 
 /**
  * 事業者の催行報告（自社の確定予約で、開始したものだけ）。

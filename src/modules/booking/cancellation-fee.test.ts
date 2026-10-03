@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { refundByPercent } from '@/lib/yen';
 import { DEFAULT_SETTINGS } from '@/modules/shop/settings';
 import { cancellationFeePercent, daysBeforeActivity, suggestedRefund } from './cancellation-fee';
 
@@ -57,5 +58,15 @@ describe('キャンセル料', () => {
     expect(suggestedRefund({ ...base, paidAmount: 6000, totalAmount: 9000, now: twoDaysBefore }).amount).toBe(3000);
     // 1 円未満のキャンセル料は切り捨て（9,999 円の 50% → 4,999 円）
     expect(suggestedRefund({ ...base, paidAmount: 9999, totalAmount: 9999, now: twoDaysBefore }).amount).toBe(5000);
+  });
+
+  it('返金率のワンクリック：入金額の 50%・20% は切り捨て、0% は返金なし、100% は全額', () => {
+    expect(refundByPercent(10000, 80)).toBe(8000);
+    expect(refundByPercent(10000, 50)).toBe(5000);
+    expect(refundByPercent(10000, 20)).toBe(2000);
+    expect(refundByPercent(10000, 0)).toBe(0);
+    expect(refundByPercent(10000, 100)).toBe(10000);
+    expect(refundByPercent(9999, 50)).toBe(4999);
+    expect(refundByPercent(0, 50)).toBe(0);
   });
 });

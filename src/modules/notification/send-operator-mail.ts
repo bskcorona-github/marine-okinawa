@@ -175,6 +175,40 @@ export async function sendOperatorResponseMail(
   });
 }
 
+/** 組合へ、事業者が天候中止にしたことを知らせる（通知先がなければ送らない） */
+export async function sendAdminOperatorWeatherMail(
+  db: DbOrTx,
+  mailer: Mailer,
+  params: { bookingId: string; operatorId: string; note: string; slotClosed: boolean; appUrl: string },
+): Promise<SendResult> {
+  const booking = await getBookingSummaryById(db, params.bookingId);
+  const [op] = await db.select({ name: operators.name }).from(operators).where(eq(operators.id, params.operatorId));
+  const to =
+    booking && adminNotifyEmailOf({ settings: booking.settings, profile: { email: booking.shopEmail ?? undefined } });
+  if (!booking || !to) return { status: 'skipped' };
+  const t = createTranslator({ locale: 'ja', messages, namespace: 'email' });
+  const operator = op?.name ?? '事業者';
+  const subject = t('operatorWeather.subject', { operator, bookingNo: booking.bookingNo });
+  const rows = [
+    ...(params.note ? [{ label: t('operatorWeather.note'), value: params.note }] : []),
+    ...operatorRows(t, booking),
+  ];
+  return deliverBookingEmail(db, mailer, booking, {
+    type: 'weather_cancel',
+    to,
+    subject,
+    react: createElement(BookingEmail, {
+      preview: subject,
+      greeting: booking.shopName,
+      intro: t(params.slotClosed ? 'operatorWeather.introSlotClosed' : 'operatorWeather.intro', { operator }),
+      rows,
+      buttonLabel: t('operatorWeather.open'),
+      buttonUrl: `${base(params.appUrl)}/admin/bookings/${booking.id}`,
+      footer: t('operatorWeather.footer'),
+    }),
+  });
+}
+
 /**
  * 事業者への予約の連絡。
  * - 省略時：実施事業者へ、今の状態（確定・取消・天候中止）を知らせる（実施事業者が決まっていなければ送らない）

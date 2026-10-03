@@ -23,7 +23,7 @@ export const NOTIFICATION_TYPE_LABELS: Record<NotificationType, string> = {
   application_result: '登録申請の結果（見送り）',
   confirmed: '予約確定メール',
   reminder: 'リマインド',
-  weather_cancel: '天候中止のお知らせ',
+  weather_cancel: '天候中止のお知らせ（お客様 / 組合宛て）',
   cancelled: '取消のお知らせ',
   refunded: '返金のお知らせ',
   apology: 'お詫びのメール',

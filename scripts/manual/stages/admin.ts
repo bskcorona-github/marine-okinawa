@@ -202,13 +202,13 @@ export async function adminCancelRefund(browser: Browser) {
   await cancel.click();
   const dialog = page.getByRole('dialog');
   await dialog.locator('select[name="cancelCategory"]').selectOption('customer');
-  const due = dialog.getByLabel('返金予定額（円・必須）');
+  const due = dialog.getByRole('radiogroup', { name: /返金する割合/ });
   await due.waitFor();
   const confirm = dialog.getByRole('button', { name: '予約を取り消す', exact: true });
   await capture(page, 'admin-cancel-refund', 2, {
     marks: [dialog.locator('select[name="cancelCategory"]'), due, confirm],
     labels: ['2-1', '2-2', '2-3'],
-    focus: due,
+    focus: due.getByRole('radio').first(),
   });
   await confirm.click();
   await page.getByText('予約を取り消しました。').first().waitFor();
@@ -217,13 +217,13 @@ export async function adminCancelRefund(browser: Browser) {
   const record = page.getByRole('button', { name: /^返金を記録する/ });
   await capture(page, 'admin-cancel-refund', 4, { marks: [record] });
   await record.click();
-  const amount = dialog.getByLabel('今回の返金額（円）');
+  const amount = dialog.getByRole('radiogroup', { name: /今回返す割合/ });
   await amount.waitFor();
   const save = dialog.getByRole('button', { name: '返金を記録する', exact: true });
   await capture(page, 'admin-cancel-refund', 5, {
     marks: [amount, dialog.locator('input[name="refundedOn"]'), save],
     labels: ['5-1', '5-1', '5-2'],
-    focus: amount,
+    focus: amount.getByRole('radio').first(),
   });
   await save.click();
   await page.waitForURL(/refunded=/);

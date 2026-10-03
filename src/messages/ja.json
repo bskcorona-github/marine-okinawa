@@ -539,6 +539,14 @@
       "open": "管理画面で開く",
       "footer": "このメールは自動送信です。"
     },
+    "operatorWeather": {
+      "subject": "【天候中止】{operator}が予約を中止しました（予約番号 {bookingNo}）",
+      "intro": "{operator} が天候・海況のため予約を中止しました。お客様へは中止のお知らせを自動で送っています。返金がある場合は管理画面で確認してください。",
+      "introSlotClosed": "{operator} が天候・海況のため予約を中止しました。この回に残る予約がなくなったため、回も天候中止にし、新しい申込は受け付けていません。お客様へは中止のお知らせを自動で送っています。返金がある場合は管理画面で確認してください。",
+      "note": "事業者の理由",
+      "open": "管理画面で開く",
+      "footer": "このメールは自動送信です。"
+    },
     "operatorBooking": {
       "subjectConfirmed": "【予約確定】{menu} {date} {time} {people}（予約番号 {bookingNo}）",
       "subjectCancelled": "【取消】{menu} {date} {time}（予約番号 {bookingNo}）",

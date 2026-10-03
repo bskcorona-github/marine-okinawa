@@ -64,6 +64,8 @@ export async function partnerAfterConfirm(browser: Browser) {
     .first()
     .locator('xpath=ancestor::section[1]');
   await capture(page, 'partner-answer', 6, { marks: [contact] });
+  const weather = page.getByRole('button', { name: '天候中止にする' });
+  await capture(page, 'partner-answer', 7, { marks: [weather] });
   await page.context().close();
 }
 

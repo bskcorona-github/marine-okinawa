@@ -10,7 +10,7 @@ import type { ReportState } from './actions';
 
 const RESULTS: [ReportResult, string, string][] = [
   ['done', '実施した', '実際の人数を入れてください（予約と違うときは、組合が料金を直します）'],
-  ['cancelled', '中止した', '天候・海況・機材などで中止したとき。理由を書いてください'],
+  ['cancelled', '中止した', '機材の不具合など、天候以外で中止したとき。理由を書いてください'],
   ['no_show', '来られなかった（無断キャンセル）', '連絡がなく、お客様が来られなかったとき'],
 ];
 

@@ -744,19 +744,20 @@ export default async function BookingDetailPage({ params, searchParams }: PagePr
       : { amount: payment?.amount ?? 0, feePercent: 0, daysBefore: 0 };
   const refundHint = (to: BookingStatus) => {
     const s = refundSuggestion(to);
-    if (!b.confirmedOnce) return `予約確定の前の取消のため、全額（${formatYen(payment?.amount ?? 0)}）を入れています。`;
+    if (!b.confirmedOnce)
+      return `予約確定の前の取消のため、全額（${formatYen(payment?.amount ?? 0)}）のボタンが選ばれます。円は打たないでください。`;
     if (to === 'weather_cancelled') {
-      return `天候中止の返金率（${feeRates.weatherRefundPercent}%）から入れています。`;
+      return `天候中止の返金率（${feeRates.weatherRefundPercent}%）に近いボタンが選ばれます。違うときは割合のボタンを押してください。`;
     }
     if (to === 'no_show') {
-      return `無断キャンセルのため、当日・無断キャンセルの料率 ${s.feePercent}% を引いた額を入れています。規定と違うときは直してください。`;
+      return `無断キャンセルのため、当日・無断キャンセルの料率 ${s.feePercent}% を引いた額のボタンが選ばれます。違うときは割合のボタンを押してください。`;
     }
     const when =
       s.daysBefore >= 1 ? `参加日の ${s.daysBefore} 日前` : s.daysBefore === 0 ? '参加日の当日' : '参加日のあと';
     const fee = (payment?.amount ?? 0) - s.amount;
     return s.feePercent === 0
-      ? `${when}の取消のため、キャンセル料はかかりません。全額（${formatYen(s.amount)}）を入れています。`
-      : `${when}の取消のため、キャンセル料（料金の ${s.feePercent}%・${formatYen(fee)}）を引いた ${formatYen(s.amount)} を入れています。規定と違うときは直してください。`;
+      ? `${when}の取消のため、キャンセル料はかかりません。全額（${formatYen(s.amount)}）のボタンが選ばれます。`
+      : `${when}の取消のため、キャンセル料（料金の ${s.feePercent}%・${formatYen(fee)}）を引いた額のボタンが選ばれます。違うときは割合のボタンを押してください。`;
   };
   /** 取消・天候中止・無断キャンセルで、入金済みなら返金予定額を決めてもらう（精算ではその残りがキャンセル料になる） */
   const refundDueField = (to: BookingStatus) =>
@@ -765,7 +766,7 @@ export default async function BookingDetailPage({ params, searchParams }: PagePr
       <div className="space-y-2 rounded-lg border border-amber-300 bg-amber-50 p-3">
         <AmountField
           name="refundDueAmount"
-          label="返金予定額（円・必須）"
+          label="返金する割合（必須・円はボタンで決まります）"
           required
           refund
           expected={payment.amount}

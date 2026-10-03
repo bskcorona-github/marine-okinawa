@@ -153,13 +153,17 @@ export function RefundForm({
         {refundableReceipts.length === 1 && <input type="hidden" name="receiptId" value={refundableReceipts[0].id} />}
         <AmountField
           name="amount"
-          label="今回の返金額（円）"
+          label="今回返す割合（円はボタンで決まります）"
           required
+          refund
           expected={refundableAmount(payment)}
           expectedLabel={payment.refundDueAmount !== null ? '未返金の予定額' : '返金できる残り'}
+          percentBase={payment.amount}
           defaultValue={
             payment.refundDueAmount !== null ? Math.max(0, payment.refundDueAmount - payment.refundedAmount) || '' : ''
           }
+          min={0}
+          max={refundableAmount(payment)}
         />
         {allCard ? (
           // カードへの返金は今日の日付で記録する

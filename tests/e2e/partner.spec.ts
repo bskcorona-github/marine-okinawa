@@ -176,6 +176,7 @@ test.describe.serial('事業者画面', () => {
     await expect(operator.getByText('催行報告待ち（1 件）')).toBeVisible();
     await operator.goto('/partner/bookings');
     await operator.getByRole('link', { name: /報告 太郎 様/ }).click();
+    await expect(operator.getByRole('button', { name: '天候中止にする' })).toBeVisible();
     await operator.getByRole('radio', { name: /実施した/ }).check();
     await operator.getByRole('spinbutton', { name: /実績の人数/ }).fill('3');
     await operator.getByRole('button', { name: '報告する' }).click();

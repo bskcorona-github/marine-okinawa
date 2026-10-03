@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { auditLogs, bookings, menus, operatorMembers, operators, payments, shops, user } from '@/db/schema';
+import { auditLogs, bookings, menus, operatorMembers, operators, payments, shops, slots, user } from '@/db/schema';
 import { getTestDb, resetDb } from '../../../tests/helpers/db';
 import { seedMenu, seedShop, seedSlot } from '../../../tests/helpers/fixtures';
 import { changeBookingStatus } from '../booking/change-status';
@@ -16,7 +16,7 @@ import { render } from '@react-email/components';
 import type { Mailer, MailMessage } from '../notification/mailer';
 import { sendApplicationMails } from '../notification/send-application-mails';
 import { approveApplication, createApplication } from './applications';
-import { getOperatorBooking, listOperatorBookings, reportActivity } from './bookings';
+import { getOperatorBooking, listOperatorBookings, reportActivity, weatherCancelOperatorBooking } from './bookings';
 import { getOperatorProfile, reviewChangeRequest, submitChangeRequest } from './change-requests';
 import { addDocument, listExpiringDocuments, readDocumentFile } from './documents';
 import {
@@ -336,6 +336,52 @@ describe('事業者の予約と催行報告', () => {
       contactPhone: null,
       contactEmail: null,
     });
+  });
+
+  it('自社の確定予約を天候中止にでき、返金予定を記録する。他社の予約は中止できない', async () => {
+    const { a, b, bookingId, change } = await setup();
+    await db.update(bookings).set({ operatorId: a.id }).where(eq(bookings.id, bookingId));
+    await change('awaiting_payment');
+    await change('confirmed', { payment: { amount: 10000, receivedAt: NOW } });
+    await expect(
+      weatherCancelOperatorBooking(db, {
+        operatorId: b.id,
+        bookingId,
+        note: '波が高い',
+        actorId: null,
+        now: NOW,
+      }),
+    ).rejects.toMatchObject({ code: 'BOOKING_NOT_FOUND' });
+    const result = await weatherCancelOperatorBooking(db, {
+      operatorId: a.id,
+      bookingId,
+      note: '波が高い',
+      actorId: null,
+      now: NOW,
+    });
+    expect(result).toMatchObject({ to: 'weather_cancelled', slotClosed: true, mail: 'cancelled' });
+    expect(await bookingOf(bookingId)).toMatchObject({
+      status: 'weather_cancelled',
+      cancelCategory: 'weather',
+      cancelReason: '波が高い',
+    });
+    const [pay] = await db.select().from(payments).where(eq(payments.bookingId, bookingId));
+    expect(pay.refundDueAmount).toBe(10000);
+    const [slot] = await db
+      .select({ status: slots.status })
+      .from(slots)
+      .innerJoin(bookings, eq(bookings.slotId, slots.id))
+      .where(eq(bookings.id, bookingId));
+    expect(slot.status).toBe('weather_cancelled');
+    await expect(
+      weatherCancelOperatorBooking(db, {
+        operatorId: a.id,
+        bookingId,
+        note: '',
+        actorId: null,
+        now: NOW,
+      }),
+    ).rejects.toMatchObject({ code: 'INVALID_TRANSITION' });
   });
 
   it('開始後に報告できる。実施は催行済み（実績人数）、中止は報告だけ残して確定のまま', async () => {

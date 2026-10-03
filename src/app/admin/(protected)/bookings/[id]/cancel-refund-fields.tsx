@@ -11,8 +11,8 @@ import { AmountField } from './amount-field';
 const FULL_REFUND_CATEGORIES = new Set<string>(FULL_REFUND_CANCEL_CATEGORIES);
 
 /**
- * 取消の区分と返金予定額。区分を選ぶと返金予定額の初期値が入る：お客様のご都合はキャンセル料率を引いた額、
- * 組合・事業者の都合とその他は全額（入金済みでなければ返金予定額の欄は出さない）
+ * 取消の区分と返す割合。区分を選ぶと割合のボタンが出る：お客様のご都合はキャンセル料率を引いた額、
+ * 組合・事業者の都合とその他は全額（入金済みでなければ欄は出さない）。円は手入力しない
  */
 export function CancelRefundFields({
   categories,
@@ -35,12 +35,12 @@ export function CancelRefundFields({
   const byCustomer = category === 'customer' && confirmedOnce;
   const initial = paid ? Math.max(paid.refunded, byCustomer ? customerRefund : full) : 0;
   const hint = !confirmedOnce
-    ? `予約確定の前の取消のため、全額（${formatYen(full)}）を入れています。`
+    ? `予約確定の前の取消のため、全額（${formatYen(full)}）のボタンが選ばれます。円は打たないでください。`
     : byCustomer
-      ? customerHint
+      ? `${customerHint} 違う割合にするときはボタンを押してください。`
       : FULL_REFUND_CATEGORIES.has(category)
-        ? `組合・事業者の都合の取消のため、全額（${formatYen(full)}）を返金します（キャンセル料はいただきません）。`
-        : `全額（${formatYen(full)}）を入れています。キャンセル料をいただくときは直してください。`;
+        ? `組合・事業者の都合の取消のため、全額（${formatYen(full)}）だけ選べます（キャンセル料はいただきません）。`
+        : `全額（${formatYen(full)}）のボタンが選ばれます。キャンセル料をいただくときは割合のボタンを押してください。`;
   return (
     <>
       <label className="block space-y-1">
@@ -69,7 +69,7 @@ export function CancelRefundFields({
               // 区分を変えたら、初期値を入れ直す
               key={category}
               name="refundDueAmount"
-              label="返金予定額（円・必須）"
+              label="返金する割合（必須・円はボタンで決まります）"
               required
               refund
               expected={paid.amount}
@@ -81,7 +81,7 @@ export function CancelRefundFields({
               max={paid.amount}
             />
           ) : (
-            <p className="text-sm text-amber-950">取消の区分を選ぶと、返金予定額の初期値が入ります。</p>
+            <p className="text-sm text-amber-950">取消の区分を選ぶと、返す割合のボタンが出ます（円は手入力しません）。</p>
           )}
         </div>
       )}

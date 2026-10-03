@@ -9,15 +9,16 @@ import { formatDateLabel, localTime } from '@/lib/dates';
 import { formatYen } from '@/lib/format';
 import { isUuid } from '@/lib/validation';
 import { requireOperator } from '@/modules/auth/guard';
+import { formatPartyItems } from '@/modules/booking/party';
+import { isPerPerson } from '@/modules/catalog/capacity-unit';
 import { splitPlanTitle } from '@/modules/catalog/display-title';
 import { REPORT_RESULT_LABELS, getOperatorBooking, type ReportResult } from '@/modules/partner/bookings';
 import { REQUEST_STATUS_LABELS } from '@/modules/partner/requests';
 import { telHref } from '@/modules/shop/contact';
 import { getShopById } from '@/modules/shop/shops';
-import { reportAction } from './actions';
+import { reportAction, weatherCancelAction } from './actions';
 import { ReportForm } from './report-form';
-import { formatPartyItems } from '@/modules/booking/party';
-import { isPerPerson } from '@/modules/catalog/capacity-unit';
+import { WeatherCancelForm } from './weather-form';
 
 export const metadata = { title: '予約の詳細' };
 
@@ -39,6 +40,7 @@ export default async function PartnerBookingPage({ params, searchParams }: PageP
   const bookedCount = charter ? booking.guestCount : booking.partySize;
   const started = booking.startsAt <= new Date();
   const canReport = booking.status === 'confirmed' && started;
+  const canWeatherCancel = booking.status === 'confirmed' || booking.status === 'awaiting_payment';
   const report = booking.reportResult as ReportResult | null;
   const rows: [string, string][] = [
     ['予約番号', booking.bookingNo],
@@ -73,6 +75,9 @@ export default async function PartnerBookingPage({ params, searchParams }: PageP
       />
       <div className="space-y-4">
         {sp.reported && <Notice tone="success">催行報告を送りました。ありがとうございました。</Notice>}
+        {sp.weathered && (
+          <Notice tone="success">天候中止にしました。お客様と組合へお知らせメールを送っています。</Notice>
+        )}
         {(booking.status === 'cancelled' || booking.status === 'weather_cancelled') && (
           <Notice tone="warning">
             この予約は「{booking.status === 'weather_cancelled' ? '天候中止' : '取消'}
@@ -103,10 +108,19 @@ export default async function PartnerBookingPage({ params, searchParams }: PageP
           </Panel>
         )}
 
-        {booking.status === 'confirmed' && !started && (
-          <Panel title="中止・変更のとき">
+        {canWeatherCancel && (
+          <Panel
+            title="天候中止"
+            description="波・風・雨などで催行できないときは、ここから中止できます。お客様と組合へメールで知らせるので、組合への電話は不要です。"
+          >
+            <WeatherCancelForm action={weatherCancelAction.bind(null, booking.id)} />
+          </Panel>
+        )}
+
+        {canWeatherCancel && (
+          <Panel title="天候以外の中止・変更のとき">
             <p className="text-sm text-slate-700">
-              天候・海況・機材などで中止や変更が必要なときは、お客様へ連絡する前に組合へお電話ください。
+              機材の不具合や人数の変更など、天候以外のときは組合へご連絡ください。
             </p>
             {shop.profile.phone && (
               <a
