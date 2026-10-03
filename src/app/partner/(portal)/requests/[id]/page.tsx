@@ -62,7 +62,7 @@ export default async function PartnerRequestPage({ params, searchParams }: PageP
     <div className="max-w-2xl">
       <PageHeader back={{ href: '/partner/requests', label: '受入確認の一覧へ' }} title="受入確認の回答" />
       <div className="space-y-4">
-        {sp.answered && (
+        {sp.answered && !awaitingForMe && !confirmedForMe && (
           <Notice tone="success">
             回答しました。組合からの連絡をお待ちください。
             {canChange && '組合が支払案内へ進めるまでは、下から回答を変えられます。'}
@@ -81,7 +81,8 @@ export default async function PartnerRequestPage({ params, searchParams }: PageP
         )}
         {awaitingForMe && (
           <Notice tone="info">
-            お客様の支払待ちです。入金を確認したら、予約確定のお知らせが届きます（回答は変えられません。変更は組合へご連絡ください）。
+            {sp.answered ? '回答しました。お客様へ支払案内を送りました。' : 'お客様の支払待ちです。'}
+            入金を確認したら、予約確定のお知らせが届きます（回答は変えられません。変更は組合へご連絡ください）。
           </Notice>
         )}
         {closed && <Notice tone="info">{closedReason}受付を終了したため、受け入れの準備は不要です。</Notice>}

@@ -146,17 +146,12 @@ test.describe.serial('事業者画面', () => {
     await operator.getByRole('radio', { name: /受入可/ }).check();
     await operator.getByRole('button', { name: '回答する' }).click();
     await expect(operator.getByText('回答しました。')).toBeVisible();
+    await expect(operator.getByText('お客様へ支払案内を送りました。')).toBeVisible();
 
-    // 組合：回答を見て支払案内 → 入金を確認して確定（事業者にも知らせる）
+    // 組合：受入可の時点で支払案内済み。入金を確認して確定（事業者にも知らせる）
     await page.goto(bookingUrl);
     await expect(page.getByText('受入可', { exact: true })).toBeVisible();
-    await page.getByRole('button', { name: '支払案内を送る' }).click();
-    const payDialog = page.getByRole('dialog', { name: '「支払待ち」にしますか？' });
-    // 事業者確認中から進むときは、電話での確認のチェックは要らない
-    await expect(payDialog.getByLabel(/に受入を確認しました/)).toHaveCount(0);
-    await expect(payDialog.getByText('アクアマリン E2E：受入可')).toBeVisible();
-    await payDialog.getByRole('button', { name: '支払案内を送る' }).click();
-    await expect(page.getByText('支払待ちにしました。')).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1 })).toContainText('支払待ち');
     await page.getByRole('button', { name: '入金を確認して確定する' }).click();
     const confirmDialog = page.getByRole('dialog', { name: '「予約確定」にしますか？' });
     await expect(confirmDialog.getByLabel('実施事業者に予約確定をメールで知らせる')).toBeChecked();

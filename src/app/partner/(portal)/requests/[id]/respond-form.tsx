@@ -8,7 +8,7 @@ import type { OperatorResponse } from '@/modules/partner/requests';
 import type { RespondState } from './actions';
 
 const RESPONSES: [OperatorResponse, string, string][] = [
-  ['accepted', '受入可', 'この日時・人数で受け入れられます'],
+  ['accepted', '受入可', 'この日時・人数で受け入れられます（お客様へ支払案内が送られます）'],
   ['conditional', '条件付きで可', '時間の変更・人数の制限などの条件があれば受け入れられます（条件を書いてください）'],
   ['declined', '受入不可', 'この日時は受け入れられません（理由を書いてください）'],
 ];

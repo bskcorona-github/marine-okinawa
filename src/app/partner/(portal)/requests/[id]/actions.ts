@@ -7,9 +7,10 @@ import { db } from '@/db';
 import { isUuid } from '@/lib/validation';
 import { requireOperator } from '@/modules/auth/guard';
 import { BookingError } from '@/modules/booking/errors';
-import { sendOperatorResponseMail } from '@/modules/notification/send-operator-mail';
+import { sendBookingMail } from '@/modules/notification/send-booking-mail';
+import { sendOperatorBookingMail, sendOperatorResponseMail } from '@/modules/notification/send-operator-mail';
 import { sendQuietly } from '@/modules/notification/send-quietly';
-import { respondToRequest, type OperatorResponse } from '@/modules/partner/requests';
+import { requestPaymentAfterAccept, respondToRequest, type OperatorResponse } from '@/modules/partner/requests';
 
 export type RespondState = {
   error: 'response' | 'note' | 'INVALID_TRANSITION' | 'BOOKING_NOT_FOUND' | null;
@@ -34,7 +35,7 @@ export async function respondAction(requestId: string, _prev: RespondState, form
   // 条件付き・受入不可は、組合がお客様と調整できるように理由・条件を必ず書いてもらう
   if (response !== 'accepted' && !parsed.data.note) return { error: 'note', response, note };
   try {
-    await respondToRequest(db, {
+    const result = await respondToRequest(db, {
       operatorId: operator.operatorId,
       requestId,
       response,
@@ -42,6 +43,35 @@ export async function respondAction(requestId: string, _prev: RespondState, form
       actorId: operator.userId,
       now: new Date(),
     });
+    // 受入可で実施事業者に決まったら、組合の操作を待たずに支払案内を送る（条件付き・受入不可は組合が調整する）
+    if (response === 'accepted') {
+      const payment = await requestPaymentAfterAccept(db, {
+        shopId: result.shopId,
+        bookingId: result.bookingId,
+        operatorId: operator.operatorId,
+        actorId: operator.userId,
+        now: new Date(),
+      });
+      const mailKind = payment?.mail;
+      if (mailKind) {
+        await sendQuietly('mail.booking.failed', { bookingId: result.bookingId, kind: mailKind }, (mailer, appUrl) =>
+          sendBookingMail(db, mailer, { bookingId: result.bookingId, kind: mailKind, appUrl }),
+        );
+      }
+      for (const operatorId of payment?.closedOperatorIds ?? []) {
+        await sendQuietly(
+          'mail.operator_booking.failed',
+          { bookingId: result.bookingId, kind: 'closed', operatorId },
+          (mailer, appUrl) =>
+            sendOperatorBookingMail(db, mailer, {
+              bookingId: result.bookingId,
+              appUrl,
+              notice: 'closed',
+              operatorId,
+            }),
+        );
+      }
+    }
   } catch (error) {
     if (error instanceof BookingError && (error.code === 'INVALID_TRANSITION' || error.code === 'BOOKING_NOT_FOUND')) {
       return { error: error.code, response, note };

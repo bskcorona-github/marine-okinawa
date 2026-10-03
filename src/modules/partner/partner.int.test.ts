@@ -4,11 +4,12 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { auditLogs, bookings, menus, operatorMembers, operators, shops, user } from '@/db/schema';
+import { auditLogs, bookings, menus, operatorMembers, operators, payments, shops, user } from '@/db/schema';
 import { getTestDb, resetDb } from '../../../tests/helpers/db';
 import { seedMenu, seedShop, seedSlot } from '../../../tests/helpers/fixtures';
 import { changeBookingStatus } from '../booking/change-status';
 import { createBooking } from '../booking/create-booking';
+import { getActionCounts } from '../booking/queries';
 import { localFileStore } from '../storage/store';
 import { createOperatorAccount, setOperatorAccountDisabled, type CreateLoginUser } from './accounts';
 import { render } from '@react-email/components';
@@ -24,6 +25,7 @@ import {
   listBookingRequests,
   listOperatorRequests,
   requestOperatorAcceptance,
+  requestPaymentAfterAccept,
   respondToRequest,
   setMenuCandidates,
   listMenuCandidates,
@@ -131,6 +133,85 @@ describe('照会（受入確認）', () => {
       ['アクアマリン', 'accepted', ''],
       ['ココマリン', 'declined', '船の点検日'],
     ]);
+  });
+
+  it('受入可なら支払案内へ進み、条件付き・受入不可・現地払いでは進めない', async () => {
+    const { shop, a, b, bookingId, request } = await setup();
+    await request([a.id, b.id]);
+    const [forA] = await listOperatorRequests(db, { operatorId: a.id });
+    const [forB] = await listOperatorRequests(db, { operatorId: b.id });
+    const afterAccept = (operatorId: string) =>
+      requestPaymentAfterAccept(db, {
+        shopId: shop.id,
+        bookingId,
+        operatorId,
+        actorId: null,
+        now: NOW,
+      });
+
+    await respondToRequest(db, {
+      operatorId: b.id,
+      requestId: forB.id,
+      response: 'declined',
+      note: '船の点検日',
+      actorId: null,
+      now: NOW,
+    });
+    expect(await afterAccept(b.id)).toBeNull();
+    expect((await bookingOf(bookingId)).status).toBe('operator_checking');
+
+    await respondToRequest(db, {
+      operatorId: a.id,
+      requestId: forA.id,
+      response: 'conditional',
+      note: '13時なら可',
+      actorId: null,
+      now: NOW,
+    });
+    expect(await afterAccept(a.id)).toBeNull();
+    expect((await bookingOf(bookingId)).status).toBe('operator_checking');
+
+    await respondToRequest(db, {
+      operatorId: a.id,
+      requestId: forA.id,
+      response: 'accepted',
+      note: '',
+      actorId: null,
+      now: NOW,
+    });
+    expect(await afterAccept(a.id)).toMatchObject({
+      from: 'operator_checking',
+      to: 'awaiting_payment',
+      mail: 'payment_request',
+    });
+    expect(await bookingOf(bookingId)).toMatchObject({ status: 'awaiting_payment', operatorId: a.id });
+    const [payment] = await db.select().from(payments).where(eq(payments.bookingId, bookingId));
+    expect(payment).toMatchObject({ status: 'pending', amount: 10000 });
+    expect(await afterAccept(a.id)).toBeNull();
+    expect((await getActionCounts(db, { shopId: shop.id, now: NOW })).operatorResponded).toBe(0);
+
+    const onsite = await setup();
+    await onsite.request([onsite.a.id]);
+    await db.update(bookings).set({ paymentMethod: 'onsite' }).where(eq(bookings.id, onsite.bookingId));
+    const [onsiteReq] = await listOperatorRequests(db, { operatorId: onsite.a.id });
+    await respondToRequest(db, {
+      operatorId: onsite.a.id,
+      requestId: onsiteReq.id,
+      response: 'accepted',
+      note: '',
+      actorId: null,
+      now: NOW,
+    });
+    expect(
+      await requestPaymentAfterAccept(db, {
+        shopId: onsite.shop.id,
+        bookingId: onsite.bookingId,
+        operatorId: onsite.a.id,
+        actorId: null,
+        now: NOW,
+      }),
+    ).toBeNull();
+    expect((await bookingOf(onsite.bookingId)).status).toBe('operator_checking');
   });
 
   it('照会し直すと回答待ちに戻る。支払待ち以降・別ショップの事業者には照会できない', async () => {
@@ -482,32 +563,28 @@ describe('事業者アカウント・資料・登録申請・更新申請', () =
       actorId: null,
     });
     if (!submitted.ok) throw new Error(submitted.error);
+    const review = {
+      shopId: shop.id,
+      operatorId: a.id,
+      requestId: submitted.requestId,
+      note: '',
+      actorId: null,
+      now: NOW,
+    };
+    // 電話番号が変わる申請は、折り返して確かめた印がないと反映しない。ほかの事業者の画面からは扱えない
+    expect(await reviewChangeRequest(db, { ...review, approve: true, verifiedByPhone: false })).toBe('unverified');
     expect(
-      await reviewChangeRequest(db, {
-        shopId: shop.id,
-        requestId: submitted.requestId,
-        approve: true,
-        note: '',
-        actorId: null,
-        now: NOW,
-      }),
-    ).toBe('ok');
+      await reviewChangeRequest(db, { ...review, operatorId: randomUUID(), approve: true, verifiedByPhone: true }),
+    ).toBe('done');
+    expect(await getOperatorProfile(db, a.id)).toMatchObject({ phone: current.phone });
+    expect(await reviewChangeRequest(db, { ...review, approve: true, verifiedByPhone: true })).toBe('ok');
     expect(await getOperatorProfile(db, a.id)).toMatchObject({ phone: '098-999-0000', contactHours: '8:00〜17:00' });
     // 履歴には変わった項目の前後だけ（口座などの値は残さない）
     const [log] = await db.select().from(auditLogs).where(eq(auditLogs.action, 'operator.change_approve'));
     expect(log.before).toMatchObject({ phone: expect.any(String) });
     expect(log.after).toMatchObject({ phone: '098-999-0000', requestId: submitted.requestId });
     // 反映済みの申請はもう一度処理できない
-    expect(
-      await reviewChangeRequest(db, {
-        shopId: shop.id,
-        requestId: submitted.requestId,
-        approve: true,
-        note: '',
-        actorId: null,
-        now: NOW,
-      }),
-    ).toBe('done');
+    expect(await reviewChangeRequest(db, { ...review, approve: true, verifiedByPhone: true })).toBe('done');
     expect((await db.select().from(menus)).length).toBeGreaterThan(0);
   });
 });

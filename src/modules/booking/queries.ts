@@ -346,7 +346,7 @@ function paymentCondition(filter: PaymentFilter, now: Date): SQL {
 const CUSTOMER_MAIL_TYPES = ['requested', 'payment_request', 'confirmed', 'cancelled', 'reminder', 'weather_cancel'];
 
 /**
- * 事業者の回答を組合がまだ受けて動いていない、確定前の申込。回答が「最後の照会」と「組合が最後に状態を変えた時刻」の
+ * 事業者の回答を組合がまだ受けて動いていない、確定前の申込。回答が「最後の照会」と「組合・自動処理が最後に状態を変えた時刻」の
  * どちらよりも後なら数える（支払案内のあとに受入不可へ直した回答も拾い、照会し直したあとの古い回答は数えない）
  */
 const operatorRespondedSql = sql`(${bookingStatusIn(OPEN_REQUEST_STATUSES)} and exists (
@@ -356,7 +356,9 @@ const operatorRespondedSql = sql`(${bookingStatusIn(OPEN_REQUEST_STATUSES)} and 
     and r.responded_at >= (select max(r2.requested_at) from ${bookingOperatorRequests} r2 where r2.booking_id = ${bookings.id})
     and r.responded_at >= coalesce(
       (select max(e.created_at) from ${bookingStatusEvents} e
-        where e.booking_id = ${bookings.id} and e.actor_type = 'staff' and e.from_status is distinct from e.to_status),
+        where e.booking_id = ${bookings.id}
+          and e.actor_type in ('staff', 'system')
+          and e.from_status is distinct from e.to_status),
       '-infinity'::timestamptz)
 ))`;
 

@@ -13,10 +13,13 @@ import {
   slots,
   user,
 } from '@/db/schema';
+import { logWarn } from '@/lib/log';
 import { writeAuditLog } from '@/modules/audit/log';
+import { changeBookingStatus, type ChangeStatusResult } from '@/modules/booking/change-status';
 import { BookingError } from '@/modules/booking/errors';
 import { isBeforePaymentRequest, isOpenRequest, OPEN_REQUEST_STATUSES } from '@/modules/booking/status';
 import { bookingStatusIn } from '@/modules/booking/status-sql';
+import { cardPaymentsEnabled } from '@/modules/payment/card-payments';
 import { resolveSettings } from '@/modules/shop/settings';
 import { DEFAULT_LOCALE } from '@/lib/locale';
 
@@ -391,6 +394,60 @@ export async function respondToRequest(
     });
     return { bookingId: booking.id, shopId: booking.shopId, assigned };
   });
+}
+
+/**
+ * 受入可の回答のあと、実施事業者に決まった予約を支払待ちへ進める（お客様への支払案内）。
+ * 条件付き・受入不可、現地払い、ほかの事業者が実施のとき、案内の文面がなくカード決済も使えないときは進めない。
+ * 呼び出し側でお客様メールと、照会を終えた事業者へのメールを送る
+ */
+export async function requestPaymentAfterAccept(
+  db: Db,
+  input: { shopId: string; bookingId: string; operatorId: string; actorId: string | null; now: Date },
+): Promise<ChangeStatusResult | null> {
+  const [booking] = await db
+    .select({
+      id: bookings.id,
+      status: bookings.status,
+      operatorId: bookings.operatorId,
+      paymentMethod: bookings.paymentMethod,
+    })
+    .from(bookings)
+    .where(and(eq(bookings.id, input.bookingId), eq(bookings.shopId, input.shopId)));
+  if (!booking) return null;
+  if (booking.operatorId !== input.operatorId) return null;
+  if (!isBeforePaymentRequest(booking.status)) return null;
+  if (booking.paymentMethod !== 'online') return null;
+  const cardPayment = cardPaymentsEnabled();
+  try {
+    return await changeBookingStatus(db, {
+      shopId: input.shopId,
+      bookingId: input.bookingId,
+      to: 'awaiting_payment',
+      actor: { type: 'system', id: input.actorId },
+      note: '受入可の回答のため、支払案内を自動で送りました',
+      now: input.now,
+      operatorCheck: { confirmed: true },
+      cardPayment,
+    });
+  } catch (error) {
+    if (
+      error instanceof BookingError &&
+      (error.code === 'PAYMENT_INSTRUCTIONS_MISSING' ||
+        error.code === 'INVALID_TRANSITION' ||
+        error.code === 'OPERATOR_REQUIRED' ||
+        error.code === 'OPERATOR_DECLINED' ||
+        error.code === 'OPERATOR_SUSPENDED')
+    ) {
+      logWarn('booking.auto_payment_request.skipped', {
+        bookingId: input.bookingId,
+        shopId: input.shopId,
+        code: error.code,
+      });
+      return null;
+    }
+    throw error;
+  }
 }
 
 /** 予約への照会と回答の一覧（管理画面の予約詳細用） */
