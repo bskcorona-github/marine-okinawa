@@ -225,6 +225,13 @@
       "when": 1790961011436,
       "tag": "0031_drop_payment_mode",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1791016076355,
+      "tag": "0032_notification_account_mails",
+      "breakpoints": true
     }
   ]
 }

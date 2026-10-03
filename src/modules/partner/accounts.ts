@@ -1,17 +1,19 @@
-import { randomBytes } from 'node:crypto';
-import { and, asc, eq } from 'drizzle-orm';
+import { and, asc, eq, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import type { Db, DbOrTx } from '@/db/client';
 import { isUniqueViolation } from '@/db/errors';
 import { logError } from '@/lib/log';
-import { operatorMembers, operators, user } from '@/db/schema';
+import { account, operatorMembers, operators, user } from '@/db/schema';
 import { writeAuditLog } from '@/modules/audit/log';
 
-/** ログイン用のユーザーを作る処理（本番は Better Auth、テストは差し替える） */
-export type CreateCredentialUser = (params: { email: string; name: string; password: string }) => Promise<string>;
+/**
+ * ログイン用のユーザーを作る処理（本番は Better Auth、テストは差し替える）。パスワードは付けない
+ * （本人が招待のリンクから、LINE・Google をつなぐか、自分でパスワードを決める）
+ */
+export type CreateLoginUser = (params: { email: string; name: string }) => Promise<string>;
 
-/** パスワードを置き換え、ログイン中のセッションと 2 要素認証の設定を消す処理（本番は Better Auth） */
-export type ResetCredential = (params: { userId: string; password: string }) => Promise<void>;
+/** パスワード・つないだ LINE / Google・2 要素認証の設定・ログイン中のセッションを消す処理（本番は Better Auth） */
+export type ResetLoginAccess = (params: { userId: string }) => Promise<void>;
 
 export type AccountError = 'EMAIL_TAKEN' | 'OPERATOR_NOT_FOUND';
 
@@ -20,33 +22,27 @@ export const operatorAccountSchema = z.object({
   name: z.string().trim().min(1).max(60),
 });
 
-/** 仮パスワード（発行時に 1 回だけ画面に出す。20 文字・英数字と記号の一部） */
-function temporaryPassword(): string {
-  return randomBytes(15).toString('base64url');
-}
-
 /**
- * 事業者のログインアカウントを発行する。同じメールアドレスのユーザーがいれば発行しない
+ * 事業者のログインアカウントを作る（このあと招待のメールを送る）。同じメールアドレスのユーザーがいれば作らない
  * （組合の管理者のアカウントを事業者に流用させない）
  */
 export async function createOperatorAccount(
   db: Db,
-  createUser: CreateCredentialUser,
+  createUser: CreateLoginUser,
   input: { shopId: string; operatorId: string; email: string; name: string; actorId: string | null },
-): Promise<{ ok: true; userId: string; password: string } | { ok: false; error: AccountError }> {
+): Promise<{ ok: true; userId: string; email: string; operatorName: string } | { ok: false; error: AccountError }> {
   const email = input.email.trim().toLowerCase();
   const [operator] = await db
-    .select({ id: operators.id })
+    .select({ id: operators.id, name: operators.name })
     .from(operators)
     .where(and(eq(operators.id, input.operatorId), eq(operators.shopId, input.shopId)));
   if (!operator) return { ok: false, error: 'OPERATOR_NOT_FOUND' };
   const [existing] = await db.select({ id: user.id }).from(user).where(eq(user.email, email));
   if (existing) return { ok: false, error: 'EMAIL_TAKEN' };
 
-  const password = temporaryPassword();
   let userId: string;
   try {
-    userId = await createUser({ email, name: input.name.trim(), password });
+    userId = await createUser({ email, name: input.name.trim() });
   } catch (error) {
     // 同じメールアドレスで同時に発行した（ユーザーのメールアドレスは重ならない）
     if (isUniqueViolation(error)) return { ok: false, error: 'EMAIL_TAKEN' };
@@ -59,8 +55,8 @@ export async function createOperatorAccount(
         shopId: input.shopId,
         operatorId: operator.id,
         createdBy: input.actorId,
-        // 仮パスワードは組合も知っているので、事業者に自分のパスワードへ変えてもらう
-        passwordChangeRequired: true,
+        // 仮パスワードはない（本人が招待のリンクから決める）ので、変更を求めない
+        passwordChangeRequired: false,
       });
       await writeAuditLog(tx, {
         shopId: input.shopId,
@@ -79,30 +75,35 @@ export async function createOperatorAccount(
       .catch((removeError) => logError('operator.account.orphan_remove_failed', { userId }, removeError));
     throw error;
   }
-  return { ok: true, userId, password };
+  return { ok: true, userId, email, operatorName: operator.name };
 }
 
 /**
- * 事業者アカウントの仮パスワードを発行し直す（パスワードを忘れた・2 要素認証の端末をなくした・漏れたおそれがあるとき）。
- * ログイン中のセッションと 2 要素認証の設定を消し、次のログインで 2 要素認証の設定とパスワードの変更をしてもらう
+ * 事業者アカウントのログインの方法をすべて外し、招待からやり直してもらう（LINE・端末をなくした・漏れたおそれがあるとき）。
+ * パスワード・つないだ LINE / Google・2 要素認証の設定・ログイン中のセッションを消す（このあと招待のメールを送る）
  */
-export async function resetOperatorPassword(
+export async function resetOperatorAccess(
   db: Db,
-  resetCredential: ResetCredential,
+  resetLoginAccess: ResetLoginAccess,
   input: { shopId: string; userId: string; actorId: string | null },
-): Promise<{ ok: true; password: string; email: string } | { ok: false }> {
+): Promise<{ ok: true; email: string; name: string; operatorName: string } | { ok: false }> {
   const [member] = await db
-    .select({ operatorId: operatorMembers.operatorId, email: user.email })
+    .select({
+      operatorId: operatorMembers.operatorId,
+      email: user.email,
+      name: user.name,
+      operatorName: operators.name,
+    })
     .from(operatorMembers)
     .innerJoin(user, eq(user.id, operatorMembers.userId))
+    .innerJoin(operators, eq(operators.id, operatorMembers.operatorId))
     .where(and(eq(operatorMembers.userId, input.userId), eq(operatorMembers.shopId, input.shopId)));
   if (!member) return { ok: false };
-  const password = temporaryPassword();
-  await resetCredential({ userId: input.userId, password });
+  await resetLoginAccess({ userId: input.userId });
   await db.transaction(async (tx) => {
     await tx
       .update(operatorMembers)
-      .set({ passwordChangeRequired: true })
+      .set({ passwordChangeRequired: false })
       .where(eq(operatorMembers.userId, input.userId));
     await writeAuditLog(tx, {
       shopId: input.shopId,
@@ -113,7 +114,7 @@ export async function resetOperatorPassword(
       after: { userId: input.userId },
     });
   });
-  return { ok: true, password, email: member.email };
+  return { ok: true, email: member.email, name: member.name, operatorName: member.operatorName };
 }
 
 /** パスワードを変えたら、仮パスワードのままの印を外す（Better Auth のパスワード変更のあとに呼ぶ） */
@@ -156,6 +157,10 @@ export async function listOperatorAccounts(db: DbOrTx, params: { shopId: string;
       disabledAt: operatorMembers.disabledAt,
       passwordChangeRequired: operatorMembers.passwordChangeRequired,
       createdAt: operatorMembers.createdAt,
+      /** ログインに使える方法（credential：パスワード、line・google：つないだアカウント） */
+      methods: sql<
+        string[]
+      >`coalesce((select array_agg(a.provider_id order by a.provider_id) from ${account} a where a.user_id = ${user.id}), '{}')`,
     })
     .from(operatorMembers)
     .innerJoin(user, eq(user.id, operatorMembers.userId))

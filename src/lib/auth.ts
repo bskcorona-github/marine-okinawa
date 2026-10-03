@@ -3,7 +3,7 @@ import { betterAuth } from 'better-auth';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 import { createAuthMiddleware, getSessionFromCtx, isAPIError } from 'better-auth/api';
 import { nextCookies } from 'better-auth/next-js';
-import { twoFactor } from 'better-auth/plugins';
+import { magicLink, twoFactor } from 'better-auth/plugins';
 import { db } from '@/db';
 import * as schema from '@/db/schema';
 import { markPasswordChanged } from '@/modules/partner/accounts';
@@ -25,7 +25,14 @@ const takeUnlinkingProvider = (accountId: string) => {
 export const auth = betterAuth({
   appName: 'Marine Okinawa',
   database: drizzleAdapter(db, { provider: 'pg', schema }),
-  emailAndPassword: { enabled: true, disableSignUp: true, minPasswordLength: 12 },
+  emailAndPassword: {
+    enabled: true,
+    disableSignUp: true,
+    minPasswordLength: 12,
+    // パスワードを決め直したら、ほかの端末のログインは切る（リンクはサーバーだけが作る：modules/auth/auth-links.ts）
+    revokeSessionsOnPasswordReset: true,
+    onPasswordReset: async ({ user }) => markPasswordChanged(db, user.id),
+  },
   // Google・LINE でのログイン（鍵を設定したものだけ）。新しいアカウントは作らず、本人がつないだアカウントでだけ入れる
   socialProviders: socialProvidersFromEnv(),
   account: {
@@ -50,11 +57,14 @@ export const auth = betterAuth({
       '/sign-in/email': { window: 60, max: 10 },
       '/two-factor/verify-totp': { window: 60, max: 10 },
       '/two-factor/verify-backup-code': { window: 60, max: 10 },
+      '/reset-password': { window: 600, max: 10 },
+      '/magic-link/verify': { window: 600, max: 20 },
     },
   },
-  // 使わない入口は閉じる（登録・パスワードの再設定・メールの変更・アカウントの削除・連携・セッションの操作など）。
-  // アカウントは組合が作り、仮パスワードの再発行も組合が行う（パスワードの変更は、ログインしている本人だけ）
+  // 使わない入口は閉じる（登録・メールの変更・アカウントの削除・セッションの操作など）。
+  // 招待・パスワードの再設定のリンクはサーバーだけが作る（リンクを作る入口は閉じ、リンクを使う入口だけ開ける）
   disabledPaths: [
+    '/sign-in/magic-link',
     '/sign-up/email',
     '/list-accounts',
     '/account-info',
@@ -62,7 +72,6 @@ export const auth = betterAuth({
     '/refresh-token',
     '/request-password-reset',
     '/forget-password',
-    '/reset-password',
     '/reset-password/:token',
     '/send-verification-email',
     '/verify-email',
@@ -110,6 +119,21 @@ export const auth = betterAuth({
     }),
     after: createAuthMiddleware(async (ctx) => {
       const returned = ctx.context.returned;
+      // 招待のリンクを使ったとき（失敗は ?error=… を付けて戻す）
+      if (ctx.path === '/magic-link/verify') {
+        const location =
+          returned && typeof returned === 'object' && 'headers' in returned && returned.headers instanceof Headers
+            ? returned.headers.get('location')
+            : null;
+        await recordAuthEvent(db, {
+          event: /[?&]error=/.test(location ?? '') ? 'invite.failed' : 'invite.used',
+          userId: ctx.context.newSession?.user.id ?? null,
+          email: null,
+          headers: ctx.headers ?? null,
+          secret: ctx.context.secret,
+        });
+        return;
+      }
       // Google・LINE から戻ってきたとき・つながりを外したとき（どの方法かも残す）
       if (ctx.path === '/callback/:id' || ctx.path === '/unlink-account') {
         const accountId = (ctx.body as { accountId?: unknown })?.accountId;
@@ -160,5 +184,16 @@ export const auth = betterAuth({
       });
     }),
   },
-  plugins: [twoFactor({ issuer: 'Marine Okinawa Admin' }), nextCookies()],
+  plugins: [
+    twoFactor({ issuer: 'Marine Okinawa Admin' }),
+    // 招待のリンク（押すとそのアカウントでログインし、LINE・Google をつなぐかパスワードを決める画面へ進む）。
+    // 新しいアカウントは作らない。リンクを作る入口（/sign-in/magic-link）は閉じているので、送る処理は使わない
+    magicLink({
+      disableSignUp: true,
+      sendMagicLink: async () => {
+        throw new Error('magic link is issued by the server only');
+      },
+    }),
+    nextCookies(),
+  ],
 });

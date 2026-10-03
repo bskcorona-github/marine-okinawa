@@ -10,7 +10,7 @@ import { seedMenu, seedShop, seedSlot } from '../../../tests/helpers/fixtures';
 import { changeBookingStatus } from '../booking/change-status';
 import { createBooking } from '../booking/create-booking';
 import { localFileStore } from '../storage/store';
-import { createOperatorAccount, setOperatorAccountDisabled, type CreateCredentialUser } from './accounts';
+import { createOperatorAccount, setOperatorAccountDisabled, type CreateLoginUser } from './accounts';
 import { render } from '@react-email/components';
 import type { Mailer, MailMessage } from '../notification/mailer';
 import { sendApplicationMails } from '../notification/send-application-mails';
@@ -277,7 +277,7 @@ describe('事業者アカウント・資料・登録申請・更新申請', () =
   });
   afterEach(() => rm(root, { recursive: true, force: true }));
 
-  const fakeCreateUser: CreateCredentialUser = async ({ email, name }) => {
+  const fakeCreateUser: CreateLoginUser = async ({ email, name }) => {
     const id = randomUUID();
     await db.insert(user).values({ id, email, name, emailVerified: true });
     return id;
@@ -293,7 +293,10 @@ describe('事業者アカウント・資料・登録申請・更新申請', () =
       actorId: null,
     });
     if (!created.ok) throw new Error('failed');
-    expect(created.password.length).toBeGreaterThanOrEqual(20);
+    expect(created).toMatchObject({ email: 'staff@aqua.example.com' });
+    // 仮パスワードはない（本人が招待のリンクから決める）ので、変更を求める印は付けない
+    const [issued] = await db.select().from(operatorMembers).where(eq(operatorMembers.userId, created.userId));
+    expect(issued.passwordChangeRequired).toBe(false);
     expect(
       await createOperatorAccount(db, fakeCreateUser, {
         shopId: shop.id,

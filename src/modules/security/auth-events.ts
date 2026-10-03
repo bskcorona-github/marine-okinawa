@@ -16,6 +16,11 @@ export type AuthEventName =
   | 'two_factor.failed'
   | 'backup_code.used'
   | 'password.changed'
+  | 'password.reset'
+  | 'password.reset_failed'
+  | 'invite.used'
+  | 'invite.failed'
+  | 'login_help.requested'
   | `social.sign_in.${SocialProviderId}`
   | `social.linked.${SocialProviderId}`
   | `social.unlinked.${SocialProviderId}`
@@ -44,6 +49,11 @@ export const AUTH_EVENT_LABELS: Record<AuthEventName, string> = {
   'two_factor.failed': '2 段階認証の失敗',
   'backup_code.used': 'バックアップコードでログイン',
   'password.changed': 'パスワードを変更',
+  'password.reset': 'リンクからパスワードを決めた',
+  'password.reset_failed': 'リンクからのパスワードの設定の失敗（期限切れなど）',
+  'invite.used': '招待・再発行のリンクからログイン',
+  'invite.failed': '招待・再発行のリンクの失敗（期限切れ・使用済み）',
+  'login_help.requested': '「ログインできないとき」から案内を依頼',
   ...SOCIAL_EVENT_LABELS,
 };
 
@@ -82,6 +92,8 @@ export function authEventOf(
       return result.failed ? null : 'two_factor.enabled';
     case '/change-password':
       return result.failed ? null : 'password.changed';
+    case '/reset-password':
+      return result.failed ? 'password.reset_failed' : 'password.reset';
     default:
       return null;
   }

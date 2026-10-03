@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState, type FormEvent } from 'react';
 import { Button } from '@/components/ui/button';
@@ -113,8 +114,13 @@ export function LoginForm({
               ))}
             </div>
           )}
-          <p className="mt-4 text-xs leading-relaxed text-slate-600">
-            組合の職員・実施事業者の方のログイン画面です。パスワードを忘れたとき・認証アプリを使えなくなったときは、組合の担当者へご連絡ください。
+          <p className="mt-4 text-center text-sm">
+            <Link href="/admin/forgot-password" className="text-sky-800 underline">
+              ログインできないとき（パスワードを忘れた・招待のリンクが切れた）
+            </Link>
+          </p>
+          <p className="mt-3 text-xs leading-relaxed text-slate-600">
+            組合の職員・実施事業者の方のログイン画面です。認証アプリが使えなくなったときは、組合の担当者へご連絡ください。
           </p>
         </CardContent>
       </Card>

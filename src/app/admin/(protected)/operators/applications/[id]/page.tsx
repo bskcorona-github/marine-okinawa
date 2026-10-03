@@ -20,7 +20,7 @@ export const metadata = { title: '登録申請の確認' };
 
 const SAVED: Record<string, string> = {
   reviewing: '確認中にしました。',
-  rejected: '見送りにしました。',
+  rejected: '見送りにしました。申請者に結果をメールで知らせました（組合のメモは送っていません）。',
 };
 
 const ERRORS: Record<string, string> = {
@@ -76,7 +76,12 @@ export default async function ApplicationPage({
         }
       />
       <div className="space-y-4">
-        {saved && <Notice tone="success">{saved}</Notice>}
+        {saved && sp.mail !== 'failed' && <Notice tone="success">{saved}</Notice>}
+        {sp.saved === 'rejected' && sp.mail === 'failed' && (
+          <Notice tone="warning">
+            見送りにしましたが、申請者へのメールを送れませんでした。お手数ですが、電話・メールで結果をお伝えください。
+          </Notice>
+        )}
         {error && <Notice tone="error">{error}</Notice>}
         {app.status === 'approved' && app.operatorId && (
           <Notice tone="info">
@@ -155,7 +160,7 @@ export default async function ApplicationPage({
               </label>
               <div className="flex flex-wrap gap-2">
                 <SubmitButton name="decision" value="approve" pendingLabel="登録中…">
-                  承認して事業者に登録
+                  承認して登録し、招待のメールを送る
                 </SubmitButton>
                 {app.status === 'new' && (
                   <SubmitButton name="decision" value="reviewing" variant="outline" pendingLabel="保存中…">
@@ -167,7 +172,7 @@ export default async function ApplicationPage({
                 </SubmitButton>
               </div>
               <p className="text-xs text-slate-600">
-                承認・見送りの結果は、申請者に自動では知らせません。電話・メールでお伝えください。
+                承認すると事業者として登録し、申請の担当者に事業者画面の招待のメールを送ります。見送ると、申請者に結果をメールで知らせます（審査のメモは送りません）。
               </p>
             </form>
           </Panel>

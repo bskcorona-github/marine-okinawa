@@ -6,13 +6,14 @@ import { z } from 'zod';
 import { db } from '@/db';
 import { isUuid } from '@/lib/validation';
 import { requireAdmin } from '@/modules/auth/guard';
+import { sendAccountInvite, type InviteResult } from '@/modules/partner/account-invite';
 import {
   createOperatorAccount,
   operatorAccountSchema,
-  resetOperatorPassword,
+  resetOperatorAccess,
   setOperatorAccountDisabled,
 } from '@/modules/partner/accounts';
-import { createCredentialUser, resetCredential } from '@/modules/partner/auth-user';
+import { createLoginUser, resetLoginAccess } from '@/modules/partner/auth-user';
 import { reviewChangeRequest } from '@/modules/partner/change-requests';
 import { addDocument, deleteDocument, documentInputSchema } from '@/modules/partner/documents';
 import { getFileStore } from '@/modules/storage/store';
@@ -28,11 +29,11 @@ async function guard(operatorId: string) {
 
 export type IssueAccountState = {
   error: string | null;
-  /** 発行した仮パスワード（この画面で 1 回だけ出す） */
-  issued?: { email: string; password: string };
+  /** 招待のメールの結果（届かなかったときは、手で送るための招待のリンクも返す） */
+  issued?: { email: string; mail: InviteResult['status']; link: string | null };
 };
 
-/** 事業者のログインアカウントを発行する（仮パスワードは画面に 1 回だけ出す） */
+/** 事業者のログインアカウントを作り、担当者に招待のメールを送る */
 export async function issueAccountAction(
   operatorId: string,
   _prev: IssueAccountState,
@@ -41,7 +42,7 @@ export async function issueAccountAction(
   const admin = await guard(operatorId);
   const parsed = operatorAccountSchema.safeParse({ email: formData.get('email'), name: formData.get('name') });
   if (!parsed.success) return { error: 'メールアドレスと担当者名を確認してください' };
-  const result = await createOperatorAccount(db, createCredentialUser, {
+  const result = await createOperatorAccount(db, createLoginUser, {
     shopId: admin.shopId,
     operatorId,
     email: parsed.data.email,
@@ -56,11 +57,18 @@ export async function issueAccountAction(
           : '事業者が見つかりません',
     };
   }
+  const invite = await sendAccountInvite(db, {
+    shopId: admin.shopId,
+    email: result.email,
+    name: parsed.data.name,
+    operatorName: result.operatorName,
+    kind: 'invite',
+  });
   revalidatePath(`/admin/operators/${operatorId}`);
-  return { error: null, issued: { email: parsed.data.email.trim().toLowerCase(), password: result.password } };
+  return { error: null, issued: { email: result.email, mail: invite.status, link: invite.link } };
 }
 
-/** 仮パスワードを発行し直す（新しい仮パスワードは画面に 1 回だけ出す） */
+/** ログインの方法をすべて外し、招待のメールを送り直す */
 export async function resetAccountAction(
   operatorId: string,
   _prev: IssueAccountState,
@@ -69,14 +77,21 @@ export async function resetAccountAction(
   const admin = await guard(operatorId);
   const userId = formData.get('userId');
   if (typeof userId !== 'string' || !userId) return { error: 'アカウントが見つかりません' };
-  const result = await resetOperatorPassword(db, resetCredential, {
+  const result = await resetOperatorAccess(db, resetLoginAccess, {
     shopId: admin.shopId,
     userId,
     actorId: admin.userId,
   });
   if (!result.ok) return { error: 'アカウントが見つかりません' };
+  const invite = await sendAccountInvite(db, {
+    shopId: admin.shopId,
+    email: result.email,
+    name: result.name,
+    operatorName: result.operatorName,
+    kind: 'reset',
+  });
   revalidatePath(`/admin/operators/${operatorId}`);
-  return { error: null, issued: { email: result.email, password: result.password } };
+  return { error: null, issued: { email: result.email, mail: invite.status, link: invite.link } };
 }
 
 /** アカウントを停止・再開する */

@@ -4,7 +4,8 @@ import { headers } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { cache } from 'react';
 import { db } from '@/db';
-import { operatorMembers, operators, shopMembers } from '@/db/schema';
+import { account, operatorMembers, operators, shopMembers } from '@/db/schema';
+import { isSocialProvider } from '@/lib/social-providers';
 import { auth } from '@/lib/auth';
 import { evaluateAccess, HOME_OF, type Role } from './access';
 
@@ -14,10 +15,36 @@ export type OperatorContext = { userId: string; email: string; shopId: string; o
 /** ログイン中の利用者と、その種類（組合の管理者か、停止されていない事業者アカウントか） */
 const loadState = cache(async () => {
   const session = await auth.api.getSession({ headers: await headers() });
-  if (!session) return { session: null, role: null, shopId: null, operatorId: null, passwordChangeRequired: false };
+  if (!session) {
+    return {
+      session: null,
+      role: null,
+      shopId: null,
+      operatorId: null,
+      passwordChangeRequired: false,
+      hasPassword: false,
+      hasSocialLogin: false,
+    };
+  }
+  // ログインに使える方法（パスワード・つないだ LINE / Google）
+  const methods = await db
+    .select({ providerId: account.providerId })
+    .from(account)
+    .where(eq(account.userId, session.user.id));
+  const login = {
+    hasPassword: methods.some((m) => m.providerId === 'credential'),
+    hasSocialLogin: methods.some((m) => isSocialProvider(m.providerId)),
+  };
   const [member] = await db.select().from(shopMembers).where(eq(shopMembers.userId, session.user.id)).limit(1);
   if (member) {
-    return { session, role: 'admin' as Role, shopId: member.shopId, operatorId: null, passwordChangeRequired: false };
+    return {
+      session,
+      role: 'admin' as Role,
+      shopId: member.shopId,
+      operatorId: null,
+      passwordChangeRequired: false,
+      ...login,
+    };
   }
   // 停止中の事業者（取引の停止）のアカウントは、アカウントごとの停止と同じく入れない
   const [operator] = await db
@@ -43,9 +70,10 @@ const loadState = cache(async () => {
       shopId: operator.shopId,
       operatorId: operator.operatorId,
       passwordChangeRequired: operator.passwordChangeRequired,
+      ...login,
     };
   }
-  return { session, role: null, shopId: null, operatorId: null, passwordChangeRequired: false };
+  return { session, role: null, shopId: null, operatorId: null, passwordChangeRequired: false, ...login };
 });
 
 async function requireRole(required: Role) {
@@ -54,12 +82,15 @@ async function requireRole(required: Role) {
     hasSession: Boolean(state.session),
     role: state.role,
     twoFactorEnabled: Boolean(state.session?.user.twoFactorEnabled),
+    hasSocialLogin: state.hasSocialLogin,
+    hasPassword: state.hasPassword,
     required,
   });
   // ログインはできているが、組合の管理者でも有効な事業者アカウントでもない（停止中など）
   if (access === 'login') redirect(state.session ? '/admin/login?reason=no_access' : '/admin/login');
   if (access === 'other_role') redirect(HOME_OF[state.role!]);
   if (access === 'setup_2fa') redirect('/admin/2fa/setup');
+  if (access === 'setup_login') redirect('/admin/welcome/setup');
   return state as typeof state & { session: NonNullable<typeof state.session>; shopId: string };
 }
 
@@ -89,6 +120,23 @@ export async function requireOperator(): Promise<OperatorContext> {
 export async function requireOperatorForPasswordChange(): Promise<{ email: string; required: boolean }> {
   const state = await requireRole('operator');
   return { email: state.session.user.email, required: state.passwordChangeRequired };
+}
+
+/**
+ * 招待のリンクから入ったあと、ログインの方法を決める画面用（LINE・Google をつなぐか、パスワードを決める）。
+ * すでに決めている人は、それぞれのトップへ戻す
+ */
+export async function requireLoginSetup(): Promise<{
+  userId: string;
+  email: string;
+  home: string;
+  hasPassword: boolean;
+}> {
+  const state = await loadState();
+  if (!state.session || !state.role) redirect('/admin/login');
+  const home = HOME_OF[state.role];
+  if (state.hasSocialLogin || state.session.user.twoFactorEnabled) redirect(home);
+  return { userId: state.session.user.id, email: state.session.user.email, home, hasPassword: state.hasPassword };
 }
 
 /** 2 要素認証の設定画面用（管理者・事業者どちらも、設定前でも通す）。設定後の行き先も返す */

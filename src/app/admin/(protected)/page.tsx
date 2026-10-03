@@ -9,6 +9,9 @@ import { addDays, formatDateLabel, localDate, localTime, zonedToUtc } from '@/li
 import { formatYen } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { requireAdmin } from '@/modules/auth/guard';
+import { listLinkedProviders } from '@/modules/auth/linked-accounts';
+import { enabledSocialProviders, isSocialProvider, SOCIAL_PROVIDER_LABELS } from '@/lib/social-providers';
+import { QuickSocialLink } from '@/components/backoffice/quick-social-link';
 import { countUnlinkedMailProblems } from '@/modules/audit/queries';
 import { countReceivedSince, getActionCounts, getPeriodSummary, listOpenRequests } from '@/modules/booking/queries';
 import { splitPlanTitle } from '@/modules/catalog/display-title';
@@ -83,8 +86,11 @@ function TileList({ tiles }: { tiles: Tile[] }) {
   );
 }
 
-export default async function DashboardPage() {
+export default async function DashboardPage({ searchParams }: PageProps<'/admin'>) {
   const admin = await requireAdmin();
+  const sp = await searchParams;
+  // まだ LINE・Google をつないでいなければ、ダッシュボードでつなげるようにする
+  const linkable = (await listLinkedProviders(db, admin.userId)).length === 0 ? enabledSocialProviders() : [];
   const shop = await getShopById(db, admin.shopId);
   const cardPayment = cardPaymentsEnabled();
   const now = new Date();
@@ -274,6 +280,13 @@ export default async function DashboardPage() {
 
   return (
     <div className="max-w-5xl space-y-6">
+      {isSocialProvider(sp.linked) && (
+        <Notice tone="success">
+          {SOCIAL_PROVIDER_LABELS[sp.linked]}をつなぎました。次からはログインの画面の「
+          {SOCIAL_PROVIDER_LABELS[sp.linked]}
+          でログイン」から入れます。
+        </Notice>
+      )}
       <PageHeader
         title="ダッシュボード"
         description="対応が必要な申込と、今日・明日・今週の予約です。"
@@ -290,6 +303,7 @@ export default async function DashboardPage() {
           </>
         }
       />
+      {linkable.length > 0 && <QuickSocialLink providers={linkable} back="/admin" />}
 
       {shop.settings.bookingPaused && (
         <Notice tone="warning">

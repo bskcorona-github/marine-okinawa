@@ -11,10 +11,10 @@ import { buttonVariants } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { db } from '@/db';
-import { getEnv } from '@/lib/env';
 import { addDays, formatDateLabel, localDate, zonedToUtc } from '@/lib/dates';
 import { ownValue } from '@/lib/own';
 import { cn } from '@/lib/utils';
+import { isSocialProvider, SOCIAL_PROVIDER_LABELS, type SocialProviderId } from '@/lib/social-providers';
 import { isUuid } from '@/lib/validation';
 import { requireAdmin } from '@/modules/auth/guard';
 import { getOperatorForAdmin } from '@/modules/catalog/operator-admin';
@@ -44,7 +44,19 @@ import {
 
 export const metadata = { title: '事業者の編集' };
 
+/** 事業者アカウントのログインの状態（どの方法で入れるか・まだ始めていないか） */
+function loginStatusOf(a: { methods: string[]; twoFactorEnabled: boolean | null; passwordChangeRequired: boolean }) {
+  const social = a.methods.filter((m) => isSocialProvider(m)).map((m) => SOCIAL_PROVIDER_LABELS[m as SocialProviderId]);
+  if (social.length > 0) return `${social.join('・')} でログイン`;
+  if (a.methods.includes('credential')) {
+    if (a.passwordChangeRequired) return '仮パスワードのまま';
+    return a.twoFactorEnabled ? 'パスワードと認証アプリでログイン' : 'パスワードのみ（認証アプリは未設定）';
+  }
+  return 'まだ始めていません（招待のメールの返事待ち）';
+}
+
 const SAVED: Record<string, string> = {
+  approved: '登録申請を承認し、事業者として登録しました。',
   account_disabled: 'アカウントを停止しました。次の操作からログインできなくなります。',
   account_enabled: 'アカウントを再開しました。',
   document: '資料を登録しました。',
@@ -111,6 +123,19 @@ export default async function OperatorPage({ params, searchParams }: PageProps<'
       <div className="space-y-4">
         {sp.saved && !saved && <Notice tone="success">保存しました。</Notice>}
         {saved && <Notice tone="success">{saved}</Notice>}
+        {sp.invite === 'sent' && (
+          <Notice tone="success">申請の担当者に、事業者画面の招待のメールを送りました（リンクは 3 日間有効）。</Notice>
+        )}
+        {(sp.invite === 'failed' || sp.invite === 'unknown' || sp.invite === 'skipped') && (
+          <Notice tone="warning">
+            招待のメールを送れませんでした。下の「事業者画面のアカウント」の「招待を送り直す」から、リンクを出して担当者へ送ってください。
+          </Notice>
+        )}
+        {sp.invite === 'taken' && (
+          <Notice tone="warning">
+            申請のメールアドレスは、すでにほかのアカウントで使われているため、アカウントを作りませんでした。下の「事業者画面のアカウント」から、別のメールアドレスで招待してください。
+          </Notice>
+        )}
         {error && <Notice tone="error">{error}</Notice>}
         {!op.phone && (
           <Notice tone="warning">
@@ -177,7 +202,7 @@ export default async function OperatorPage({ params, searchParams }: PageProps<'
         <section id="accounts" className="scroll-mt-6">
           <Panel
             title="事業者画面のアカウント"
-            description="事業者は、自社に受入確認を依頼された予約・割り当てられた予約だけを見られます。ログインには 2 要素認証が必要です。"
+            description="事業者は、自社に受入確認を依頼された予約・割り当てられた予約だけを見られます。担当者には招待のメールが届き、LINE・Google でのログインか、パスワードと認証アプリ（2 要素認証）でのログインを本人が選びます。"
           >
             {accounts.length > 0 && (
               <ul className="mb-4 divide-y divide-slate-100 text-sm">
@@ -186,9 +211,7 @@ export default async function OperatorPage({ params, searchParams }: PageProps<'
                     <span className="min-w-0">
                       <span className="block font-medium break-all text-slate-900">{a.email}</span>
                       <span className="text-xs text-slate-600">
-                        {a.name} ・ 発行 {at(a.createdAt)} ・{' '}
-                        {a.twoFactorEnabled ? '2 要素認証 設定済み' : '2 要素認証 未設定'}
-                        {a.passwordChangeRequired && ' ・ 仮パスワードのまま'}
+                        {a.name} ・ 発行 {at(a.createdAt)} ・ {loginStatusOf(a)}
                       </span>
                     </span>
                     <span className="flex items-center gap-2">
@@ -202,7 +225,6 @@ export default async function OperatorPage({ params, searchParams }: PageProps<'
                           action={resetAccountAction.bind(null, op.id)}
                           userId={a.userId}
                           email={a.email}
-                          loginUrl={`${getEnv().APP_URL.replace(/\/$/, '')}/admin/login`}
                         />
                       )}
                       <form action={setAccountDisabledAction.bind(null, op.id)}>
@@ -231,10 +253,7 @@ export default async function OperatorPage({ params, searchParams }: PageProps<'
                 ))}
               </ul>
             )}
-            <AccountIssueForm
-              action={issueAccountAction.bind(null, op.id)}
-              loginUrl={`${getEnv().APP_URL.replace(/\/$/, '')}/admin/login`}
-            />
+            <AccountIssueForm action={issueAccountAction.bind(null, op.id)} />
           </Panel>
         </section>
 
@@ -330,7 +349,9 @@ export default async function OperatorPage({ params, searchParams }: PageProps<'
                   </div>
                 </fieldset>
                 <div className="space-y-1 sm:col-span-2">
-                  <p className="font-medium">ファイル（Web で受け取ったとき・PDF / JPEG / PNG / WebP、{MAX_FILE_MB}MB まで）</p>
+                  <p className="font-medium">
+                    ファイル（Web で受け取ったとき・PDF / JPEG / PNG / WebP、{MAX_FILE_MB}MB まで）
+                  </p>
                   <FileInput name="file" label="資料のファイル" />
                 </div>
                 <label className="space-y-1 sm:col-span-2">

@@ -6,6 +6,9 @@ import { OperatorBookingRow } from '@/components/partner/booking-row';
 import { db } from '@/db';
 import { addDays, formatDateLabel, localDate, localTime, zonedToUtc } from '@/lib/dates';
 import { requireOperator } from '@/modules/auth/guard';
+import { listLinkedProviders } from '@/modules/auth/linked-accounts';
+import { enabledSocialProviders, isSocialProvider, SOCIAL_PROVIDER_LABELS } from '@/lib/social-providers';
+import { QuickSocialLink } from '@/components/backoffice/quick-social-link';
 import { isOpenRequest } from '@/modules/booking/status';
 import { splitPlanTitle } from '@/modules/catalog/display-title';
 import {
@@ -35,6 +38,9 @@ const CHANGE_LABELS: Record<RecentChangeKind, string> = {
 
 export default async function PartnerHomePage({ searchParams }: PageProps<'/partner'>) {
   const operator = await requireOperator();
+  // まだ LINE・Google をつないでいなければ、ホームでつなげるようにする
+  const linked = await listLinkedProviders(db, operator.userId);
+  const linkable = linked.length === 0 ? enabledSocialProviders() : [];
   const sp = await searchParams;
   const shop = await getShopById(db, operator.shopId);
   const now = new Date();
@@ -76,6 +82,14 @@ export default async function PartnerHomePage({ searchParams }: PageProps<'/part
         description={`${shop.name}からの受入確認と、自社で実施する予約です。お客様の連絡先は、予約が確定したあとに表示します。`}
       />
       {sp.password === 'changed' && <Notice tone="success">パスワードを変更しました。</Notice>}
+      {isSocialProvider(sp.linked) && (
+        <Notice tone="success">
+          {SOCIAL_PROVIDER_LABELS[sp.linked]}をつなぎました。次からはログインの画面の「
+          {SOCIAL_PROVIDER_LABELS[sp.linked]}
+          でログイン」から入れます。
+        </Notice>
+      )}
+      {linkable.length > 0 && <QuickSocialLink providers={linkable} back="/partner" />}
 
       <Panel
         title={`回答待ちの受入確認（${pending.length} 件）`}

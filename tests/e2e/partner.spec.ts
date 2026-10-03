@@ -37,7 +37,8 @@ async function signInWithCode(page: Page, email: string, password: string, secre
 type StorageState = Awaited<ReturnType<BrowserContext['storageState']>>;
 
 test.describe.serial('事業者画面', () => {
-  let operatorPassword = '';
+  const operatorPassword = 'e2e-partner-own-password-2026';
+  let inviteLink = '';
   // ログインのし直しを減らす（本番のログインの回数制限は 1 分に 10 回まで）。初回のログインの状態を使い回す
   let adminState: StorageState | null = null;
   let operatorState: StorageState | null = null;
@@ -59,7 +60,9 @@ test.describe.serial('事業者画面', () => {
     return page;
   };
 
-  test('組合が事業者のアカウントを発行する（仮パスワードは 1 回だけ表示）', async ({ page }) => {
+  test('組合が事業者のアカウントを作り、担当者に招待のメールを送る（メールを送らない設定では、リンクを画面に出す）', async ({
+    page,
+  }) => {
     await signIn(page, E2E_PARTNER_ADMIN.email, E2E_PARTNER_ADMIN.password);
     await setUp2fa(page, E2E_PARTNER_ADMIN.password);
     await expect(page.getByRole('heading', { name: 'ダッシュボード' })).toBeVisible();
@@ -69,31 +72,34 @@ test.describe.serial('事業者画面', () => {
     await page.getByRole('link', { name: /アクアマリン E2E/ }).click();
     await page.getByLabel('ログイン用メールアドレス').fill(OPERATOR_EMAIL);
     await page.getByLabel('担当者名').fill('アクア 担当');
-    await page.getByRole('button', { name: 'アカウントを発行' }).click();
-    await expect(page.getByText('アカウントを発行しました。')).toBeVisible();
-    operatorPassword = ((await page.locator('code').first().textContent()) ?? '').trim();
-    expect(operatorPassword.length).toBeGreaterThanOrEqual(20);
+    await page.getByRole('button', { name: '招待のメールを送る' }).click();
+    await expect(page.getByText(`${OPERATOR_EMAIL} に招待のメールを送りました。`)).toBeVisible();
+    inviteLink = ((await page.getByTestId('invite-link').textContent()) ?? '').trim();
+    expect(inviteLink).toMatch(/\/admin\/welcome\?token=/);
 
-    // 再読み込みすると仮パスワードは出ない
+    // 再読み込みするとリンクは出ない。一覧には「まだ始めていません」と出る
     await page.reload();
     await expect(page.getByText(OPERATOR_EMAIL, { exact: true })).toBeVisible();
-    await expect(page.locator('code')).toHaveCount(0);
+    await expect(page.getByText(/まだ始めていません/)).toBeVisible();
+    await expect(page.getByTestId('invite-link')).toHaveCount(0);
   });
 
-  test('事業者は初回ログインで 2 要素認証を設定し、自分のパスワードに変えてから事業者画面だけを使える', async ({
+  test('事業者は招待のリンクからパスワードを決め、2 要素認証を設定して事業者画面だけを使える。リンクは 1 回だけ', async ({
     page,
   }) => {
-    await signIn(page, OPERATOR_EMAIL, operatorPassword);
+    await page.goto(inviteLink);
+    await expect(page.getByRole('heading', { name: 'はじめましょう' })).toBeVisible();
+    await page.getByRole('link', { name: 'パスワードではじめる' }).click();
+    await expect(page).toHaveURL(/\/admin\/welcome\/password$/);
+    await page.getByLabel('パスワード（12 文字以上）').fill(operatorPassword);
+    await page.getByLabel('パスワード（確認）').fill(operatorPassword);
+    await page.getByRole('button', { name: 'パスワードを決めて、次へ' }).click();
     const operatorSecret = await setUp2fa(page, operatorPassword);
-    // 仮パスワードのままでは、ほかの画面より先にパスワードの変更へ進む
-    await expect(page).toHaveURL(/\/partner\/password$/);
-    await page.getByLabel('仮パスワード').fill(operatorPassword);
-    operatorPassword = 'e2e-partner-own-password-2026';
-    await page.getByLabel('新しいパスワード（12 文字以上）').fill(operatorPassword);
-    await page.getByLabel('新しいパスワード（確認）').fill(operatorPassword);
-    await page.getByRole('button', { name: 'パスワードを変更する' }).click();
     await expect(page.getByRole('heading', { name: 'ホーム' })).toBeVisible();
     operatorState = await page.context().storageState();
+    // 招待のリンクは使用済み（もう一度は使えない）
+    await page.goto(inviteLink);
+    await expect(page.getByRole('heading', { name: 'このリンクは使えません' })).toBeVisible();
     // 2 回目からは、2 要素認証のコードを入れてログインする
     await page.context().clearCookies();
     await signInWithCode(page, OPERATOR_EMAIL, operatorPassword, operatorSecret);
