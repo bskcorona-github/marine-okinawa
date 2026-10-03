@@ -56,6 +56,7 @@ describe('bookingsToCsv', () => {
           cancelCategory: null,
           updatedAt: new Date('2026-09-29T03:00:00Z'),
           items: [{ label: '大人', quantity: 2 }],
+          secondChoice: null,
         },
       ],
       'Asia/Tokyo',
