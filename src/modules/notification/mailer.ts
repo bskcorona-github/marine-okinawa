@@ -1,3 +1,4 @@
+import { render } from '@react-email/components';
 import type { ReactElement } from 'react';
 import { Resend } from 'resend';
 import { getEnv } from '@/lib/env';
@@ -40,13 +41,16 @@ function createResendMailer(apiKey: string, from: string): Mailer {
   const resend = new Resend(apiKey);
   return {
     async send(message) {
+      // Resend の `react:` は実行時に @react-email/render を読む。Vercel のバンドルではそれが無く、
+      // 「Make sure to install @react-email/render」で落ちるので、こちらで HTML にしてから送る
+      const html = await render(message.react);
       const { data, error } = await withTimeout(
         resend.emails.send(
           {
             from,
             to: message.to,
             subject: message.subject,
-            react: message.react,
+            html,
             ...(message.replyTo ? { replyTo: message.replyTo } : {}),
           },
           message.idempotencyKey ? { idempotencyKey: message.idempotencyKey } : undefined,
