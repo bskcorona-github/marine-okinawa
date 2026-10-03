@@ -87,6 +87,10 @@ export function getFileStore(): FileStore {
   if (token) store = blobFileStore(token);
   else if (process.env.VERCEL)
     throw new Error('BLOB_READ_WRITE_TOKEN is not set (Vercel のディスクには保存できません)');
-  else store = localFileStore(path.resolve(process.env.STORAGE_DIR || '.storage'));
+  // 実行時に決まるパスなので、ビルドでたどらせない（たどるとプロジェクト全体を関数に含めてしまう）
+  else
+    store = localFileStore(
+      path.resolve(/* turbopackIgnore: true */ process.cwd(), process.env.STORAGE_DIR || '.storage'),
+    );
   return store;
 }
