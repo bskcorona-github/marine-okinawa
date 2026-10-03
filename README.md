@@ -125,7 +125,7 @@ E2E_DATABASE_URL=postgres://postgres:postgres@localhost:5433/marine_e2e
 ## デプロイ（Vercel）
 
 - 環境変数: `.env.example` の項目（`MARINE_DATABASE_URL`、`BETTER_AUTH_SECRET`、`BETTER_AUTH_URL`・`APP_URL`（本番の URL）、`CRON_SECRET`、`BLOB_READ_WRITE_TOKEN`。メールを送るときは `MAIL_DRIVER=resend`・`RESEND_API_KEY`・`MAIL_FROM`）
-- `vercel.json` の Cron が毎日 3:00（JST）に `/api/cron/sync-slots` を呼び、今日から 180 日分の回を作る。関数は東京（`hnd1`）で動かす（DB・Blob も東京に置く）
+- `vercel.json` の Cron が毎日 3:00（JST）に `/api/cron/sync-slots` を呼び、今日から 180 日分の回を作る。関数は DB（Neon）と同じシンガポール（`sin1`）で動かす（Vercel の Neon 連携に東京がないため。写真・資料の Blob は東京 `hnd1`）
 - マイグレーションはデプロイ前に `npm run db:migrate` で適用する
 - `APP_URL`（本番 URL）は必須。未設定だとメールのリンクが作れない
 - Web 申込は同じ IP から 10 分間に 5 件まで、お問い合わせは 10 分間に 3 件まで、事業者の登録申請は 1 時間に 3 件まで（`x-forwarded-for` を使う）
