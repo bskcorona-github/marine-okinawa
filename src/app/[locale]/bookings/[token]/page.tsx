@@ -18,12 +18,16 @@ import { splitPlanTitle } from '@/modules/catalog/display-title';
 import { dayOfContact, shopContact } from '@/modules/shop/contact';
 import { cardPaymentsActive } from '@/modules/payment/card-payments';
 import { weatherPolicyText } from '@/modules/shop/settings';
-import { startCardCheckoutAction } from './actions';
+import { customerCancelQuote } from '@/modules/booking/customer-cancel';
+import { customerCancelAction, startCardCheckoutAction } from './actions';
+import { CancelPanel } from './cancel-panel';
 import { CardPayButton } from './card-pay-button';
 import { CopyButton } from './copy-button';
 import { RequestProgress } from './request-progress';
 import { formatPartyItems } from '@/modules/booking/party';
 import { isPerPerson } from '@/modules/catalog/capacity-unit';
+
+const CANCEL_NOTICES = new Set(['done', 'already', 'changed', 'not_cancellable', 'failed']);
 
 const CHECKOUT_NOTICES = new Set([
   'paid',
@@ -132,6 +136,49 @@ export default async function BookingViewPage({ params, searchParams }: PageProp
         { heading: t('cancellationCommon'), text: booking.settings.commonCancellationPolicy },
         { heading: t('cancellationPlan'), text: booking.cancellationPolicy },
       ].filter((p) => p.text);
+  const cancelNotice = typeof sp.cancel === 'string' && CANCEL_NOTICES.has(sp.cancel) ? sp.cancel : null;
+  // お客様が取り消せる予約（催行の前）だけ、キャンセル料・返金額の見積もりを出す
+  const cancelQuote = customerCancelQuote(
+    {
+      status,
+      startsAt: booking.startsAt,
+      timezone: booking.timezone,
+      totalAmount: booking.totalAmount,
+      confirmedOnce: booking.confirmedOnce,
+      rates: feeSettingsFor(booking),
+      payment: booking.paymentStatus
+        ? {
+            status: booking.paymentStatus,
+            amount: booking.paymentAmount ?? 0,
+            refundedAmount: booking.refundedAmount ?? 0,
+          }
+        : null,
+    },
+    now,
+  );
+  const cancelLines = cancelQuote
+    ? [
+        cancelQuote.daysBefore >= 1
+          ? t('selfCancel.whenDays', { days: cancelQuote.daysBefore })
+          : t('selfCancel.whenToday'),
+        !booking.confirmedOnce
+          ? t('selfCancel.beforeConfirm')
+          : cancelQuote.feePercent === 0
+            ? t('selfCancel.feeNone')
+            : t(cancelQuote.paidAmount > 0 ? 'selfCancel.fee' : 'selfCancel.feeUnpaid', {
+                percent: cancelQuote.feePercent,
+                amount: formatYen(cancelQuote.feeAmount),
+              }),
+        ...(cancelQuote.paidAmount > 0
+          ? [
+              t('selfCancel.refund', { amount: formatYen(cancelQuote.refundAmount) }),
+              ...(cancelQuote.refundAmount > 0
+                ? [t(booking.paymentReceiptMethod === 'card' ? 'selfCancel.refundCard' : 'selfCancel.refundOther')]
+                : []),
+            ]
+          : [t('selfCancel.noPayment')]),
+      ]
+    : [];
   const bring = toListItems(booking.whatToBring);
   const showPlace = !ended && (booking.meetingPoint || booking.meetingAddress || bring.length > 0);
   // カードで払った予約は、組合がカードへ返金する（お客様の手続きは要らない）
@@ -163,6 +210,19 @@ export default async function BookingViewPage({ params, searchParams }: PageProp
   return (
     <div className="bg-sand pb-16">
       <div className="mx-auto max-w-3xl space-y-6 px-4 pt-6">
+        {cancelNotice && (
+          <p
+            role="status"
+            className={cn(
+              'jp-wrap rounded-2xl px-4 py-3 text-sm font-semibold',
+              cancelNotice === 'done' || cancelNotice === 'already'
+                ? 'bg-lagoon/15 text-ocean'
+                : 'bg-coral-strong/10 text-coral-deep',
+            )}
+          >
+            <Phrase>{t(`selfCancel.notice.${cancelNotice}` as 'selfCancel.notice.done')}</Phrase>
+          </p>
+        )}
         {/* 「受け付けました（確認待ち）」は、下の見出しと同じことを言うので出さない */}
         {checkoutNotice && !(checkoutNotice === 'received' && received && awaitingPayment) && (
           <p
@@ -487,6 +547,24 @@ export default async function BookingViewPage({ params, searchParams }: PageProp
             </p>
             <ContactLinks contact={dayOf} />
           </section>
+        )}
+
+        {cancelQuote && (
+          <CancelPanel
+            action={customerCancelAction.bind(null, token, locale)}
+            labels={{
+              title: t('selfCancel.title'),
+              lead: t('selfCancel.lead'),
+              open: t('selfCancel.open'),
+              confirmTitle: t('selfCancel.confirmTitle'),
+              irreversible: t('selfCancel.irreversible'),
+              submit: t('selfCancel.submit'),
+              submitting: t('selfCancel.submitting'),
+              back: t('selfCancel.back'),
+            }}
+            lines={cancelLines}
+            expected={{ refundAmount: cancelQuote.refundAmount, feePercent: cancelQuote.feePercent }}
+          />
         )}
 
         <section className="rounded-3xl bg-white p-6 ring-1 ring-ocean/10" aria-labelledby="contact-title">

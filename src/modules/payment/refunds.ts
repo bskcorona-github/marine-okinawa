@@ -126,6 +126,69 @@ export async function refundPayment(db: Db, input: RefundInput): Promise<RefundR
   });
 }
 
+/** 記録した送信中のカードへの返金（このあと Stripe へ送る） */
+export type ReservedCardRefund = { refundId: string; paymentIntentId: string; amount: number };
+
+/**
+ * 取消と同じトランザクションで、カードの入金へ返す「送信中」の返金を記録する（Stripe へはコミットのあとに
+ * sendReservedCardRefund で送る。送る前に落ちても送信中の記録が残り、Webhook・「Stripe に確かめる」で決まる）。
+ * 精算のロック → 予約の支払いのロックを取ったあとに呼ぶ。返す額はカードの入金に古い順で割り振り、
+ * 返しきれない残り（振込などの入金の分）は組合が返す。次のときは何も記録しない（組合が確かめて返す）：
+ * 送信中の返金がある・確定した精算の実施の明細に入っている
+ */
+export async function reserveCardRefunds(
+  tx: Tx,
+  params: { shopId: string; bookingId: string; amount: number; refundedAt: Date; note: string },
+): Promise<ReservedCardRefund[]> {
+  const [payment] = await tx.select().from(payments).where(eq(payments.bookingId, params.bookingId)).for('update');
+  if (!payment || !isRefundable(payment.status)) return [];
+  if ((await pendingRefundSum(tx, payment.id)) > 0) return [];
+  const settlement = await getBookingSettlement(tx, { shopId: params.shopId, bookingId: params.bookingId });
+  if (settlement?.status === 'confirmed' && settlement.kind === 'activity') return [];
+  let left = Math.min(params.amount, refundableAmount(payment));
+  const reserved: ReservedCardRefund[] = [];
+  for (const receipt of await listReceipts(tx, payment.id)) {
+    if (left <= 0) break;
+    if (receipt.method !== 'card' || !receipt.stripePaymentIntentId) continue;
+    const amount = Math.min(left, receipt.amount - receipt.refunded);
+    if (amount <= 0) continue;
+    const [row] = await tx
+      .insert(paymentRefunds)
+      .values({
+        shopId: params.shopId,
+        paymentId: payment.id,
+        receiptId: receipt.id,
+        amount,
+        refundedAt: params.refundedAt,
+        status: 'pending',
+        note: `${params.note}（Stripe でカードへ返金）`,
+        createdBy: null,
+      })
+      .returning({ id: paymentRefunds.id });
+    await writeAuditLog(tx, {
+      shopId: params.shopId,
+      actorId: null,
+      actorType: 'customer',
+      action: 'booking.refund_requested',
+      targetType: 'booking',
+      targetId: params.bookingId,
+      after: { refundId: row.id, amount, receiptId: receipt.id },
+    });
+    reserved.push({ refundId: row.id, paymentIntentId: receipt.stripePaymentIntentId, amount });
+    left -= amount;
+  }
+  return reserved;
+}
+
+/** reserveCardRefunds で記録した返金を Stripe へ送る（失敗・結果不明は BookingError。記録はそれに合わせて残る） */
+export function sendReservedCardRefund(
+  db: Db,
+  provider: CardPaymentProvider,
+  params: ReservedCardRefund & { bookingId: string },
+): Promise<RefundResult> {
+  return sendCardRefund(db, provider, { ...params, actorId: null });
+}
+
 /** 送信中のカードへの返金を Stripe へ送り、結果を記録する（送り直しも同じ冪等キーなので、2 回返金しない） */
 async function sendCardRefund(
   db: Db,

@@ -141,6 +141,7 @@ export const BOOKING_ERROR_LABELS: Record<BookingErrorCode | 'INVALID_INPUT', st
     'カードへの返金を Stripe へ送りましたが、結果がまだ分かりません。少し待ってから「Stripe に確かめる」を押してください（同じ返金は 2 回送りません）',
   INVALID_DATE: '日付が正しくありません（今日より後の日付は入れられません）',
   SLOT_DAY_PASSED: '終わった日の回のため、この操作はできません',
+  CANCEL_QUOTE_CHANGED: '返金額が変わったため、取り消していません。画面を開き直して確かめてください',
 };
 
 export const WEEKDAY_LABELS = ['日', '月', '火', '水', '木', '金', '土'] as const;

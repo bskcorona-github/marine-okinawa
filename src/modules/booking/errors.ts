@@ -49,7 +49,9 @@ export type BookingErrorCode =
   /** 入金日・返金日が今日より後、または古すぎる */
   | 'INVALID_DATE'
   /** 終わった日（今日より前）の回への操作（一括の天候中止・手動予約） */
-  | 'SLOT_DAY_PASSED';
+  | 'SLOT_DAY_PASSED'
+  /** お客様が取消の確認画面を開いたあとに、返金額・キャンセル料率が変わった（日付の境目・入金など） */
+  | 'CANCEL_QUOTE_CHANGED';
 
 export class BookingError extends Error {
   constructor(readonly code: BookingErrorCode) {

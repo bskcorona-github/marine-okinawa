@@ -10,6 +10,7 @@ import { shops } from './shop';
 // operator_application / application_ack：事業者の登録申請の組合への通知 / 申請者への受付メール
 // payment_issue：カード決済が済んだが自動で確定できなかった（確認・返金が要る）ことの組合への通知
 // account_invite / password_reset：事業者画面への招待・パスワードの再設定のリンク。application_result：登録申請を見送った知らせ
+// admin_customer_cancel：お客様が予約確認ページから取り消したことの組合への通知（返金の状況つき）
 export const notificationType = pgEnum('notification_type', [
   'requested',
   'payment_request',
@@ -27,6 +28,7 @@ export const notificationType = pgEnum('notification_type', [
   'account_invite',
   'password_reset',
   'application_result',
+  'admin_customer_cancel',
   'confirmed',
   'reminder',
   'weather_cancel',

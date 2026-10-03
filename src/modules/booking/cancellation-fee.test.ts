@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { refundByPercent } from '@/lib/yen';
 import { DEFAULT_SETTINGS } from '@/modules/shop/settings';
-import { cancellationFeePercent, daysBeforeActivity, suggestedRefund } from './cancellation-fee';
+import { cancellationFeePercent, cancelRefund, daysBeforeActivity, suggestedRefund } from './cancellation-fee';
 
 const tz = 'Asia/Tokyo';
 // 2026-10-10 09:00（日本時間）の回
@@ -47,6 +47,21 @@ describe('キャンセル料', () => {
       }).amount,
     ).toBe(7200);
     expect(suggestedRefund({ ...base, refundedAmount: 6000, kind: 'cancelled', now: twoDaysBefore }).amount).toBe(6000);
+  });
+
+  it('一度も予約確定になっていない申込の取消は、日付にかかわらず全額を返す（組合の画面とお客様の取消で同じ）', () => {
+    const base = {
+      settings: DEFAULT_SETTINGS,
+      paidAmount: 9000,
+      refundedAmount: 0,
+      totalAmount: 9000,
+      startsAt,
+      timezone: tz,
+      kind: 'cancelled' as const,
+      now: new Date('2026-10-10T00:30:00Z'),
+    };
+    expect(cancelRefund({ ...base, confirmedOnce: false })).toEqual({ amount: 9000, feePercent: 0, daysBefore: 0 });
+    expect(cancelRefund({ ...base, confirmedOnce: true })).toEqual({ amount: 0, feePercent: 100, daysBefore: 0 });
   });
 
   it('キャンセル料は料金にかける：二重のお支払いがあっても、キャンセル料は料金の率の分だけ', () => {

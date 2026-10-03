@@ -42,7 +42,7 @@ import {
   nextStatusesFor,
   type BookingStatus,
 } from '@/modules/booking/status';
-import { cancellationRateLines, feeSettingsFor, suggestedRefund } from '@/modules/booking/cancellation-fee';
+import { cancellationRateLines, cancelRefund, feeSettingsFor } from '@/modules/booking/cancellation-fee';
 import { splitPlanTitle } from '@/modules/catalog/display-title';
 import { listOperators } from '@/modules/catalog/menus';
 import { listPricesForDate } from '@/modules/catalog/prices';
@@ -730,18 +730,17 @@ export default async function BookingDetailPage({ params, searchParams }: PagePr
   const waitingForReport = b.status === 'confirmed' && started && !report;
   // 取消・天候中止の返金予定額の初期値（設定のキャンセル料率・天候中止の返金率から。予約ごとに直せる）
   const refundSuggestion = (to: BookingStatus) =>
-    b.confirmedOnce
-      ? suggestedRefund({
-          settings: feeRates,
-          paidAmount: payment?.amount ?? 0,
-          refundedAmount: payment?.refundedAmount ?? 0,
-          totalAmount: b.totalAmount,
-          kind: to === 'weather_cancelled' ? 'weather_cancelled' : 'cancelled',
-          startsAt: b.startsAt,
-          now,
-          timezone: b.timezone,
-        })
-      : { amount: payment?.amount ?? 0, feePercent: 0, daysBefore: 0 };
+    cancelRefund({
+      settings: feeRates,
+      paidAmount: payment?.amount ?? 0,
+      refundedAmount: payment?.refundedAmount ?? 0,
+      totalAmount: b.totalAmount,
+      kind: to === 'weather_cancelled' ? 'weather_cancelled' : 'cancelled',
+      startsAt: b.startsAt,
+      now,
+      timezone: b.timezone,
+      confirmedOnce: b.confirmedOnce,
+    });
   const refundHint = (to: BookingStatus) => {
     const s = refundSuggestion(to);
     if (!b.confirmedOnce)

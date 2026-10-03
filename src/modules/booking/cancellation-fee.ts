@@ -81,3 +81,16 @@ export function suggestedRefund(params: {
   const amount = Math.max(params.refundedAmount, params.paidAmount - fee);
   return { amount: Math.min(amount, params.paidAmount), feePercent, daysBefore };
 }
+
+/**
+ * 取消・天候中止の返金予定額（組合の画面の初期値と、お客様の予約確認ページからの取消で同じ計算）。
+ * 一度も予約確定になっていない申込の取消は、キャンセル料をいただかず全額
+ */
+export function cancelRefund(
+  params: Parameters<typeof suggestedRefund>[0] & { confirmedOnce: boolean },
+): ReturnType<typeof suggestedRefund> {
+  if (!params.confirmedOnce) {
+    return { amount: params.paidAmount, feePercent: 0, daysBefore: daysBeforeActivity(params) };
+  }
+  return suggestedRefund(params);
+}

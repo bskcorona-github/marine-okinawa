@@ -1,0 +1,1 @@
+ALTER TYPE "public"."notification_type" ADD VALUE 'admin_customer_cancel' BEFORE 'confirmed';

@@ -21,6 +21,7 @@ export const NOTIFICATION_TYPE_LABELS: Record<NotificationType, string> = {
   account_invite: '事業者画面への招待',
   password_reset: 'パスワードの再設定',
   application_result: '登録申請の結果（見送り）',
+  admin_customer_cancel: 'お客様の取消の通知（組合宛て）',
   confirmed: '予約確定メール',
   reminder: 'リマインド',
   weather_cancel: '天候中止のお知らせ（お客様 / 組合宛て）',

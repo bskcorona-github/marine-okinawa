@@ -28,7 +28,8 @@ import {
   type BookingStatus,
 } from './status';
 
-export type BookingActor = { type: 'staff' | 'operator' | 'system'; id: string | null };
+/** customer はお客様（予約確認ページのトークンで操作。id はない） */
+export type BookingActor = { type: 'staff' | 'operator' | 'customer' | 'system'; id: string | null };
 
 /** 状態を変えたあとにお客様へ送るメール（送信は呼び出し側で、トランザクションの外で行う） */
 export type StatusMail = BookingMailKind | null;
@@ -323,6 +324,7 @@ export async function changeBookingStatus(db: DbOrTx, input: ChangeStatusInput):
     await writeAuditLog(tx, {
       shopId: input.shopId,
       actorId: input.actor.id,
+      actorType: input.actor.type === 'customer' ? 'customer' : undefined,
       action: 'booking.status',
       targetType: 'booking',
       targetId: booking.id,
